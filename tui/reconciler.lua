@@ -76,6 +76,11 @@ local function expand(state, element, path)
         end
 
         hooks._begin_render(inst)
+        -- Clear dirty BEFORE calling fn. If fn (or a mount effect queued
+        -- below) calls a setter, inst.dirty flips back to true and the
+        -- outer driver (main loop / harness stabilization) can detect
+        -- that another render pass is needed.
+        inst.dirty = false
         local ok, rendered = pcall(fn, props)
         hooks._end_render()
         if not ok then

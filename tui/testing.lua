@@ -124,12 +124,36 @@ Harness.__index = Harness
 
 -- Produce + commit one frame. Called internally by render / rerender /
 -- type / press / advance / resize.
+--
+-- Stabilization: if a mount effect (or any post-commit work) calls a setter,
+-- the instance flips inst.dirty = true. In real tui.render the scheduler
+-- loop picks this up on the next tick; in the harness we do the equivalent
+-- inline — re-run render up to MAX_PASSES times until the tree is stable.
+-- Hard-fail beyond that to catch infinite setState loops.
+local MAX_PAINT_PASSES = 4
+
+local function any_instance_dirty(state)
+    for _, inst in pairs(state.instances) do
+        if inst.dirty then return true end
+    end
+    return false
+end
+
 function Harness:_paint()
     -- Observe the (possibly changed) terminal size; triggers useWindowSize
     -- subscribers installed on prior renders.
     resize_mod.observe(self._w, self._h)
 
-    local tree = reconciler.render(self._state, self._App, self._app_handle)
+    local tree
+    for pass = 1, MAX_PAINT_PASSES do
+        tree = reconciler.render(self._state, self._App, self._app_handle)
+        if not any_instance_dirty(self._state) then break end
+        if pass == MAX_PAINT_PASSES then
+            error("tui.testing: render did not stabilize after " ..
+                  MAX_PAINT_PASSES .. " passes — suspect infinite setState loop", 2)
+        end
+    end
+
     if not tree then
         tree = element.Box { width = self._w, height = self._h }
     end

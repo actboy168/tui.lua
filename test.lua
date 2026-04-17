@@ -11,5 +11,6 @@ require "test.test_static"
 require "test.test_text_input"
 require "test.test_chat_flow"
 require "test.test_snapshots"
+require "test.test_dirty"
 
 os.exit(lt.run(), true)
