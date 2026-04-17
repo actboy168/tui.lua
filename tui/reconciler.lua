@@ -48,6 +48,27 @@ local function is_error_boundary(e)
     return type(e) == "table" and e.kind == "error_boundary"
 end
 
+-- Compute the path for the i-th child under `parent_path`. If the child has
+-- an `element.key`, it gets its own namespace `parent/#<key>`; otherwise the
+-- child uses its positional index `parent/<i>`. The two namespaces do not
+-- collide (the `#` prefix is never produced by numeric i).
+--
+-- `seen_keys` is a per-parent table tracking keys already used in this loop;
+-- duplicate keys raise a render-time error with the parent path for context.
+local function child_path_for(parent_path, i, child, seen_keys)
+    local ck = type(child) == "table" and child.key
+    if ck ~= nil then
+        local ks = tostring(ck)
+        if seen_keys[ks] then
+            error("reconciler: duplicate key '" .. ks ..
+                  "' in children of '" .. parent_path .. "'", 0)
+        end
+        seen_keys[ks] = true
+        return parent_path .. "/#" .. ks
+    end
+    return parent_path .. "/" .. tostring(i)
+end
+
 -- ---------------------------------------------------------------------------
 -- Walk and expand. Returns a fresh host element tree (function nodes replaced
 -- by whatever they rendered).
@@ -114,9 +135,10 @@ local function expand(state, element, path)
 
         local out = { kind = "box", props = {}, children = {} }
         local ok, err = pcall(function()
+            local seen_keys = {}
             for i, c in ipairs(element.children or {}) do
-                local child_path = path .. "/" .. tostring(i)
-                local expanded = expand(state, c, child_path)
+                local cp = child_path_for(path, i, c, seen_keys)
+                local expanded = expand(state, c, cp)
                 if expanded ~= nil then
                     out.children[#out.children + 1] = expanded
                 end
@@ -153,9 +175,10 @@ local function expand(state, element, path)
             -- Propagate metadata fields used by builtin components.
             out._cursor_offset = element._cursor_offset
         else
+            local seen_keys = {}
             for i, c in ipairs(element.children or {}) do
-                local child_path = path .. "/" .. tostring(i)
-                local expanded = expand(state, c, child_path)
+                local cp = child_path_for(path, i, c, seen_keys)
+                local expanded = expand(state, c, cp)
                 if expanded ~= nil then
                     out.children[#out.children + 1] = expanded
                 end

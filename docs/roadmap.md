@@ -72,6 +72,12 @@
 - `tui/init.lua`：`tui.ErrorBoundary` 导出；`produce_tree` 把 `reconciler.render` 包 pcall，失败时画"[tui] render error: <msg>"错误屏而非崩掉事件循环（未声明 boundary 时的框架级兜底）
 - `test/test_error_boundary.lua`：6 个用例（catches_child_throw 含 rerender 稳定 / no_throw_passthrough / isolates_sibling_subtrees / nested_inner_catches_first / error_from_deeper_descendant_caught / no_boundary_error_propagates）
 
+### Stage 8 — 基于 key 的 reconciler diff
+- `tui/element.lua`：`pluck_key` 把 props.key 提升到 `element.key`，不泄漏到 Yoga；Box / Text / ErrorBoundary 构造器都挂 key
+- `tui/reconciler.lua`：`child_path_for(parent, i, child, seen_keys)` —— 有 key 走 `parent/#<key>` 命名空间、无 key 走 `parent/<i>`；同父同 key render 期 error 硬失败；Box 与 ErrorBoundary children 循环都用新辅助
+- 行为：同层重排 / 前插 / 删中间元素不再 remount 带 key 的兄弟，state/effect 保留；无 key 时维持原有位置语义（零回归）；key 换了按路径换算自然 unmount + mount
+- `test/test_reconciler_keys.lua`：8 个用例（重排保身 / 前插 / 删中间 / 无 key 位置回归 / 混用 keyed+unkeyed / 重复 key 报错 / key 换位置强制 remount / host Box 带 key 稳定后代）
+
 ---
 
 ## 正在进行
@@ -100,10 +106,10 @@ _暂无_
 - `useInput` 回调抛错被最近 ErrorBoundary 吞掉（需要记录 entry → boundary 映射）
 - `ErrorBoundary` 的 `fallback` 支持 `function(err, reset)` 形式 + `reset` 显式复位 API
 - `useErrorBoundary` hook：组件读取最近祖先 Boundary 的 `caught_error`，用于自定义错误展示
+- ErrorBoundary 不应吞 fatal 类型 error（例如 reconciler 的 duplicate key assert）：引入 `[tui:fatal]` 错误前缀或特殊 sentinel，Boundary pcall 识别后 rethrow
 
 **reconciler 增强**
-- 基于 `key` prop 的 diff：无 key 回退到位置匹配
-- 组件身份清洁性：同一位置换了不同组件 fn 时，销毁旧实例 + hooks，不复用
+- 组件身份清洁性的测试覆盖（行为已实现：同一位置 `inst.fn ~= fn` 时 unmount 旧实例 + new，但目前没专门的单元测试）
 
 ### 渲染性能与稳定性
 

@@ -14,5 +14,6 @@ require "test.test_snapshots"
 require "test.test_dirty"
 require "test.test_focus"
 require "test.test_error_boundary"
+require "test.test_reconciler_keys"
 
 os.exit(lt.run(), true)

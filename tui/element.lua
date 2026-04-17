@@ -32,12 +32,23 @@ local function split_props_children(t)
     return props, children
 end
 
+-- Pull the reserved `key` prop off to the element's top level. `key` is used
+-- by the reconciler for identity-preserving diff among sibling children; it
+-- is NOT a Yoga layout prop, so we strip it from `props` to avoid leaking
+-- into layout/renderer.
+local function pluck_key(props)
+    local k = props.key
+    props.key = nil
+    return k
+end
+
 --- Box(props_and_children) -> element
 -- Supports both `Box { child1, child2 }` and `Box { padding=1, child }`.
 function M.Box(t)
     t = t or {}
     local props, children = split_props_children(t)
-    return { kind = "box", props = props, children = children }
+    local key = pluck_key(props)
+    return { kind = "box", key = key, props = props, children = children }
 end
 
 --- Text(props_and_children) -> element
@@ -45,6 +56,7 @@ end
 function M.Text(t)
     t = t or {}
     local props, children = split_props_children(t)
+    local key = pluck_key(props)
     -- Join all string children into a single string for now.
     local parts = {}
     for i, v in ipairs(children) do
@@ -52,6 +64,7 @@ function M.Text(t)
     end
     return {
         kind = "text",
+        key = key,
         props = props,
         children = parts,
         text = table.concat(parts),
@@ -67,8 +80,10 @@ end
 function M.ErrorBoundary(t)
     t = t or {}
     local props, children = split_props_children(t)
+    local key = pluck_key(props)
     return {
         kind = "error_boundary",
+        key = key,
         fallback = props.fallback,
         children = children,
     }
