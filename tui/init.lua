@@ -55,10 +55,11 @@ local M = {}
 M.configureScheduler = scheduler.configure
 
 -- Host elements
-M.Box       = element.Box
-M.Text      = element.Text
-M.Static    = static_mod.Static
-M.TextInput = text_input.TextInput
+M.Box            = element.Box
+M.Text           = element.Text
+M.ErrorBoundary  = element.ErrorBoundary
+M.Static         = static_mod.Static
+M.TextInput      = text_input.TextInput
 
 -- Hooks
 M.useState       = hooks.useState
@@ -101,13 +102,34 @@ local function find_cursor(tree)
     return walk(tree)
 end
 
+-- Produce + commit one frame. Called internally by render / rerender /
+-- type / press / advance / resize.
+--
+-- Error-handling: `reconciler.render` can raise if a component fn throws
+-- and there is no `<ErrorBoundary>` ancestor to catch it. We swap in a
+-- banner tree so the event loop keeps running instead of crashing the
+-- whole TUI (the "framework-level implicit boundary" guarantee).
+local function fallback_error_tree(msg, w, h)
+    return element.Box {
+        width = w, height = h,
+        element.Text {
+            "[tui] render error: " .. tostring(msg),
+        },
+    }
+end
+
 -- Produce a fresh host tree (with layout applied) for the current frame.
 -- Caller is responsible for layout.free() after using the tree.
 local function produce_tree(rec_state, root, app_handle, w, h)
-    local tree = reconciler.render(rec_state, root, app_handle)
-    if not tree then
-        -- Component returned nil; render a blank root box to keep the screen sane.
-        tree = element.Box { width = w, height = h }
+    local ok, tree_or_err = pcall(reconciler.render, rec_state, root, app_handle)
+    local tree
+    if ok then
+        tree = tree_or_err
+        if not tree then
+            tree = element.Box { width = w, height = h }
+        end
+    else
+        tree = fallback_error_tree(tree_or_err, w, h)
     end
 
     -- Expand root Box to fill the terminal if user didn't set size.

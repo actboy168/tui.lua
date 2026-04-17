@@ -13,5 +13,6 @@ require "test.test_chat_flow"
 require "test.test_snapshots"
 require "test.test_dirty"
 require "test.test_focus"
+require "test.test_error_boundary"
 
 os.exit(lt.run(), true)

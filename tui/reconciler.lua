@@ -44,6 +44,10 @@ local function is_host_element(e)
     return type(e) == "table" and (e.kind == "box" or e.kind == "text")
 end
 
+local function is_error_boundary(e)
+    return type(e) == "table" and e.kind == "error_boundary"
+end
+
 -- ---------------------------------------------------------------------------
 -- Walk and expand. Returns a fresh host element tree (function nodes replaced
 -- by whatever they rendered).
@@ -93,6 +97,50 @@ local function expand(state, element, path)
         -- Queue effects for post-commit.
         state._effects_to_flush[#state._effects_to_flush + 1] = inst
         return expanded
+    end
+
+    if is_error_boundary(element) then
+        -- ErrorBoundary: wrap the children expand loop in pcall. Any error
+        -- raised by a descendant (component fn throwing, or malformed host
+        -- element) is caught here; we swap in `fallback` for the rest of
+        -- this render pass. The boundary stays mounted across frames — it
+        -- does not auto-reset when the error clears (Ink/React semantics).
+        state.seen[path] = true
+        local inst = state.instances[path]
+        if not inst then
+            inst = { kind = "error_boundary", caught_error = nil }
+            state.instances[path] = inst
+        end
+
+        local out = { kind = "box", props = {}, children = {} }
+        local ok, err = pcall(function()
+            for i, c in ipairs(element.children or {}) do
+                local child_path = path .. "/" .. tostring(i)
+                local expanded = expand(state, c, child_path)
+                if expanded ~= nil then
+                    out.children[#out.children + 1] = expanded
+                end
+            end
+        end)
+        if ok then
+            inst.caught_error = nil
+            return out
+        end
+
+        inst.caught_error = err
+        -- Render fallback as its own sub-tree (may itself contain components).
+        -- If fallback is nil, return an empty box so the layout still has a node.
+        if element.fallback == nil then
+            return { kind = "box", props = {}, children = {} }
+        end
+        local fb_ok, fb_tree = pcall(expand, state, element.fallback, path .. "/fallback")
+        if not fb_ok or fb_tree == nil then
+            -- Fallback itself failed or returned nothing; degrade to empty box
+            -- rather than propagating (the whole point of a boundary is to
+            -- stop the bleed).
+            return { kind = "box", props = {}, children = {} }
+        end
+        return fb_tree
     end
 
     if is_host_element(element) then

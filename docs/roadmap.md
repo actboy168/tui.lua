@@ -66,6 +66,12 @@
 - `testing.render` 初始 paint 失败时恢复 hijack 的 terminal，避免后续用例报 "another harness is already active"
 - `test/test_focus.lua`：8 个用例（autoFocus / Tab / FocusManager / disable / unmount 转焦点 / TextInput / 两个 TextInput Tab 切换 / rerender 不改变 Tab 顺序）
 
+### Stage 7 — ErrorBoundary 错误隔离
+- `tui/element.lua`：`ErrorBoundary { fallback = ..., children... }` 构造器，`kind = "error_boundary"`
+- `tui/reconciler.lua`：`expand` 识别 error_boundary 节点，用 pcall 包住 children 循环；失败时切换到 `fallback`（fallback 自身也走 expand，支持组件）；inst 记录 `caught_error`；fallback 再失败降级为空 box 阻止错误继续传播
+- `tui/init.lua`：`tui.ErrorBoundary` 导出；`produce_tree` 把 `reconciler.render` 包 pcall，失败时画"[tui] render error: <msg>"错误屏而非崩掉事件循环（未声明 boundary 时的框架级兜底）
+- `test/test_error_boundary.lua`：6 个用例（catches_child_throw 含 rerender 稳定 / no_throw_passthrough / isolates_sibling_subtrees / nested_inner_catches_first / error_from_deeper_descendant_caught / no_boundary_error_propagates）
+
 ---
 
 ## 正在进行
@@ -90,7 +96,10 @@ _暂无_
 - `form.lua`：多输入框 + 导航
 
 **错误隔离**
-- ErrorBoundary：框架级 pcall + 降级渲染，单组件 render 抛错不炸整个 App
+- `useEffect` body / cleanup 抛错冒泡到最近 ErrorBoundary（当前仅 render 阶段捕获）
+- `useInput` 回调抛错被最近 ErrorBoundary 吞掉（需要记录 entry → boundary 映射）
+- `ErrorBoundary` 的 `fallback` 支持 `function(err, reset)` 形式 + `reset` 显式复位 API
+- `useErrorBoundary` hook：组件读取最近祖先 Boundary 的 `caught_error`，用于自定义错误展示
 
 **reconciler 增强**
 - 基于 `key` prop 的 diff：无 key 回退到位置匹配

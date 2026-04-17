@@ -58,4 +58,20 @@ function M.Text(t)
     }
 end
 
+--- ErrorBoundary { fallback = element_or_nil, child1, child2, ... }
+-- Catches errors raised while expanding any descendant during reconciliation.
+-- On a caught error, the boundary's children are replaced by `fallback` for
+-- the rest of this (and subsequent) render passes, until the element
+-- remounts. `fallback` must be a static element (host or component); it is
+-- not passed any error info in this version.
+function M.ErrorBoundary(t)
+    t = t or {}
+    local props, children = split_props_children(t)
+    return {
+        kind = "error_boundary",
+        fallback = props.fallback,
+        children = children,
+    }
+end
+
 return M
