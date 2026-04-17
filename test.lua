@@ -5,5 +5,9 @@ require "test.test_element"
 require "test.test_reconciler"
 require "test.test_scheduler"
 require "test.test_keys"
+require "test.test_wcwidth"
+require "test.test_text_wrap"
+require "test.test_static"
+require "test.test_text_input"
 
 os.exit(lt.run(), true)

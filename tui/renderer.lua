@@ -1,8 +1,16 @@
 -- tui/renderer.lua — rasterize laid-out elements into a cell buffer
 -- and flush as a single ANSI string.
 --
--- Stage 1: no diffing, no color, no wrapping — just draw the whole screen
--- each time. Box borders supported. CJK/emoji width handling is Stage 4.
+-- Stage 4:
+--   * wcwidth-aware drawing: double-wide chars occupy two cells; the cell
+--     immediately to the right is marked with "" (empty string) so that it
+--     is skipped during row concatenation — the terminal itself advances
+--     two columns for the wide char.
+--   * Multi-line text via element.lines (populated by tui/layout readback
+--     when the text node has soft-wrap enabled).
+
+local tui_core = require "tui_core"
+local wcwidth  = tui_core.wcwidth
 
 local M = {}
 
@@ -12,6 +20,11 @@ local BORDERS = {
     double = { tl = "╔", tr = "╗", bl = "╚", br = "╝", h = "═", v = "║" },
     round  = { tl = "╭", tr = "╮", bl = "╰", br = "╯", h = "─", v = "│" },
 }
+
+-- Sentinel marking the right half of a wide character. table.concat skips it
+-- because it's the empty string, while its presence prevents put() from
+-- overwriting the right half with a later draw.
+local WIDE_TAIL = ""
 
 -- Allocate a 2-D cell buffer [row][col] filled with spaces.
 local function new_buffer(w, h)
@@ -26,57 +39,62 @@ local function new_buffer(w, h)
     return buf
 end
 
-local function put(buf, x, y, ch)
-    -- 0-based (x,y) from yoga → 1-based buffer coords.
+-- Put a single character (1 or 2 columns wide) at (x,y). 0-based to match yoga.
+-- Returns the number of columns actually consumed.
+local function put(buf, x, y, ch, cw)
     local cy = y + 1
     local cx = x + 1
-    if cy < 1 or cy > buf.h then return end
-    if cx < 1 or cx > buf.w then return end
-    buf[cy][cx] = ch
+    if cy < 1 or cy > buf.h then return cw end
+    if cx < 1 or cx > buf.w then return cw end
+    if cw == 2 then
+        -- Need two adjacent cells in-bounds; otherwise downgrade to a space.
+        if cx + 1 > buf.w then
+            buf[cy][cx] = " "
+            return 1
+        end
+        buf[cy][cx]     = ch
+        buf[cy][cx + 1] = WIDE_TAIL
+    else
+        buf[cy][cx] = ch
+    end
+    return cw
 end
 
 local function draw_border(buf, x, y, w, h, style)
     local g = BORDERS[style] or BORDERS.single
     if w < 2 or h < 2 then return end
-    -- corners
-    put(buf, x,         y,         g.tl)
-    put(buf, x + w - 1, y,         g.tr)
-    put(buf, x,         y + h - 1, g.bl)
-    put(buf, x + w - 1, y + h - 1, g.br)
-    -- horizontal edges
+    put(buf, x,         y,         g.tl, 1)
+    put(buf, x + w - 1, y,         g.tr, 1)
+    put(buf, x,         y + h - 1, g.bl, 1)
+    put(buf, x + w - 1, y + h - 1, g.br, 1)
     for i = 1, w - 2 do
-        put(buf, x + i, y,         g.h)
-        put(buf, x + i, y + h - 1, g.h)
+        put(buf, x + i, y,         g.h, 1)
+        put(buf, x + i, y + h - 1, g.h, 1)
     end
-    -- vertical edges
     for i = 1, h - 2 do
-        put(buf, x,         y + i, g.v)
-        put(buf, x + w - 1, y + i, g.v)
+        put(buf, x,         y + i, g.v, 1)
+        put(buf, x + w - 1, y + i, g.v, 1)
     end
 end
 
--- UTF-8 safe iteration over characters of a string.
-local function iter_utf8(s)
-    local i, n = 1, #s
-    return function()
-        if i > n then return nil end
-        local b = s:byte(i)
-        local size
-        if b < 0x80 then size = 1
-        elseif b < 0xE0 then size = 2
-        elseif b < 0xF0 then size = 3
-        else size = 4 end
-        local ch = s:sub(i, i + size - 1)
-        i = i + size
-        return ch
-    end
-end
-
-local function draw_text(buf, x, y, text)
+-- Draw one logical line of text at (x,y) within max_w cells. Handles double-
+-- wide chars and skips controls.
+local function draw_line(buf, x, y, text, max_w)
+    if not text or text == "" then return end
     local cx = x
-    for ch in iter_utf8(text) do
-        put(buf, cx, y, ch)
-        cx = cx + 1
+    local stop = x + (max_w or buf.w)
+    local i, n = 1, #text
+    while i <= n do
+        local cw, ni = wcwidth.char_width(text, i)
+        local ch = text:sub(i, ni - 1)
+        i = ni
+        if cw == 0 then
+            -- Skip combining / control chars (they'd misalign cells).
+        else
+            if cx + cw > stop then break end
+            put(buf, cx, y, ch, cw)
+            cx = cx + cw
+        end
     end
 end
 
@@ -93,13 +111,20 @@ local function paint(element, buf)
             paint(child, buf)
         end
     elseif element.kind == "text" then
-        draw_text(buf, r.x, r.y, element.text or "")
+        if element.lines then
+            for li, line in ipairs(element.lines) do
+                if r.y + (li - 1) >= r.y + r.h then break end
+                draw_line(buf, r.x, r.y + (li - 1), line, r.w)
+            end
+        else
+            draw_line(buf, r.x, r.y, element.text or "", r.w)
+        end
     end
 end
 
 -- Serialize buffer to ANSI: move to home, then write each row followed by CRLF.
 local function buffer_to_ansi(buf)
-    local parts = { "\27[H" }  -- cursor home
+    local parts = { "\27[H" }
     for y = 1, buf.h do
         parts[#parts + 1] = table.concat(buf[y])
         if y < buf.h then
@@ -126,7 +151,6 @@ function M.render(element, w, h)
 end
 
 --- Render element tree into a fresh buffer and return (rows, w, h).
--- rows is a 1-indexed array of strings, one per terminal row.
 function M.render_rows(element, w, h)
     local buf = new_buffer(w, h)
     paint(element, buf)

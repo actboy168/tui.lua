@@ -186,6 +186,29 @@ function M.useInput(fn)
 end
 
 -- ---------------------------------------------------------------------------
+-- useWindowSize() -> { cols, rows }
+-- Returns the current terminal size. Re-renders when the terminal is resized.
+
+local resize_mod
+
+function M.useWindowSize()
+    if not resize_mod then resize_mod = require "tui.resize" end
+    local w0, h0 = resize_mod.current()
+    local size, setSize = M.useState({ cols = w0 or 80, rows = h0 or 24 })
+    M.useEffect(function()
+        -- Seed initial size in case it wasn't known when useState ran.
+        local cw, ch = resize_mod.current()
+        if cw and ch and (cw ~= size.cols or ch ~= size.rows) then
+            setSize({ cols = cw, rows = ch })
+        end
+        return resize_mod.subscribe(function(w, h)
+            setSize({ cols = w, rows = h })
+        end)
+    end, {})
+    return size
+end
+
+-- ---------------------------------------------------------------------------
 -- useApp: exposes a handle with .exit(); provided by reconciler each render.
 
 function M.useApp()

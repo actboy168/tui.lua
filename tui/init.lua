@@ -21,6 +21,10 @@ local reconciler = require "tui.reconciler"
 local scheduler  = require "tui.scheduler"
 local hooks      = require "tui.hooks"
 local input_mod  = require "tui.input"
+local resize_mod = require "tui.resize"
+local static_mod = require "tui.builtin.static"
+local text_input = require "tui.builtin.text_input"
+local cursor_mod = require "tui.builtin.cursor"
 local tui_core   = require "tui_core"
 
 local terminal = tui_core.terminal
@@ -50,16 +54,19 @@ local M = {}
 M.configureScheduler = scheduler.configure
 
 -- Host elements
-M.Box  = element.Box
-M.Text = element.Text
+M.Box       = element.Box
+M.Text      = element.Text
+M.Static    = static_mod.Static
+M.TextInput = text_input.TextInput
 
 -- Hooks
-M.useState    = hooks.useState
-M.useEffect   = hooks.useEffect
-M.useInterval = hooks.useInterval
-M.useTimeout  = hooks.useTimeout
-M.useInput    = hooks.useInput
-M.useApp      = hooks.useApp
+M.useState       = hooks.useState
+M.useEffect      = hooks.useEffect
+M.useInterval    = hooks.useInterval
+M.useTimeout     = hooks.useTimeout
+M.useInput       = hooks.useInput
+M.useWindowSize  = hooks.useWindowSize
+M.useApp         = hooks.useApp
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
 M.setInterval = scheduler.setInterval
@@ -70,6 +77,26 @@ M.clearTimer  = scheduler.clearTimer
 local CLEAR    = "\27[2J\27[H"
 local HIDE_CUR = "\27[?25l"
 local SHOW_CUR = "\27[?25h"
+
+-- Walk the laid-out tree and record the first Text node that requested a
+-- cursor. 1-based (col, row) returned for direct use in `\27[<row>;<col>H`.
+local function find_cursor(tree)
+    local function walk(e)
+        if not e then return nil end
+        if e.kind == "text" and e._cursor_offset ~= nil then
+            local r = e.rect or { x = 0, y = 0 }
+            return r.x + e._cursor_offset + 1, r.y + 1
+        end
+        if e.children then
+            for _, c in ipairs(e.children) do
+                local col, row = walk(c)
+                if col then return col, row end
+            end
+        end
+        return nil
+    end
+    return walk(tree)
+end
 
 -- Produce a fresh host tree (with layout applied) for the current frame.
 -- Caller is responsible for layout.free() after using the tree.
@@ -103,6 +130,7 @@ function M.render(root)
     local rec_state    = reconciler.new()
     local screen_state = screen_mod.new()
     input_mod._reset()
+    resize_mod._reset()
 
     local app_handle  = {
         exit = function() scheduler.stop() end,
@@ -110,10 +138,27 @@ function M.render(root)
 
     local function paint()
         local w, h = terminal.get_size()
+        -- Notify subscribers (useWindowSize) before rendering so the first
+        -- frame sees the correct size. observe() is cheap when unchanged.
+        if resize_mod.observe(w, h) then
+            screen_mod.invalidate(screen_state)
+        end
         local tree = produce_tree(rec_state, root, app_handle, w, h)
         local rows = renderer.render_rows(tree, w, h)
         local ansi = screen_mod.diff(screen_state, rows, w, h)
         if #ansi > 0 then terminal.write(ansi) end
+
+        -- Post-commit: cursor + IME positioning. A focused TextInput tags its
+        -- Text element with _cursor_offset; we translate that to absolute
+        -- coordinates and move the terminal's real cursor there.
+        local ccol, crow = find_cursor(tree)
+        if ccol and crow then
+            terminal.write(SHOW_CUR .. "\27[" .. crow .. ";" .. ccol .. "H")
+            terminal.set_ime_pos(ccol, crow)
+        else
+            terminal.write(HIDE_CUR)
+        end
+
         layout.free(tree)
     end
 
@@ -147,6 +192,7 @@ function M.render(root)
     -- Teardown: run cleanups on all live instances.
     reconciler.shutdown(rec_state)
     input_mod._reset()
+    resize_mod._reset()
 
     -- Restore terminal state regardless of error.
     terminal.write(SHOW_CUR .. "\r\n")

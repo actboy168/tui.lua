@@ -1,13 +1,15 @@
 -- tui/layout.lua — build Yoga tree from element tree and compute layout.
 --
--- Stage 1 only handles the subset needed by hello.lua:
+-- Stage 4:
 --   * Box with optional border / padding / width / height
---   * Text as leaf (intrinsic width = string length, height = 1)
---
--- The element table is mutated in place with `.rect = { x, y, w, h }` for
--- the renderer to consume.
+--   * Text leaf: intrinsic width = display width via wcwidth; height accounts
+--     for soft-wrap when wrap != "nowrap" (handled in tui/text.lua).
 
-local yoga = require "yoga"
+local yoga     = require "yoga"
+local tui_core = require "tui_core"
+local text_mod = require "tui.text"
+
+local wcwidth = tui_core.wcwidth
 
 local M = {}
 
@@ -65,13 +67,29 @@ local function build(element, parent)
             build(child, node)
         end
     elseif element.kind == "text" then
-        -- Stage 1: each text is a single-line leaf with intrinsic width.
-        -- We count bytes for ASCII-only here; CJK/emoji width arrives in Stage 4.
-        local text = element.text or ""
-        yoga.node_set(node, {
-            width  = #text,
-            height = 1,
-        })
+        -- Intrinsic size via wcwidth. Soft-wrap decisions defer to yoga
+        -- measure when wrap is enabled; for now compute a single-line width
+        -- and let tui/text.lua install a measure callback if wrap is on.
+        local text  = element.text or ""
+        local iw    = wcwidth.string_width(text)
+        local props = element.props or {}
+        local wrap  = props.wrap
+        if wrap == nil then wrap = "wrap" end
+        -- Respect user-supplied width/height; otherwise fall back to intrinsic.
+        local style = {
+            width  = props.width  or iw,
+            height = props.height or 1,
+        }
+        if props.flex       ~= nil then style.flex       = props.flex end
+        if props.alignSelf  ~= nil then style.alignSelf  = props.alignSelf end
+        if props.marginTop  ~= nil then style.marginTop  = props.marginTop end
+        if props.marginBottom ~= nil then style.marginBottom = props.marginBottom end
+        if props.marginLeft ~= nil then style.marginLeft = props.marginLeft end
+        if props.marginRight~= nil then style.marginRight= props.marginRight end
+        yoga.node_set(node, style)
+        if wrap ~= "nowrap" then
+            element._wrap = true
+        end
     end
 
     return node
@@ -79,13 +97,25 @@ end
 
 -- Recursively read computed layout back and stash it on each element.
 -- Returns absolute x/y by accumulating parent offsets (yoga only gives local).
-local function readback(element, ox, oy)
+-- `phase` == "measure" : first pass, record rect on everything and collect
+--                         wrap-capable text nodes that need re-measuring.
+-- `phase` == "final"   : second pass, rect/lines final.
+local function readback(element, ox, oy, phase, wrap_nodes)
     local lx, ly, lw, lh = yoga.node_get(element.yoga_node)
     local ax, ay = ox + lx, oy + ly
     element.rect = { x = ax, y = ay, w = lw, h = lh }
     if element.kind == "box" then
         for _, child in ipairs(element.children or {}) do
-            readback(child, ax, ay)
+            readback(child, ax, ay, phase, wrap_nodes)
+        end
+    elseif element.kind == "text" then
+        if element._wrap then
+            -- Produce line array bounded by the current rect width.
+            local lines = text_mod.wrap(element.text or "", lw)
+            element.lines = lines
+            if phase == "measure" and wrap_nodes and #lines > 1 then
+                wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
+            end
         end
     end
 end
@@ -95,7 +125,21 @@ end
 function M.compute(element)
     local root = build(element, nil)
     yoga.node_calc(root)
-    readback(element, 0, 0)
+
+    -- Pass 1: measure-only readback to gather text nodes whose wrapped height
+    -- differs from the intrinsic height=1 yoga used.
+    local wrap_nodes = {}
+    readback(element, 0, 0, "measure", wrap_nodes)
+
+    -- Pass 2: if any text wrapped to multiple lines, resize their yoga nodes
+    -- and recompute so ancestors see the real height.
+    if #wrap_nodes > 0 then
+        for _, wn in ipairs(wrap_nodes) do
+            yoga.node_set(wn.node.yoga_node, { height = #wn.lines })
+        end
+        yoga.node_calc(root)
+        readback(element, 0, 0, "final", nil)
+    end
     return root
 end
 

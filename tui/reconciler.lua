@@ -97,6 +97,8 @@ local function expand(state, element, path)
             -- Text children are strings; copy verbatim + keep .text field.
             for i, c in ipairs(element.children or {}) do out.children[i] = c end
             out.text = element.text
+            -- Propagate metadata fields used by builtin components.
+            out._cursor_offset = element._cursor_offset
         else
             for i, c in ipairs(element.children or {}) do
                 local child_path = path .. "/" .. tostring(i)
