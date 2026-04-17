@@ -20,6 +20,7 @@ local screen_mod = require "tui.screen"
 local reconciler = require "tui.reconciler"
 local scheduler  = require "tui.scheduler"
 local hooks      = require "tui.hooks"
+local input_mod  = require "tui.input"
 local tui_core   = require "tui_core"
 
 local terminal = tui_core.terminal
@@ -57,6 +58,7 @@ M.useState    = hooks.useState
 M.useEffect   = hooks.useEffect
 M.useInterval = hooks.useInterval
 M.useTimeout  = hooks.useTimeout
+M.useInput    = hooks.useInput
 M.useApp      = hooks.useApp
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
@@ -91,7 +93,8 @@ end
 
 --- tui.render(root)
 -- Run the main loop with `root` as the top of the component tree. Blocks
--- until Ctrl+C / Ctrl+D / 'q' is pressed, or useApp():exit() is called.
+-- until the app calls `useApp():exit()`, or an emergency key is received
+-- (Ctrl+C / Ctrl+D — always honored by the framework).
 function M.render(root)
     terminal.windows_vt_enable()
     terminal.set_raw(true)
@@ -99,10 +102,10 @@ function M.render(root)
 
     local rec_state    = reconciler.new()
     local screen_state = screen_mod.new()
+    input_mod._reset()
 
-    local should_exit = false
     local app_handle  = {
-        exit = function() should_exit = true; scheduler.stop() end,
+        exit = function() scheduler.stop() end,
     }
 
     local function paint()
@@ -119,12 +122,16 @@ function M.render(root)
     end
 
     local function on_input(s)
+        -- Framework-level emergency exit: Ctrl+C (0x03) / Ctrl+D (0x04).
+        -- These are always honored even if the app didn't register useInput.
         for i = 1, #s do
             local b = s:byte(i)
-            if b == 3 or b == 4 or s:sub(i, i) == "q" then
-                return true  -- stop scheduler
-            end
+            if b == 3 or b == 4 then return true end
         end
+        -- Otherwise, parse + broadcast to subscribed useInput handlers.
+        input_mod.dispatch(s)
+        -- Input handlers may have flipped state; ensure a repaint happens.
+        scheduler.requestRedraw()
         return false
     end
 
@@ -139,13 +146,13 @@ function M.render(root)
 
     -- Teardown: run cleanups on all live instances.
     reconciler.shutdown(rec_state)
+    input_mod._reset()
 
     -- Restore terminal state regardless of error.
     terminal.write(SHOW_CUR .. "\r\n")
     terminal.set_raw(false)
 
     if not ok then error(err) end
-    local _ = should_exit  -- currently unused; retained for future use
 end
 
 return M

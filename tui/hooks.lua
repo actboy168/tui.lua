@@ -35,23 +35,43 @@ function M._end_render()
     cursor  = 0
 end
 
+-- Shallow-equal for two arrays of deps (rawequal per element, same length).
+local function deps_equal(a, b)
+    if a == nil or b == nil then return false end
+    if #a ~= #b then return false end
+    for i = 1, #a do
+        if not rawequal(a[i], b[i]) then return false end
+    end
+    return true
+end
+
 -- Called after the element tree has been committed, so effects observe the
 -- latest rendered output.
+--
+-- Deps semantics (React-aligned):
+--   nil       -> run every render; always cleanup previous first.
+--   {}        -> run exactly once on mount; cleanup on unmount.
+--   {d1,d2}   -> re-run only when any dep changed (shallow); cleanup prev first.
 function M._flush_effects(instance)
     for _, fx in ipairs(instance.pending_fx or {}) do
         local slot = fx.slot
-        -- Deps check: {} = mount-once; nil = every render.
         local should_run
         if fx.deps == nil then
             should_run = true
+        elseif not slot.ran then
+            should_run = true   -- first mount
         else
-            -- deps=={} => run once; reuse slot.ran flag.
-            should_run = not slot.ran
+            -- Re-run only if deps changed. `{}` with ran=true compares equal
+            -- to itself and thus stays mounted (correct mount-once behavior).
+            should_run = not deps_equal(slot.deps, fx.deps)
         end
         if should_run then
-            if slot.cleanup then slot.cleanup() end
+            -- Always cleanup the previous effect before running the new one
+            -- (S2.11 — React-aligned ordering).
+            if slot.cleanup then slot.cleanup(); slot.cleanup = nil end
             slot.cleanup = fx.fn() or nil
-            slot.ran = true
+            slot.deps    = fx.deps
+            slot.ran     = true
         end
     end
     instance.pending_fx = nil
@@ -112,19 +132,56 @@ function M.useEffect(fn, deps)
 end
 
 -- ---------------------------------------------------------------------------
+-- Internal: useLatestRef(value)
+-- Stores `value` in a hook slot and returns a stable ref table whose .current
+-- is updated every render. Used by useInterval/useTimeout/useInput to avoid
+-- stale closures without forcing the user to specify deps.
+local function useLatestRef(value)
+    local inst, i = require_instance()
+    local slot = inst.hooks[i]
+    if not slot then
+        slot = { kind = "ref", ref = { current = value } }
+        inst.hooks[i] = slot
+    else
+        slot.ref.current = value
+    end
+    return slot.ref
+end
+
+-- ---------------------------------------------------------------------------
 -- Timer sugar (built on top of useEffect for cleanup)
 
 function M.useInterval(fn, ms)
+    local ref = useLatestRef(fn)
     M.useEffect(function()
-        local id = scheduler.setInterval(fn, ms)
+        local id = scheduler.setInterval(function() ref.current() end, ms)
         return function() scheduler.clearTimer(id) end
-    end, {})
+    end, { ms })
 end
 
 function M.useTimeout(fn, ms)
+    local ref = useLatestRef(fn)
     M.useEffect(function()
-        local id = scheduler.setTimeout(fn, ms)
+        local id = scheduler.setTimeout(function() ref.current() end, ms)
         return function() scheduler.clearTimer(id) end
+    end, { ms })
+end
+
+-- ---------------------------------------------------------------------------
+-- useInput(handler) — subscribe to keyboard events for the lifetime of the
+-- component. Handler signature: handler(input_str, key_table).
+--
+-- Stage 3: broadcasts to all subscribers (no focus yet — see Stage 5).
+
+local input_mod -- lazy-loaded to avoid a static require cycle
+
+function M.useInput(fn)
+    if not input_mod then input_mod = require "tui.input" end
+    local ref = useLatestRef(fn)
+    M.useEffect(function()
+        return input_mod.subscribe(function(input, key)
+            ref.current(input, key)
+        end)
     end, {})
 end
 

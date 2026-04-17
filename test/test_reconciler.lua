@@ -178,3 +178,122 @@ function suite:test_functional_setter()
     render_once(Comp, state)
     lt.assertEquals(captured, 15)
 end
+
+-- S2.1: useEffect with a deps array re-runs when any dep changes (shallow compare).
+function suite:test_effect_deps_rerun_on_change()
+    local run_count = 0
+    local dep_value = "a"
+    local function Comp()
+        tui.useEffect(function() run_count = run_count + 1 end, { dep_value })
+        return tui.Text { "x" }
+    end
+    local _, state = render_once(Comp)
+    lt.assertEquals(run_count, 1)
+    -- Same dep, no re-run.
+    render_once(Comp, state)
+    lt.assertEquals(run_count, 1)
+    -- Change dep -> re-run.
+    dep_value = "b"
+    render_once(Comp, state)
+    lt.assertEquals(run_count, 2)
+    render_once(Comp, state)
+    lt.assertEquals(run_count, 2)
+end
+
+-- S2.11: cleanup runs before the new effect body on re-run.
+function suite:test_effect_cleanup_before_rerun()
+    local events = {}
+    local dep = 1
+    local function Comp()
+        tui.useEffect(function()
+            events[#events + 1] = "setup"
+            return function() events[#events + 1] = "cleanup" end
+        end, { dep })
+        return tui.Text { "x" }
+    end
+    local _, state = render_once(Comp)
+    lt.assertEquals(events, { "setup" })
+    dep = 2
+    render_once(Comp, state)
+    lt.assertEquals(events, { "setup", "cleanup", "setup" })
+end
+
+-- S2.11 (nil deps path): cleanup also runs before new effect every render.
+function suite:test_effect_cleanup_nil_deps_every_render()
+    local events = {}
+    local function Comp()
+        tui.useEffect(function()
+            events[#events + 1] = "s"
+            return function() events[#events + 1] = "c" end
+        end)  -- no deps = nil = every render
+        return tui.Text { "x" }
+    end
+    local _, state = render_once(Comp)
+    lt.assertEquals(events, { "s" })
+    render_once(Comp, state)
+    lt.assertEquals(events, { "s", "c", "s" })
+end
+
+-- useInput: handler receives parsed events; subscribe/unsubscribe lifecycle.
+function suite:test_use_input_subscribes_and_unsubscribes()
+    local input_mod = require "tui.input"
+    input_mod._reset()
+
+    local got = {}
+    local mounted = true
+    local function Child()
+        tui.useInput(function(input, key)
+            got[#got + 1] = { input = input, name = key.name }
+        end)
+        return tui.Text { "child" }
+    end
+    local function Root()
+        return tui.Box { mounted and Child or nil }
+    end
+
+    local _, state = render_once(Root)
+    -- Effect flushes on render -> Child is subscribed.
+    lt.assertEquals(#input_mod._handlers(), 1)
+
+    input_mod.dispatch("x")
+    lt.assertEquals(#got, 1)
+    lt.assertEquals(got[1].input, "x")
+
+    -- Unmount Child -> subscription cleaned up.
+    mounted = false
+    render_once(Root, state)
+    lt.assertEquals(#input_mod._handlers(), 0)
+
+    input_mod.dispatch("y")
+    lt.assertEquals(#got, 1)   -- no new events
+end
+
+-- useInput sees the latest handler closure (no stale capture).
+function suite:test_use_input_uses_latest_handler()
+    local input_mod = require "tui.input"
+    input_mod._reset()
+
+    local multiplier = 1
+    local sum = 0
+    local function Comp()
+        -- `multiplier` captured freshly each render; the subscription
+        -- must call the latest closure.
+        local m = multiplier
+        tui.useInput(function(input, key)
+            if key.name == "char" then sum = sum + m end
+        end)
+        return tui.Text { "x" }
+    end
+
+    local _, state = render_once(Comp)
+    input_mod.dispatch("a")
+    lt.assertEquals(sum, 1)
+
+    multiplier = 10
+    render_once(Comp, state)
+    input_mod.dispatch("a")
+    lt.assertEquals(sum, 11)  -- 1 + 10
+
+    -- cleanup
+    require("tui.reconciler").shutdown(state)
+end

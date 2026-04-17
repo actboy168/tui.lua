@@ -33,11 +33,12 @@ lm:lua_dll "yoga" {
     includes = "3rd/yoga",
 }
 
--- Lua DLL #2: tui_core (Stage 1: terminal only; wcwidth/keys will be added later)
+-- Lua DLL #2: tui_core (Stage 3: terminal + keys; wcwidth added in Stage 4)
 lm:lua_dll "tui_core" {
     sources = {
         "src/tui_core/tui_core.c",
         "src/tui_core/terminal.c",
+        "src/tui_core/keys.c",
     },
     windows = {
         links = { "imm32" },
