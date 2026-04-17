@@ -8,14 +8,25 @@ local M = {}
 
 -- Internal helper: given a table that may mix hash-style props and
 -- array-style children, split them into a props table and a children list.
+-- Children are compacted to a contiguous array (nil slots are dropped) so
+-- that downstream `ipairs(children)` works even when users write conditional
+-- expressions like `cond and X or nil` inside the constructor.
 local function split_props_children(t)
     local props = {}
-    local children = {}
+    local sparse = {}
+    local max_idx = 0
     for k, v in pairs(t) do
         if type(k) == "number" then
-            children[k] = v
+            sparse[k] = v
+            if k > max_idx then max_idx = k end
         else
             props[k] = v
+        end
+    end
+    local children = {}
+    for i = 1, max_idx do
+        if sparse[i] ~= nil then
+            children[#children + 1] = sparse[i]
         end
     end
     return props, children

@@ -1,37 +1,10 @@
 -- test/test_static.lua — unit tests for <Static> component.
 
-local lt         = require "ltest"
-local tui        = require "tui"
-local reconciler = require "tui.reconciler"
-local layout     = require "tui.layout"
-local renderer   = require "tui.renderer"
-local screen_mod = require "tui.screen"
+local lt      = require "ltest"
+local tui     = require "tui"
+local testing = require "tui.testing"
 
 local suite = lt.test "static"
-
--- Minimal shared harness: render App returning a Box containing a Static.
-local function new_harness(W, H)
-    local state = reconciler.new()
-    local scr   = screen_mod.new()
-    local app   = { exit = function() end }
-    return {
-        render_once = function(App)
-            local tree = reconciler.render(state, App, app)
-            if tree and tree.kind == "box" then
-                tree.props.width  = tree.props.width  or W
-                tree.props.height = tree.props.height or H
-            end
-            layout.compute(tree)
-            local rows = renderer.render_rows(tree, W, H)
-            local ansi = screen_mod.diff(scr, rows, W, H)
-            layout.free(tree)
-            return rows, ansi
-        end,
-        teardown = function()
-            reconciler.shutdown(state)
-        end,
-    }
-end
 
 function suite:test_static_initial_items_render()
     local items = { "hello", "world" }
@@ -45,11 +18,10 @@ function suite:test_static_initial_items_render()
             },
         }
     end
-    local h = new_harness(20, 5)
-    local rows = h.render_once(App)
-    lt.assertEquals(rows[1]:sub(1, 5), "hello")
-    lt.assertEquals(rows[2]:sub(1, 5), "world")
-    h.teardown()
+    local h = testing.render(App, { cols = 20, rows = 5 })
+    lt.assertEquals(h:row(1):sub(1, 5), "hello")
+    lt.assertEquals(h:row(2):sub(1, 5), "world")
+    h:unmount()
 end
 
 function suite:test_static_appending_items_produces_incremental_diff()
@@ -64,17 +36,16 @@ function suite:test_static_appending_items_produces_incremental_diff()
             },
         }
     end
-    local h = new_harness(20, 5)
-    h.render_once(App)
-    -- Append one item; next diff should only write the changed row.
+    local h = testing.render(App, { cols = 20, rows = 5 })
+    -- Drain the initial-frame ANSI so we only measure the incremental diff.
+    h:clear_ansi()
     items[#items + 1] = "second"
-    local _, ansi = h.render_once(App)
-    -- A single-row diff is substantially shorter than a full redraw of 5 rows.
+    h:rerender()
+    local ansi = h:ansi()
     lt.assertEquals(#ansi > 0, true, "expected some ANSI for new row")
     lt.assertEquals(#ansi < 150, true, "expected a small diff, got " .. #ansi .. " bytes")
-    -- The new row's content should appear.
     lt.assertEquals(ansi:find("second", 1, true) ~= nil, true)
-    h.teardown()
+    h:unmount()
 end
 
 function suite:test_static_no_change_produces_zero_diff()
@@ -89,11 +60,11 @@ function suite:test_static_no_change_produces_zero_diff()
             },
         }
     end
-    local h = new_harness(20, 5)
-    h.render_once(App)
-    local _, ansi = h.render_once(App)
-    lt.assertEquals(#ansi, 0, "second identical render should emit no ANSI")
-    h.teardown()
+    local h = testing.render(App, { cols = 20, rows = 5 })
+    h:clear_ansi()
+    h:rerender()
+    lt.assertEquals(#h:ansi(), 0, "second identical render should emit no ANSI")
+    h:unmount()
 end
 
 function suite:test_static_preserves_item_identity_when_cached()
@@ -114,9 +85,8 @@ function suite:test_static_preserves_item_identity_when_cached()
             },
         }
     end
-    local h = new_harness(20, 5)
-    h.render_once(App)
-    h.render_once(App)
+    local h = testing.render(App, { cols = 20, rows = 5 })
+    h:rerender()
     lt.assertEquals(render_calls, 2, "render() should be memoized per item")
-    h.teardown()
+    h:unmount()
 end
