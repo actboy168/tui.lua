@@ -109,11 +109,28 @@ local function buffer_to_ansi(buf)
     return table.concat(parts)
 end
 
+-- Serialize buffer to an array of row strings (for row-level diff).
+local function buffer_to_rows(buf)
+    local rows = {}
+    for y = 1, buf.h do
+        rows[y] = table.concat(buf[y])
+    end
+    return rows
+end
+
 --- Render element tree into a fresh buffer of size (w, h) and return an ANSI string.
 function M.render(element, w, h)
     local buf = new_buffer(w, h)
     paint(element, buf)
     return buffer_to_ansi(buf)
+end
+
+--- Render element tree into a fresh buffer and return (rows, w, h).
+-- rows is a 1-indexed array of strings, one per terminal row.
+function M.render_rows(element, w, h)
+    local buf = new_buffer(w, h)
+    paint(element, buf)
+    return buffer_to_rows(buf), w, h
 end
 
 return M
