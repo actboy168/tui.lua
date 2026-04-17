@@ -13,6 +13,7 @@
 --   h:advance(100)       -- drive timers forward 100ms of virtual time
 --   h:resize(60, 20)
 --   local frame = h:frame()
+--   h:match_snapshot("chat_after_submit")  -- test/__snapshots__/<name>.txt
 --   h:unmount()
 --
 -- For tests that only exercise reconciler/hooks without any layout concern,
@@ -261,6 +262,126 @@ function Harness:unmount()
     resize_mod._reset()
     scheduler._reset()
     restore_terminal()
+end
+
+-- ---------------------------------------------------------------------------
+-- Snapshot testing.
+--
+-- Plain-text format: one line per screen row, LF-joined, single trailing LF
+-- so the file ends on a newline (git-diff friendly). Trailing spaces on each
+-- row are preserved — the renderer pads with spaces and we want alignment
+-- failures to surface rather than be silently normalized.
+--
+-- Path: <cwd>/test/__snapshots__/<name>.txt (created on first run). Set the
+-- env var TUI_UPDATE_SNAPSHOTS=1 to overwrite all snapshots on a run (for
+-- intentional updates).
+
+local SNAPSHOT_DIR = "test/__snapshots__"
+
+local function snapshot_path(name)
+    if type(name) ~= "string" or #name == 0 then
+        error("match_snapshot: name must be non-empty string", 3)
+    end
+    if name:find("[/\\%s]") then
+        error("match_snapshot: name must not contain slashes or whitespace, got " .. name, 3)
+    end
+    return SNAPSHOT_DIR .. "/" .. name .. ".txt"
+end
+
+local function file_read(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local s = f:read("*a")
+    f:close()
+    return s
+end
+
+local function ensure_dir(path)
+    -- Blind mkdir — both Windows `mkdir` and Unix `mkdir -p` are idempotent
+    -- when the target exists; errors are silenced. We rely on the subsequent
+    -- io.open() failing loudly if the directory really can't be created.
+    if package.config:sub(1, 1) == "\\" then
+        os.execute('mkdir "' .. path:gsub("/", "\\") .. '" 2>nul')
+    else
+        os.execute('mkdir -p "' .. path .. '" 2>/dev/null')
+    end
+end
+
+local function file_write(path, content)
+    ensure_dir(SNAPSHOT_DIR)
+    local f, err = io.open(path, "wb")
+    if not f then error("match_snapshot: cannot write " .. path .. ": " .. tostring(err), 3) end
+    f:write(content)
+    f:close()
+end
+
+local function split_lines(s)
+    local out = {}
+    local i = 1
+    while i <= #s do
+        local j = s:find("\n", i, true)
+        if not j then
+            out[#out + 1] = s:sub(i)
+            break
+        end
+        out[#out + 1] = s:sub(i, j - 1)
+        i = j + 1
+    end
+    if s:sub(-1) == "\n" then out[#out + 1] = "" end
+    return out
+end
+
+-- Build a human-readable diff: show first differing row with ±3 lines of
+-- surrounding context, and the full line-count / width delta.
+local function format_diff(name, expected, actual)
+    local e_lines = split_lines(expected)
+    local a_lines = split_lines(actual)
+    local n = math.max(#e_lines, #a_lines)
+    local first = nil
+    for i = 1, n do
+        if e_lines[i] ~= a_lines[i] then first = i; break end
+    end
+    if not first then
+        return ("snapshot %s: contents differ but no line-level diff found"):format(name)
+    end
+    local lo = math.max(1, first - 3)
+    local hi = math.min(n, first + 3)
+    local buf = { ("snapshot mismatch: %s"):format(name) }
+    buf[#buf + 1] = ("first diff at line %d (expected %d rows, got %d rows)"):format(first, #e_lines, #a_lines)
+    buf[#buf + 1] = "context (lines " .. lo .. ".." .. hi .. "):"
+    for i = lo, hi do
+        local e = e_lines[i] or "<<missing>>"
+        local a = a_lines[i] or "<<missing>>"
+        if e == a then
+            buf[#buf + 1] = ("  %3d  %s"):format(i, e)
+        else
+            buf[#buf + 1] = ("- %3d  %s"):format(i, e)
+            buf[#buf + 1] = ("+ %3d  %s"):format(i, a)
+        end
+    end
+    buf[#buf + 1] = "re-run with TUI_UPDATE_SNAPSHOTS=1 to accept the new output."
+    return table.concat(buf, "\n")
+end
+
+function Harness:match_snapshot(name)
+    local path = snapshot_path(name)
+    local actual = self:frame() .. "\n"
+
+    if os.getenv("TUI_UPDATE_SNAPSHOTS") == "1" then
+        file_write(path, actual)
+        return self
+    end
+
+    local expected = file_read(path)
+    if not expected then
+        -- First run: write and pass.
+        file_write(path, actual)
+        return self
+    end
+
+    if expected == actual then return self end
+
+    error(format_diff(name, expected, actual), 2)
 end
 
 -- ---------------------------------------------------------------------------
