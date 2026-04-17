@@ -38,7 +38,6 @@ function suite:test_char_insertion_updates_value()
             tui.TextInput {
                 value = value,
                 onChange = function(v) value = v end,
-                focus = true,
             },
         }
     end
@@ -56,7 +55,6 @@ function suite:test_cjk_insertion_updates_value()
             tui.TextInput {
                 value = value,
                 onChange = function(v) value = v end,
-                focus = true,
             },
         }
     end
@@ -76,7 +74,6 @@ function suite:test_backspace_deletes_last_char()
             tui.TextInput {
                 value = value,
                 onChange = function(v) value = v end,
-                focus = true,
             },
         }
     end
@@ -94,7 +91,6 @@ function suite:test_left_arrow_moves_caret_and_insert_in_middle()
             tui.TextInput {
                 value = value,
                 onChange = function(v) value = v end,
-                focus = true,
             },
         }
     end
@@ -115,7 +111,6 @@ function suite:test_enter_triggers_onsubmit()
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted = v end,
-                focus = true,
             },
         }
     end
@@ -151,7 +146,6 @@ function suite:test_cursor_offset_tracks_caret_column()
             tui.TextInput {
                 value = value,
                 onChange = function(v) value = v end,
-                focus = true,
             },
         }
     end
@@ -170,7 +164,6 @@ function suite:test_mask_hides_chars_but_preserves_width()
             tui.TextInput {
                 value = value,
                 onChange = function(v) value = v end,
-                focus = true,
                 mask = "*",
             },
         }

@@ -72,7 +72,6 @@ local function make_chat_app(reply_text)
                     value    = input,
                     onChange = setInput,
                     onSubmit = submit,
-                    focus    = true,
                 },
             },
         }

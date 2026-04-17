@@ -38,6 +38,7 @@ local reconciler = require "tui.reconciler"
 local scheduler  = require "tui.scheduler"
 local input_mod  = require "tui.input"
 local resize_mod = require "tui.resize"
+local focus_mod  = require "tui.focus"
 local tui_core   = require "tui_core"
 
 local M = {}
@@ -53,6 +54,8 @@ local KEYS = {
     escape    = "\27",
     esc       = "\27",
     tab       = "\t",
+    ["shift+tab"] = "\27[Z",
+    backtab   = "\27[Z",
     backspace = "\127",
     up        = "\27[A",
     down      = "\27[B",
@@ -277,6 +280,31 @@ function Harness:resize(cols, rows)
     return self
 end
 
+-- Focus helpers. These drive the focus chain directly without going through
+-- input_mod.dispatch, so tests can assert focus state without caring about
+-- key byte sequences. `:press("tab")` still works for end-to-end flows.
+function Harness:focus_id()
+    return focus_mod.get_focused_id()
+end
+
+function Harness:focus_next()
+    focus_mod.focus_next()
+    self:_paint()
+    return self
+end
+
+function Harness:focus_prev()
+    focus_mod.focus_prev()
+    self:_paint()
+    return self
+end
+
+function Harness:focus(id)
+    focus_mod.focus(id)
+    self:_paint()
+    return self
+end
+
 function Harness:unmount()
     if self._dead then return end
     self._dead = true
@@ -284,6 +312,7 @@ function Harness:unmount()
     if self._tree then layout.free(self._tree); self._tree = nil end
     input_mod._reset()
     resize_mod._reset()
+    focus_mod._reset()
     scheduler._reset()
     restore_terminal()
 end
@@ -425,6 +454,7 @@ function M.render(App, opts)
     -- unclean) harness is wiped.
     input_mod._reset()
     resize_mod._reset()
+    focus_mod._reset()
     scheduler._reset()
 
     local h = setmetatable({
@@ -462,7 +492,19 @@ function M.render(App, opts)
     }
 
     -- Initial paint — installs subscriptions, runs mount-effects.
-    h:_paint()
+    -- If the first render blows up (e.g. the stabilization guard in _paint
+    -- fires on an infinite setState loop), we must restore the hijacked
+    -- terminal before re-raising, otherwise the next testing.render() call
+    -- in the same process will fail with "another harness is already active".
+    local ok, err = pcall(function() h:_paint() end)
+    if not ok then
+        restore_terminal()
+        input_mod._reset()
+        resize_mod._reset()
+        focus_mod._reset()
+        scheduler._reset()
+        error(err, 2)
+    end
     return h
 end
 
@@ -493,6 +535,7 @@ function Bare:unmount()
     reconciler.shutdown(self._state)
     input_mod._reset()
     resize_mod._reset()
+    focus_mod._reset()
     scheduler._reset()
 end
 
@@ -502,6 +545,7 @@ end
 function M.mount_bare(App)
     input_mod._reset()
     resize_mod._reset()
+    focus_mod._reset()
     scheduler._reset()
     scheduler.configure {
         now   = function() return 0 end,

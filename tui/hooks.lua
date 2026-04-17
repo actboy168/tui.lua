@@ -186,6 +186,86 @@ function M.useInput(fn)
 end
 
 -- ---------------------------------------------------------------------------
+-- useFocus(opts) — register this component into the focus chain.
+--
+-- opts = {
+--   autoFocus = bool?,       -- explicitly take focus on mount
+--   id        = string?,     -- manual id; generated otherwise
+--   on_input  = fn?,         -- called when a key is delivered to us
+-- }
+--
+-- returns { isFocused : bool, focus : fn }
+--
+-- Implementation note: subscription MUST happen inside a mount-once
+-- useEffect (`deps = {}`). Registering on every render would re-append the
+-- entry each frame, permanently shifting Tab order and likely clearing
+-- focus. The effect's cleanup unsubscribes on unmount.
+
+local focus_mod
+
+function M.useFocus(opts)
+    opts = opts or {}
+    if not focus_mod then focus_mod = require "tui.focus" end
+
+    local isFocused, setFocused = M.useState(false)
+    local onInputRef = useLatestRef(opts.on_input)
+
+    -- A dedicated slot holds the live focus entry so the returned `focus()`
+    -- closure can reach it even though subscribe happens in a later effect.
+    local inst, i = require_instance()
+    local slot = inst.hooks[i]
+    if not slot then
+        slot = { kind = "focus", entry = nil }
+        inst.hooks[i] = slot
+    end
+
+    local auto = opts.autoFocus
+    local id   = opts.id
+
+    M.useEffect(function()
+        local entry, unsub = focus_mod.subscribe {
+            id        = id,
+            autoFocus = auto,
+            on_change = function(b) setFocused(b) end,
+            on_input  = function(input, key)
+                if onInputRef.current then onInputRef.current(input, key) end
+            end,
+        }
+        slot.entry = entry
+        return function()
+            slot.entry = nil
+            unsub()
+        end
+    end, {})
+
+    return {
+        isFocused = isFocused,
+        focus     = function()
+            if slot.entry then focus_mod.focus(slot.entry.id) end
+        end,
+    }
+end
+
+-- ---------------------------------------------------------------------------
+-- useFocusManager() — return the focus system's control surface.
+--
+-- Methods are direct pass-throughs to tui.focus; there is no component-
+-- level state attached (hence no hook slot), but we still require the
+-- call to happen during render so usage is consistent with other hooks.
+
+function M.useFocusManager()
+    assert(current, "useFocusManager called outside of a component render")
+    if not focus_mod then focus_mod = require "tui.focus" end
+    return {
+        enableFocus   = focus_mod.enable,
+        disableFocus  = focus_mod.disable,
+        focus         = focus_mod.focus,
+        focusNext     = focus_mod.focus_next,
+        focusPrevious = focus_mod.focus_prev,
+    }
+end
+
+-- ---------------------------------------------------------------------------
 -- useWindowSize() -> { cols, rows }
 -- Returns the current terminal size. Re-renders when the terminal is resized.
 

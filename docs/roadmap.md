@@ -43,12 +43,28 @@
 - 新增 `test/test_chat_flow.lua` 端到端集成测试
 - 修掉 `tui/element.lua` 的 Box children nil 截断 bug（table constructor 里 `cond and X or nil` 会让后续孩子被 ipairs 丢弃）
 
-### Stage 5B — 快照测试 (`d2e9d34`)
+### Stage 5B — 快照测试
 - `Harness:match_snapshot(name)` → `test/__snapshots__/<name>.txt`
 - 首次运行写入并通过；后续运行逐行对比，不匹配时输出带上下文的 diff
 - `TUI_UPDATE_SNAPSHOTS=1` 环境变量强制覆盖所有快照
 - 纯文本格式，每行一屏幕行，git diff 友好
 - `test/test_snapshots.lua`：chat idle / typed / streaming / resized 四个用例
+
+### Stage 6 — 焦点管理（Ink 兼容）
+**前置修复 — `inst.dirty` 清零 + Harness 稳定化循环**
+- `tui/reconciler.lua` 在调用组件 fn 之前清 `inst.dirty = false`，mount-effect 里调 setter 能被检测到
+- `tui/testing.lua` `Harness:_paint` 加稳定化循环：render → 有 instance dirty 则重跑，上限 4 轮，超限 error
+- `test/test_dirty.lua`：mount-effect 调 setter 首帧即反映；死循环 setter 触发稳定化报错
+
+**焦点系统**
+- `tui/focus.lua`：焦点链状态机（entries 按订阅序 == Tab 次序；`focused_id` 单值）
+- `useFocus { autoFocus, id, on_input }` → `{ isFocused, focus }`；订阅走 `useEffect({}, [])` 挂载
+- `useFocusManager()` → `{ enableFocus, disableFocus, focus, focusNext, focusPrevious }`
+- `tui/input.lua` dispatch 拦截 Tab / Shift-Tab 转 `focus_next / focus_prev`；其他键先派给 focused entry，再广播给裸 `useInput`
+- `TextInput` 内置走 `useFocus`；`props.focus = false` 保留 disabled 独立分支；新增 `focusId` / `autoFocus` props
+- `Harness:focus_id / :focus_next / :focus_prev / :focus(id)`；`KEYS["shift+tab"] = "\27[Z"`
+- `testing.render` 初始 paint 失败时恢复 hijack 的 terminal，避免后续用例报 "another harness is already active"
+- `test/test_focus.lua`：8 个用例（autoFocus / Tab / FocusManager / disable / unmount 转焦点 / TextInput / 两个 TextInput Tab 切换 / rerender 不改变 Tab 顺序）
 
 ---
 
@@ -62,8 +78,14 @@ _暂无_
 
 ### 功能增强
 
-**焦点管理与高阶组件**
-- `useFocus` / `useFocusManager`（Ink 兼容）：Tab/Shift-Tab 切换，只有 focused 组件收 `useInput`
+**焦点系统完善**
+- `useFocus` id 冲突改为 render 期 assert 硬失败（当前仅后缀 `#seq`，易掩盖重复注册）
+- `useFocus` 支持 opts 热更新（当前 id / autoFocus 在 mount 时固化，运行时改不生效）
+- 严格按 Ink 语义：仅 `autoFocus=true` 才自动拿焦点（当前 `#entries==1` 也会自动，为 demo 方便）
+- `useFocus({ isActive = false })` 支持临时禁用某 entry 而不 unmount
+- `TextInput` 的 disabled 语义并回 useFocus：`focus.subscribe` 加 `suppress_initial`，移除独立分支
+
+**高阶组件**
 - `useStdout` / `useStderr`
 - `form.lua`：多输入框 + 导航
 
@@ -83,12 +105,15 @@ _暂无_
 
 - dev-mode hook 调用顺序校验：对比上次 render 的 hook 类型序列，错位告警
 - render 期间 setState 卫兵：设标志位，render 中调 setter 发 warn（避免死循环）
+- `Harness:_paint` 稳定化循环改为基于 dirty 集合收敛的严格终止条件（当前硬编码 4 轮上限）
+- `tui/testing.lua` `resolve_key` 支持通用 `shift+<key>` 前缀（当前只硬编码 `shift+tab`）
 
 ### 架构改进（非阻塞，穿插推进）
 
 - **`scheduler.step()` 正式 API**：当前 `tui.testing:advance(ms)` 借用 `scheduler._timers()` 私表做 timer 循环。应提升为公共 `scheduler.step(now)`，消除重复、给用户一个正式的"外部驱动"入口。
 - **paint 链路显式 terminal 注入**：`tui_core.terminal` 是进程单例，`tui.testing` 靠整表替换+还原来做 mock，限制了同进程内多 harness 并存。改为 `paint(root, ctx)` 接受 `ctx.terminal`，让测试 harness 直接传 fake，无需全局劫持。
 - **ltest 并行 runner 兼容**：若未来 ltest 改并行，上面两项必须已完成，否则测试互相踩单例。目前在 `tui/testing.lua` 文件头注释里记录警告。
+- **`input.dispatch` 中间件链**：当前用 `handled_by_focus_nav` bool 手动串 `pre → focus → broadcast`。改为可插拔中间件链，方便将来插入 mouse / bracketed-paste / 日志中间件。
 
 ### 文档
 

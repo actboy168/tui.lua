@@ -22,6 +22,7 @@ local scheduler  = require "tui.scheduler"
 local hooks      = require "tui.hooks"
 local input_mod  = require "tui.input"
 local resize_mod = require "tui.resize"
+local focus_mod  = require "tui.focus"
 local static_mod = require "tui.builtin.static"
 local text_input = require "tui.builtin.text_input"
 local cursor_mod = require "tui.builtin.cursor"
@@ -67,6 +68,8 @@ M.useTimeout     = hooks.useTimeout
 M.useInput       = hooks.useInput
 M.useWindowSize  = hooks.useWindowSize
 M.useApp         = hooks.useApp
+M.useFocus        = hooks.useFocus
+M.useFocusManager = hooks.useFocusManager
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
 M.setInterval = scheduler.setInterval
@@ -131,6 +134,7 @@ function M.render(root)
     local screen_state = screen_mod.new()
     input_mod._reset()
     resize_mod._reset()
+    focus_mod._reset()
 
     local app_handle  = {
         exit = function() scheduler.stop() end,
@@ -193,6 +197,7 @@ function M.render(root)
     reconciler.shutdown(rec_state)
     input_mod._reset()
     resize_mod._reset()
+    focus_mod._reset()
 
     -- Restore terminal state regardless of error.
     terminal.write(SHOW_CUR .. "\r\n")

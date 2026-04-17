@@ -5,8 +5,13 @@
 --   onChange    : fn(new_value) — called when the user edits the buffer.
 --   onSubmit    : fn(value)     — called on Enter.
 --   placeholder : string shown when value is empty and unfocused.
---   focus       : boolean (default true). When false, input is ignored and
---                 the cursor is not drawn.
+--   focus       : legacy escape hatch. Only meaningful when explicitly set to
+--                 false — the component then skips the focus system entirely
+--                 (renders as read-only placeholder). Omit it (or any other
+--                 value) to use the focus chain: the component calls
+--                 useFocus({ autoFocus = props.autoFocus ~= false }).
+--   autoFocus   : default true. Forwarded to useFocus.
+--   focusId     : optional id passed to useFocus.
 --   mask        : string (default nil). If set, each visible char is replaced
 --                 by this single-char mask (e.g. "*" for passwords).
 --   width       : optional cell width; defaults to container-allocated width.
@@ -108,9 +113,13 @@ local function TextInputImpl(props)
     local onChange    = props.onChange
     local onSubmit    = props.onSubmit
     local placeholder = props.placeholder or ""
-    local focus       = props.focus
-    if focus == nil then focus = true end
     local mask        = props.mask
+
+    -- Legacy escape hatch: props.focus == false explicitly opts out of the
+    -- focus chain entirely. The component behaves as a read-only placeholder
+    -- and never subscribes via useFocus. Any other value (nil, true, etc.)
+    -- routes through the focus system.
+    local disabled = (props.focus == false)
 
     -- Caret: persistent state. Reset if value shrank past caret externally.
     local chars = to_chars(value)
@@ -120,10 +129,7 @@ local function TextInputImpl(props)
         setCaret(caret_state)
     end
 
-    -- Keep a ref to latest props so the useInput callback sees fresh value.
-    local ctx = { chars = chars, caret = caret_state,
-                  onChange = onChange, onSubmit = onSubmit, setCaret = setCaret,
-                  value = value }
+    -- Keep a ref to latest props so the useFocus callback sees fresh value.
     local ctxRef, _ = hooks.useState({})
     ctxRef.chars    = chars
     ctxRef.caret    = caret_state
@@ -132,57 +138,69 @@ local function TextInputImpl(props)
     ctxRef.setCaret = setCaret
     ctxRef.value    = value
 
-    hooks.useInput(function(input, key)
-        if not focus then return end
-        local cs = ctxRef.chars
-        local c  = ctxRef.caret
-        local name = key.name
+    local focus_flag
+    if disabled then
+        -- Skip focus subscription entirely; nothing to do.
+        focus_flag = false
+    else
+        local f = hooks.useFocus {
+            autoFocus = props.autoFocus ~= false,
+            id        = props.focusId,
+            on_input  = function(input, key)
+                local cs = ctxRef.chars
+                local c  = ctxRef.caret
+                local name = key.name
 
-        local function emit(new_chars, new_caret)
-            ctxRef.setCaret(new_caret)
-            if ctxRef.onChange then ctxRef.onChange(chars_to_string(new_chars)) end
-        end
+                local function emit(new_chars, new_caret)
+                    ctxRef.setCaret(new_caret)
+                    if ctxRef.onChange then
+                        ctxRef.onChange(chars_to_string(new_chars))
+                    end
+                end
 
-        if name == "enter" then
-            if ctxRef.onSubmit then ctxRef.onSubmit(ctxRef.value) end
-        elseif name == "backspace" then
-            if c > 0 then
-                local nc = {}
-                for i = 1, c - 1 do nc[i] = cs[i] end
-                for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-                emit(nc, c - 1)
-            end
-        elseif name == "delete" then
-            if c < #cs then
-                local nc = {}
-                for i = 1, c do nc[i] = cs[i] end
-                for i = c + 2, #cs do nc[#nc + 1] = cs[i] end
-                emit(nc, c)
-            end
-        elseif name == "left" then
-            if c > 0 then ctxRef.setCaret(c - 1) end
-        elseif name == "right" then
-            if c < #cs then ctxRef.setCaret(c + 1) end
-        elseif name == "home" then
-            ctxRef.setCaret(0)
-        elseif name == "end" then
-            ctxRef.setCaret(#cs)
-        elseif name == "char" and input and input ~= "" then
-            -- Insert printable UTF-8 character(s) at caret.
-            local ins = to_chars(input)
-            local nc = {}
-            for i = 1, c do nc[i] = cs[i] end
-            for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
-            for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-            emit(nc, c + #ins)
-        end
-    end)
+                if name == "enter" then
+                    if ctxRef.onSubmit then ctxRef.onSubmit(ctxRef.value) end
+                elseif name == "backspace" then
+                    if c > 0 then
+                        local nc = {}
+                        for i = 1, c - 1 do nc[i] = cs[i] end
+                        for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
+                        emit(nc, c - 1)
+                    end
+                elseif name == "delete" then
+                    if c < #cs then
+                        local nc = {}
+                        for i = 1, c do nc[i] = cs[i] end
+                        for i = c + 2, #cs do nc[#nc + 1] = cs[i] end
+                        emit(nc, c)
+                    end
+                elseif name == "left" then
+                    if c > 0 then ctxRef.setCaret(c - 1) end
+                elseif name == "right" then
+                    if c < #cs then ctxRef.setCaret(c + 1) end
+                elseif name == "home" then
+                    ctxRef.setCaret(0)
+                elseif name == "end" then
+                    ctxRef.setCaret(#cs)
+                elseif name == "char" and input and input ~= "" then
+                    -- Insert printable UTF-8 character(s) at caret.
+                    local ins = to_chars(input)
+                    local nc = {}
+                    for i = 1, c do nc[i] = cs[i] end
+                    for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
+                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
+                    emit(nc, c + #ins)
+                end
+            end,
+        }
+        focus_flag = f.isFocused
+    end
 
     -- Visible text + caret column.
     local width = props.width or props.minWidth or nil
     -- Fall back to a reasonable default when unset; parent Box typically
     -- passes a flex-grown child so we try to render the whole value.
-    local show_placeholder = (#chars == 0) and not focus and placeholder ~= ""
+    local show_placeholder = (#chars == 0) and not focus_flag and placeholder ~= ""
     local render_width = width or math.max(prefix_width(chars, #chars) + 1,
                                            text_mod.display_width(placeholder))
     if render_width < 1 then render_width = 1 end
@@ -197,14 +215,10 @@ local function TextInputImpl(props)
     -- Build the Text child; user may apply styling via a wrapper Box.
     local text_el = element.Text { width = render_width, wrap = "nowrap", visible }
 
-    -- After layout, we need the absolute rect.y / rect.x to know where the
-    -- caret is on screen. We use useEffect to run after commit and compute
-    -- the cursor position. Since we don't have rect here pre-layout, we stash
-    -- the caret_col on the element and a post-commit hook in init.lua resolves
-    -- rect + cursor.set. Simpler: we set cursor.set based on a fixup helper
-    -- that runs during paint; we tag the returned element with _cursor_offset
-    -- so tui/init.lua's paint pipeline can resolve it.
-    text_el._cursor_offset = focus and caret_col or nil
+    -- Tag the Text element with the caret column when this input is focused;
+    -- tui/init.lua's paint pipeline translates that into an absolute cursor
+    -- move. Disabled and unfocused inputs leave _cursor_offset = nil.
+    text_el._cursor_offset = focus_flag and caret_col or nil
 
     return text_el
 end

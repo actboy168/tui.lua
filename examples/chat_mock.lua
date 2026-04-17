@@ -87,7 +87,6 @@ local function App()
                 onChange = setInput,
                 onSubmit = submit,
                 placeholder = "type a message and press Enter",
-                focus    = true,
             },
         },
     }
