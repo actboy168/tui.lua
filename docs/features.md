@@ -4,7 +4,7 @@
 
 ## 组件
 
-- **Box** — 布局容器，支持 `flexGrow` / `flexShrink` / `flexBasis` / `flexDirection` / `justifyContent` / `alignItems` / `alignContent` / `alignSelf` / `aspectRatio` / `overflow` / `boxSizing` / `border` / `padding` / `margin` / `gap` 等 Yoga 属性
+- **Box** — 布局容器，支持 `flexGrow` / `flexShrink` / `flexBasis` / `flexDirection` / `justifyContent` / `alignItems` / `alignContent` / `alignSelf` / `overflow` / `boxSizing` / `borderStyle` / `borderColor` / `borderDimColor` / `padding` / `margin` / `gap` 等 Yoga 属性
 - **Text** — 文本渲染，支持 `color` / `backgroundColor` / `bold` / `dim` / `underline` / `inverse` / `wrap`
 - **TextInput** — 受控文本输入，支持 `value` / `onChange` / `onSubmit` / `placeholder` / `mask` / `focus` / `autoFocus` / `focusId` / `width`；IME 光标跟随；批量 dispatch 正确处理
 - **Select** — 列表选择，支持 `items` / `onSelect` / `onChange` / `initialIndex` / `indicator` / `highlightColor` / `renderItem` / `limit` / `isDisabled`
@@ -50,6 +50,12 @@
 - 3+ 子节点缺 `key` 警告
 - hook 在非 component 函数里调用 → `[tui:fatal]`
 - 测试中未预期 dev 警告升级为 fatal
+
+## Box 样式
+
+- `borderStyle`: `"single"` / `"double"` / `"round"` / `"bold"` / `"singleDouble"` / `"doubleSingle"` / `"classic"`
+- `borderColor`: 边框前景色（优先级高于 `color`）
+- `borderDimColor`: 边框暗色（自动设置 `dim` 属性）
 
 ## C 层
 

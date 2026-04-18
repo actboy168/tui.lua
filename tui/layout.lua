@@ -18,13 +18,14 @@ local M = {}
 local function apply_box_style(node, props)
     local style = {}
 
-    -- border: "single" | "double" | "round" → 1 on every edge (for layout
-    -- reservation). Actual glyph choice happens in renderer.
-    if props.border then
+    -- borderStyle: "single" | "double" | "round" | "bold" | "singleDouble" | "doubleSingle" | "classic"
+    -- → 1 on every edge (for layout reservation). Actual glyph choice happens in renderer.
+    if props.borderStyle then
         style.border = 1
     end
 
     -- pass-through keys that map 1:1 to luayoga style names
+    -- Note: Yoga binding only accepts integers (not floats or percentages)
     local passthrough = {
         "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
         "flexGrow", "flexShrink", "flexBasis", "flexDirection", "flexWrap",
@@ -35,12 +36,13 @@ local function apply_box_style(node, props)
         "paddingX", "paddingY",
         "borderTop", "borderBottom", "borderLeft", "borderRight",
         "gap", "rowGap", "columnGap",
-        "aspectRatio", "overflow", "boxSizing",
+        "overflow", "boxSizing",
         "display", "position", "top", "bottom", "left", "right",
     }
     for _, k in ipairs(passthrough) do
         if props[k] ~= nil then
-            -- arrays like {0,1} become "0 1" for luayoga's string parser
+            -- arrays like {1,2} become "1 2" for luayoga multi-value syntax
+            -- (e.g., margin = {1, 2} means top/bottom=1, left/right=2)
             local v = props[k]
             if type(v) == "table" then
                 v = table.concat(v, " ")

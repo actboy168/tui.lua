@@ -4,6 +4,7 @@
 #include <lauxlib.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "yoga/Yoga.h"
 
 #define FlexDirection 1
@@ -24,7 +25,6 @@ struct enum_string {
 
 struct set_number {
 	void (*set)(YGNodeRef node, float width);
-	void (*setPercent)(YGNodeRef node, float width);
 	void (*setAuto)(YGNodeRef node);
 	void (*setMaxContent)(YGNodeRef node);
 	void (*setFitContent)(YGNodeRef node);
@@ -33,7 +33,6 @@ struct set_number {
 
 struct set_edge_number {
 	void (*set)(YGNodeRef node, YGEdge edge, float v);
-	void (*setPercent)(YGNodeRef node, YGEdge edge, float v);
 	void (*setAuto)(YGNodeRef node, YGEdge edge);
 };
 
@@ -89,11 +88,9 @@ is_whitespace(char c) {
 static void
 setNumberString(lua_State *L, YGNodeRef node, const char *v, const struct set_number *setter) {
 	char* endptr = NULL;
-	float number = strtof(v, &endptr);
-	if (*endptr == '%') {
-		setter->setPercent(node, number);
-	} else if (is_whitespace(*endptr)) {
-		setter->set(node, number);
+	long number = strtol(v, &endptr, 10);
+	if (is_whitespace(*endptr)) {
+		setter->set(node, (float)number);
 	} else if (setter->setAuto && strcmp(v, "auto") == 0) {
 		setter->setAuto(node);
 	} else if (strcmp(v, "stretch") == 0) {
@@ -103,15 +100,15 @@ setNumberString(lua_State *L, YGNodeRef node, const char *v, const struct set_nu
 	} else if (strcmp(v, "fit-content") == 0) {
 		setter->setFitContent(node);
 	} else {
-		luaL_error(L, "Invalid number %s", v);
+		luaL_error(L, "Invalid integer %s", v);
 	}
 }
 
 static void
 setNumber(lua_State *L, YGNodeRef node, const struct set_number *setter) {
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		float v = lua_tonumber(L, -1);
-		setter->set(node, v);
+		int v = luaL_checkinteger(L, -1);
+		setter->set(node, (float)v);
 	} else {
 		const char * v = luaL_checkstring(L, -1);
 		setNumberString(L, node, v, setter);
@@ -122,7 +119,6 @@ static void
 lsetWidth(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetWidth,
-		YGNodeStyleSetWidthPercent,
 		YGNodeStyleSetWidthAuto,
 		YGNodeStyleSetWidthMaxContent,
 		YGNodeStyleSetWidthFitContent,
@@ -134,7 +130,6 @@ static void
 lsetMinWidth(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetMinWidth,
-		YGNodeStyleSetMinWidthPercent,
 		NULL,
 		YGNodeStyleSetMinWidthMaxContent,
 		YGNodeStyleSetMinWidthFitContent,
@@ -146,7 +141,6 @@ static void
 lsetMaxWidth(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetMaxWidth,
-		YGNodeStyleSetMaxWidthPercent,
 		NULL,
 		YGNodeStyleSetMaxWidthMaxContent,
 		YGNodeStyleSetMaxWidthFitContent,
@@ -158,7 +152,6 @@ static void
 lsetHeight(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetHeight,
-		YGNodeStyleSetHeightPercent,
 		YGNodeStyleSetHeightAuto,
 		YGNodeStyleSetHeightMaxContent,
 		YGNodeStyleSetHeightFitContent,
@@ -170,7 +163,6 @@ static void
 lsetMinHeight(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetMinHeight,
-		YGNodeStyleSetMinHeightPercent,
 		NULL,
 		YGNodeStyleSetMinHeightMaxContent,
 		YGNodeStyleSetMinHeightFitContent,
@@ -182,7 +174,6 @@ static void
 lsetMaxHeight(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetMaxHeight,
-		YGNodeStyleSetMaxHeightPercent,
 		NULL,
 		YGNodeStyleSetMaxHeightMaxContent,
 		YGNodeStyleSetMaxHeightFitContent,
@@ -216,20 +207,17 @@ static const char *
 setEdgeNumber(lua_State *L, YGNodeRef node, YGEdge edge, const char *v, const struct set_edge_number *setter) {
 	v = skip_whitespace(v);
 	char* endptr = NULL;
-	float number = strtof(v, &endptr);
+	long number = strtol(v, &endptr, 10);
 	if (is_whitespace(*endptr)) {
-		setter->set(node, edge, number);
+		setter->set(node, edge, (float)number);
 		return endptr;
-	} else if (setter->setPercent && *endptr == '%') {
-		setter->setPercent(node, edge, number);
-		return endptr+1;
 	} else if (setter->setAuto && memcmp("auto", v, 4) == 0) {
 		if (!is_whitespace(v[4]))
 			luaL_error(L, "Invalid number %s", v);
 		setter->setAuto(node, edge);
 		return v + 4;
 	} else {
-		luaL_error(L, "Invalid number %s", v);
+		luaL_error(L, "Invalid integer %s", v);
 	}
 	return NULL;
 }
@@ -237,8 +225,8 @@ setEdgeNumber(lua_State *L, YGNodeRef node, YGEdge edge, const char *v, const st
 static void
 setFourNumber(lua_State *L, YGNodeRef node, const struct set_edge_number *setter) {
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		float v = lua_tonumber(L, -1);
-		setter->set(node, YGEdgeAll, v);
+		int v = luaL_checkinteger(L, -1);
+		setter->set(node, YGEdgeAll, (float)v);
 	} else {
 		const char * v = luaL_checkstring(L, -1);
 		switch (count_words(v)) {
@@ -261,7 +249,7 @@ setFourNumber(lua_State *L, YGNodeRef node, const struct set_edge_number *setter
 			setEdgeNumber(L, node, YGEdgeStart, v, setter);
 			break;
 		default:
-			luaL_error(L, "Invalid numbers %s", v);
+			luaL_error(L, "Invalid integers %s", v);
 		}
 	}
 }
@@ -280,7 +268,6 @@ static void
 lsetFlexBasis(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetFlexBasis,
-		YGNodeStyleSetFlexBasisPercent,
 		YGNodeStyleSetFlexBasisAuto,
 		YGNodeStyleSetFlexBasisMaxContent,
 		YGNodeStyleSetFlexBasisFitContent,
@@ -292,7 +279,6 @@ static void
 lsetMargin(lua_State *L, YGNodeRef node) {
 	static const struct set_edge_number setter = {
 		YGNodeStyleSetMargin,
-		YGNodeStyleSetMarginPercent,
 		YGNodeStyleSetMarginAuto,
 	};
 	setFourNumber(L, node, &setter);
@@ -302,7 +288,6 @@ static void
 lsetPadding(lua_State *L, YGNodeRef node) {
 	static const struct set_edge_number setter = {
 		YGNodeStyleSetPadding,
-		YGNodeStyleSetPaddingPercent,
 		NULL,
 	};
 	setFourNumber(L, node, &setter);
@@ -312,11 +297,11 @@ static void
 setPaddingEdge(lua_State *L, YGNodeRef node, YGEdge edge) {
 	static const struct set_edge_number setter = {
 		YGNodeStyleSetPadding,
-		YGNodeStyleSetPaddingPercent,
 		NULL,
 	};
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		setter.set(node, edge, lua_tonumber(L, -1));
+		int v = luaL_checkinteger(L, -1);
+		setter.set(node, edge, (float)v);
 	} else {
 		setEdgeNumber(L, node, edge, luaL_checkstring(L, -1), &setter);
 	}
@@ -333,11 +318,11 @@ static void
 setMarginEdge(lua_State *L, YGNodeRef node, YGEdge edge) {
 	static const struct set_edge_number setter = {
 		YGNodeStyleSetMargin,
-		YGNodeStyleSetMarginPercent,
 		YGNodeStyleSetMarginAuto,
 	};
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		setter.set(node, edge, lua_tonumber(L, -1));
+		int v = luaL_checkinteger(L, -1);
+		setter.set(node, edge, (float)v);
 	} else {
 		setEdgeNumber(L, node, edge, luaL_checkstring(L, -1), &setter);
 	}
@@ -355,7 +340,6 @@ lsetBorder(lua_State *L, YGNodeRef node) {
 	static const struct set_edge_number setter = {
 		YGNodeStyleSetBorder,
 		NULL,
-		NULL,
 	};
 	setFourNumber(L, node, &setter);
 }
@@ -363,9 +347,10 @@ lsetBorder(lua_State *L, YGNodeRef node) {
 static void
 setBorderEdge(lua_State *L, YGNodeRef node, YGEdge edge) {
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		YGNodeStyleSetBorder(node, edge, lua_tonumber(L, -1));
+		int v = luaL_checkinteger(L, -1);
+		YGNodeStyleSetBorder(node, edge, (float)v);
 	} else {
-		luaL_error(L, "border edge expects a number");
+		luaL_error(L, "border edge expects an integer");
 	}
 }
 
@@ -373,11 +358,6 @@ static void lsetBorderTop(lua_State *L, YGNodeRef node)    { setBorderEdge(L, no
 static void lsetBorderBottom(lua_State *L, YGNodeRef node) { setBorderEdge(L, node, YGEdgeBottom); }
 static void lsetBorderLeft(lua_State *L, YGNodeRef node)   { setBorderEdge(L, node, YGEdgeLeft); }
 static void lsetBorderRight(lua_State *L, YGNodeRef node)  { setBorderEdge(L, node, YGEdgeRight); }
-
-static void
-lsetAspectRatio(lua_State *L, YGNodeRef node) {
-	YGNodeStyleSetAspectRatio(node, luaL_checknumber(L, -1));
-}
 
 static void
 lsetOverflow(lua_State *L, YGNodeRef node) {
@@ -392,7 +372,7 @@ lsetBoxSizing(lua_State *L, YGNodeRef node) {
 static void
 lsetGap(lua_State *L, YGNodeRef node) {
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		YGNodeStyleSetGap(node, YGGutterAll, lua_tonumber(L, -1));
+		YGNodeStyleSetGap(node, YGGutterAll, (float)luaL_checkinteger(L, -1));
 	} else {
 		luaL_error(L, "gap expects a number");
 	}
@@ -401,7 +381,7 @@ lsetGap(lua_State *L, YGNodeRef node) {
 static void
 lsetRowGap(lua_State *L, YGNodeRef node) {
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		YGNodeStyleSetGap(node, YGGutterRow, lua_tonumber(L, -1));
+		YGNodeStyleSetGap(node, YGGutterRow, (float)luaL_checkinteger(L, -1));
 	} else {
 		luaL_error(L, "rowGap expects a number");
 	}
@@ -410,7 +390,7 @@ lsetRowGap(lua_State *L, YGNodeRef node) {
 static void
 lsetColumnGap(lua_State *L, YGNodeRef node) {
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		YGNodeStyleSetGap(node, YGGutterColumn, lua_tonumber(L, -1));
+		YGNodeStyleSetGap(node, YGGutterColumn, (float)luaL_checkinteger(L, -1));
 	} else {
 		luaL_error(L, "columnGap expects a number");
 	}
@@ -485,12 +465,11 @@ static void
 setPosition(lua_State *L, YGNodeRef node, YGEdge edge) {
 	static const struct set_edge_number setter = {
 		YGNodeStyleSetPosition,
-		YGNodeStyleSetPositionPercent,
 		YGNodeStyleSetPositionAuto,
 	};
 	if (lua_type(L, -1) == LUA_TNUMBER) {
-		float v = luaL_checknumber(L, -1);
-		setter.set(node, edge, v);
+		int v = luaL_checkinteger(L, -1);
+		setter.set(node, edge, (float)v);
 	} else {
 		const char *v = luaL_checkstring(L, -1);
 		setEdgeNumber(L, node, edge, v, &setter);
@@ -593,7 +572,6 @@ luaopen_yoga(lua_State *L) {
 		{ "flexGrow", lsetFlexGrow },
 		{ "flexShrink", lsetFlexShrink },
 		{ "flexBasis", lsetFlexBasis },
-		{ "aspectRatio", lsetAspectRatio },
 		{ "overflow", lsetOverflow },
 		{ "boxSizing", lsetBoxSizing },
 		{ "display", lsetDisplay },

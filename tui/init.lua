@@ -197,7 +197,7 @@ function M.render(root)
         exit = function() scheduler.stop() end,
     }
 
-    local function paint()
+    local function paint(term)
         local w, h = terminal.get_size()
         local cw, ch = screen_mod.size(screen_state)
         if cw ~= w or ch ~= h then
@@ -247,6 +247,7 @@ function M.render(root)
             paint    = paint,
             read     = read,
             on_input = on_input,
+            terminal = terminal,
         }
     end)
 

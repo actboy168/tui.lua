@@ -219,7 +219,7 @@ function suite:test_cursor_inside_bordered_padded_box()
         local v, setV = tui.useState("x")
         return tui.Box {
             width = 20, height = 3,
-            border = "round", paddingX = 1,
+            borderStyle = "round", paddingX = 1,
             tui.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end

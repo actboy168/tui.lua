@@ -13,15 +13,39 @@ local sgr      = require "tui.sgr"
 
 local M = {}
 
+-- Pack border-specific style props.
+-- borderColor / borderDimColor take precedence over color / dim.
+local function pack_border_style(props)
+    if not props then return sgr.pack_bytes(nil) end
+
+    -- Build effective style table for border
+    local border_props = {
+        color     = props.borderColor or props.color,
+        backgroundColor = props.backgroundColor,
+        bold      = props.bold,
+        dim       = props.borderDimColor and true or props.dim,
+        underline = props.underline,
+        inverse   = props.inverse,
+    }
+
+    -- If borderDimColor is set, use it as color with dim
+    if props.borderDimColor then
+        border_props.color = props.borderDimColor
+        border_props.dim = true
+    end
+
+    return sgr.pack_bytes(border_props)
+end
+
 local function paint(element, screen)
     local r = element.rect
     if not r then return end
     if element.kind == "box" then
         local props = element.props
-        local border = props and props.border
-        if border then
-            local fg_bg, attrs = sgr.pack_bytes(props)
-            screen_c.put_border(screen, r.x, r.y, r.w, r.h, border,
+        local border_style = props and props.borderStyle
+        if border_style then
+            local fg_bg, attrs = pack_border_style(props)
+            screen_c.put_border(screen, r.x, r.y, r.w, r.h, border_style,
                                 fg_bg, attrs)
         end
         for _, child in ipairs(element.children or {}) do

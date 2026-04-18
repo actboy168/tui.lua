@@ -157,47 +157,53 @@ end
 --   on_input = function(str)  -- called with each non-empty read_raw batch
 --                             -- return true to stop the loop
 --   read     = function() -> string|nil   -- non-blocking stdin read
---   paint    = function()  -- called whenever a repaint should happen
+--   paint    = function(terminal)  -- called whenever a repaint should happen;
+--                                   -- receives the terminal object so callers can
+--                                   -- pass a real or fake terminal without global
+--                                   -- replacement (eliminates the tui_core.terminal
+--                                   -- singleton hijack that testing.render used to need)
+--   terminal = <terminal object>  -- passed as first arg to paint
 -- }
 
 function M.run(opts)
-    assert(opts and opts.paint and opts.read, "scheduler.run requires paint+read")
-    running = true
-    local last_frame = 0
+	assert(opts and opts.paint and opts.read, "scheduler.run requires paint+read")
+	local terminal = opts.terminal
+	running = true
+	local last_frame = 0
 
-    -- Initial paint so the screen isn't blank before first event.
-    opts.paint()
-    dirty = false
-    last_frame = now_ms()
+	-- Initial paint so the screen isn't blank before first event.
+	opts.paint(terminal)
+	dirty = false
+	last_frame = now_ms()
 
-    while running do
-        local now = now_ms()
+	while running do
+		local now = now_ms()
 
-        -- Input: forward raw bytes; handler can stop loop by returning true.
-        if opts.read then
-            local s = opts.read()
-            if s and #s > 0 and opts.on_input then
-                if opts.on_input(s) then
-                    running = false
-                    break
-                end
-            end
-        end
+		-- Input: forward raw bytes; handler can stop loop by returning true.
+		if opts.read then
+			local s = opts.read()
+			if s and #s > 0 and opts.on_input then
+				if opts.on_input(s) then
+					running = false
+					break
+				end
+			end
+		end
 
-        -- Timers.
-        if tick_timers(now) then
-            -- Timer callbacks may have flipped dirty via requestRedraw.
-        end
+		-- Timers.
+		if tick_timers(now) then
+			-- Timer callbacks may have flipped dirty via requestRedraw.
+		end
 
-        -- Repaint if dirty and a frame worth of time has elapsed.
-        if dirty and (now - last_frame) >= frame_ms then
-            opts.paint()
-            dirty = false
-            last_frame = now
-        end
+		-- Repaint if dirty and a frame worth of time has elapsed.
+		if dirty and (now - last_frame) >= frame_ms then
+			opts.paint(terminal)
+			dirty = false
+			last_frame = now
+		end
 
-        sleep_ms(input_poll_ms)
-    end
+		sleep_ms(input_poll_ms)
+	end
 end
 
 -- Expose for tests / introspection.

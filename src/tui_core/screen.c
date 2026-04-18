@@ -394,13 +394,50 @@ static const border_glyphs_t BORDER_ROUND = {
     {(char)0xE2,(char)0x94,(char)0x80,0}, /* ─ */
     {(char)0xE2,(char)0x94,(char)0x82,0}, /* │ */
 };
+static const border_glyphs_t BORDER_BOLD = {
+    {(char)0xE2,(char)0x94,(char)0x8F,0}, /* ┏ */
+    {(char)0xE2,(char)0x94,(char)0x93,0}, /* ┓ */
+    {(char)0xE2,(char)0x94,(char)0x97,0}, /* ┗ */
+    {(char)0xE2,(char)0x94,(char)0x9B,0}, /* ┛ */
+    {(char)0xE2,(char)0x94,(char)0x81,0}, /* ━ */
+    {(char)0xE2,(char)0x94,(char)0x83,0}, /* ┃ */
+};
+static const border_glyphs_t BORDER_SINGLE_DOUBLE = {
+    {(char)0xE2,(char)0x94,(char)0x8D,0}, /* ┍ */
+    {(char)0xE2,(char)0x94,(char)0x91,0}, /* ┑ */
+    {(char)0xE2,(char)0x94,(char)0x95,0}, /* ┕ */
+    {(char)0xE2,(char)0x94,(char)0x99,0}, /* ┙ */
+    {(char)0xE2,(char)0x94,(char)0x80,0}, /* ─ */
+    {(char)0xE2,(char)0x95,(char)0x91,0}, /* ║ */
+};
+static const border_glyphs_t BORDER_DOUBLE_SINGLE = {
+    {(char)0xE2,(char)0x95,(char)0x8E,0}, /* ╎ */
+    {(char)0xE2,(char)0x95,(char)0x8F,0}, /* ╏ */
+    {(char)0xE2,(char)0x95,(char)0x8A,0}, /* ╊ */
+    {(char)0xE2,(char)0x95,(char)0x8B,0}, /* ╋ */
+    {(char)0xE2,(char)0x95,(char)0x90,0}, /* ═ */
+    {(char)0xE2,(char)0x94,(char)0x82,0}, /* │ */
+};
+static const border_glyphs_t BORDER_CLASSIC = {
+    {(char)0x2B,0,0,0},                   /* + */
+    {(char)0x2B,0,0,0},                   /* + */
+    {(char)0x2B,0,0,0},                   /* + */
+    {(char)0x2B,0,0,0},                   /* + */
+    {(char)0x2D,0,0,0},                   /* - hh */
+    {(char)0x7C,0,0,0},                   /* | vv */
+};
 
 static const border_glyphs_t *
 border_lookup(const char *name) {
     if (!name) return &BORDER_SINGLE;
+    if (strcmp(name, "single") == 0) return &BORDER_SINGLE;
     if (strcmp(name, "double") == 0) return &BORDER_DOUBLE;
     if (strcmp(name, "round")  == 0) return &BORDER_ROUND;
-    return &BORDER_SINGLE;  /* default / "single" */
+    if (strcmp(name, "bold")   == 0) return &BORDER_BOLD;
+    if (strcmp(name, "singleDouble") == 0) return &BORDER_SINGLE_DOUBLE;
+    if (strcmp(name, "doubleSingle") == 0) return &BORDER_DOUBLE_SINGLE;
+    if (strcmp(name, "classic") == 0) return &BORDER_CLASSIC;
+    return &BORDER_SINGLE;  /* default */
 }
 
 static int

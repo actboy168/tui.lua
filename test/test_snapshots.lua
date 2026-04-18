@@ -66,7 +66,7 @@ local function make_chat_app(reply_text)
             streaming and tui.Text { ("[bot] %s"):format(streaming.target:sub(1, streaming.shown)), key = "stream" } or nil,
             tui.Box { flexGrow = 1, key = "spacer" },
             tui.Box {
-                border = "round",
+                borderStyle = "round",
                 paddingX = 1,
                 key = "prompt",
                 tui.TextInput {

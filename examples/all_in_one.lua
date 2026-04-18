@@ -86,7 +86,7 @@ local Header = component(function(props)
 
     return tui.Box {
         flexDirection = "row",
-        border = "round",
+        borderStyle = "round",
         color = theme.border_fg,
         paddingX = 1,
         tui.Text { key = "title", color = theme.accent, bold = true, "chat demo" },
@@ -159,7 +159,7 @@ local HelpBox = component(function()
     local theme = tui.useContext(ThemeCtx)
     return tui.Box {
         flexDirection = "column",
-        border = "double",
+        borderStyle = "double",
         color = theme.accent,
         paddingX = 1,
         tui.Text { key = "h0", bold = true, color = theme.accent, "commands" },
@@ -325,7 +325,7 @@ local function App()
                         boundaryRef.current.reset = reset
                         return tui.Box {
                             flexDirection = "column",
-                            border = "round",
+                            borderStyle = "round",
                             color = "red",
                             paddingX = 1,
                             tui.Text { key = "e1", color = "red", bold = true, "caught error" },
@@ -352,7 +352,7 @@ local function App()
             showModel and tui.Box {
                 key = "model-overlay",
                 flexDirection = "column",
-                border = "double",
+                borderStyle = "double",
                 color = theme_value.accent,
                 paddingX = 1,
                 tui.Text { key = "title", color = theme_value.accent, bold = true, "choose model" },
@@ -371,7 +371,7 @@ local function App()
             tui.Box {
                 key = "input",
                 flexDirection = "row",
-                border = "round",
+                borderStyle = "round",
                 color = theme_value.border_fg,
                 paddingX = 1,
                 tui.TextInput {

@@ -52,11 +52,11 @@ function suite:test_cursor_coords_are_integers_nested_flex()
         return tui.Box {
             flexDirection = "column",
             width = 80, height = 75,
-            tui.Box { key = "header", border = "round", paddingX = 1,
+            tui.Box { key = "header", borderStyle = "round", paddingX = 1,
                 tui.Text { key = "t", "title" },
             },
             tui.Box { key = "grow", flexGrow = 1 },
-            tui.Box { key = "input", border = "round", paddingX = 1,
+            tui.Box { key = "input", borderStyle = "round", paddingX = 1,
                 tui.TextInput { value = v, onChange = setV, autoFocus = true },
             },
         }

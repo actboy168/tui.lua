@@ -26,7 +26,7 @@ end
 
 function suite:test_box_with_border()
     local w, h = tui.intrinsicSize(tui.Box {
-        border = "round",
+        borderStyle = "round",
         tui.Text { "hi" },
     })
     -- border reserves 1 cell on each side (left+right, top+bottom)

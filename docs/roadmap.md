@@ -24,21 +24,26 @@ _暂无_
 
 - `Newline { count }` / `Spacer` / `Transform { transform=fn }`
 - `form.lua`：多输入框 + 导航
+- **Ansi**：解析 ANSI 转义序列（SGR / OSC）渲染为带样式 Text，用于外部工具输出（`git diff --color`）
 - Markdown / syntax-highlight（AI chat 核心诉求，Stage 靠后）
 
 ### 渲染性能与稳定性
 
-- Box prop 命名对齐 Ink：当前 `border` / `color`（兼边框与文本色）与 Ink 的 `borderStyle` / `borderColor` 不一致，迁移成本会越积越重。改为：
-  - `borderStyle` 取代 `border`（保留 `border` 作 alias 若干版本）
-  - 新增 `borderColor` / `borderDimColor`（每边独立颜色选配）
-  - 边框样式扩充：`bold` / `singleDouble` / `doubleSingle` / `classic`
 - alternate screen buffer（类 vim 进出全屏）
 - truecolor / 256 色扩展：`cell_t` 扩到 16 字节 or 独立 style pool，给 `fg / bg` 加 16/24 bit 值
 - Text 样式补齐：`italic` / `strikethrough` / `dimColor` / `wrap` 模式（`wrap` / `hard` / `truncate` / `truncate-start` / `truncate-middle` / `truncate-end`）
 - Text per-run inline style：`Text { "plain ", {text="red", color="red"} }`，wrap 沿 run 边界切片
 - Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text
-- `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索）
+- `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索 O(n) → O(1)）
+- **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点（Ink 行为），解决动态 UI（弹窗关闭后焦点丢失）问题
+- **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
 - Yoga 属性预处理：apply_box_style 每节点遍历 38 个 passthrough key + Yoga 绑定再遍历一次，改为扁平数字数组按固定索引传入
+- **StylePool 缓存**：Ink 的 style_id → SGR 会话级缓存，避免每帧重复计算 ANSI 序列。方案：独立 style pool，cell_t 存 style_id (uint16_t) 索引到 pool，首次 interning 后续直接查找
+- **CharPool 字符串去重**：相同文本共享存储，减少内存占用
+- **行尾空白跳过**：diff 时跳过行尾空白单元格，减少比较开销
+- **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
+- **Damage Tracking 损坏区域跟踪**：只扫描修改过的行，跳过未变区域（长期：结合增量 blit 跳过未变子树）
+- **超链接 HyperlinkPool（OSC 8）**：终端超链接支持，URL 去重存储
 
 ### 开发者体验
 
@@ -46,24 +51,25 @@ _暂无_
   - A) reconciler 在 children 归一化时发现 function，自动包成 component element（对齐 React 直觉，但 helper function 误塞进 children 会被误认为组件）
   - B) 提供 `tui.component(fn)` 工厂助手到框架层（显式、可 grep、1 行 boilerplate）
   - 若选 A，还需 dev-mode 检测"hook 在未注册为 component 的函数里被调用"给早期报错，而不是等 hook count mismatch 才炸
-- `Harness:_paint` 稳定化循环改为基于 dirty 集合收敛的严格终止条件（当前硬编码 4 轮上限）
 - `tui/testing.lua` `resolve_key` 支持通用 `shift+<key>` 前缀（当前只硬编码 `shift+tab`）；同时让 `h:press(ch)` 在 `ch` 是单个可打印字符时回落为 `type(ch)`，避免"unknown key '?'"这类翻车
-- ErrorBoundary 保留 `debug.traceback(err, 2)`，fallback 函数接收 `{message, trace}` 而不只是字符串
+- ErrorBoundary fallback 接收 `{message, trace}` 而不只是字符串（保留 `debug.traceback(err, 2)`）
+- `screen.c` full-redraw 模式下行末加 `reset_sgr`，避免 SGR 状态跨行继承导致视觉 bug
 - `tui._VERSION` 字符串常量
 - `make.lua` 加 `lm:conf_debug` / `lm:conf_release` 区分（asan / NDEBUG 开关）
-- `ltest.assertEquals` 长字符串比较输出 multiline diff 而不是整串 dump
+- `testing.lua` `io.stderr` 全局替换改为生命周期受限的拦截（`render` 到 `unmount` 之间），避免并行测试风险
 
 ### 测试覆盖
 
 - TextInput IME composition 状态转换、cursor 越界（当前只覆盖 commit 后的正常输入路径）
+- ErrorBoundary 嵌套场景
+- 并发 setState 导致的稳定化循环边界（MAX_STABILIZE_PASSES）
 
 ### 架构改进（非阻塞，穿插推进）
 
-- **paint 链路显式 terminal 注入**：`tui_core.terminal` 是进程单例，`tui.testing` 靠整表替换+还原来做 mock，限制了同进程内多 harness 并存。改为 `paint(root, ctx)` 接受 `ctx.terminal`，让测试 harness 直接传 fake，无需全局劫持。
-- **ltest 并行 runner 兼容**：若未来 ltest 改并行，上面一项必须已完成，否则测试互相踩单例。目前在 `tui/testing.lua` 文件头注释里记录警告。
 - **`input.dispatch` 中间件链**：当前用 `handled_by_focus_nav` bool 手动串 `pre → focus → broadcast`。改为可插拔中间件链，方便将来插入 mouse / bracketed-paste / 日志中间件。
 - **订阅总线工具化**：input / resize / focus 三处重复实现 "订阅表 + dispatch"，提 `make_subscription_bus()`
 - **C 层 assert 走 `[tui:fatal]` 前缀**：当前 C 层 `luaL_error` 会被 ErrorBoundary 吞掉，不变式违反应该 bypass
+- **`put_cell` OOM 检测**：当前 OOM 时静默丢弃 grapheme cluster，建议 dev-mode 下报错或记录标志位
 
 ### 输入扩展
 

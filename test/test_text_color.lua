@@ -72,7 +72,7 @@ end
 
 function suite:test_border_color()
     local function App()
-        return Box { width = 4, height = 3, border = "single", color = "cyan",
+        return Box { width = 4, height = 3, borderStyle = "single", color = "cyan",
             Text { "" },
         }
     end

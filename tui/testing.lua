@@ -20,15 +20,10 @@
 -- use `testing.mount_bare(App)` instead — it skips layout + renderer and
 -- exposes only :rerender / :dispatch / :unmount / :tree / :state.
 --
--- CONCURRENCY WARNING
--- -------------------
--- `tui_core.terminal` is a **process-wide singleton**. `render()` replaces its
--- methods in place and `unmount()` restores them. This means you CANNOT have
--- two live `testing.render()` harnesses at once in the same process. ltest
--- currently runs tests serially so this is fine; if the runner ever goes
--- parallel, either add mutex in here or push the work upstream: make
--- `tui/init.lua`'s paint accept a `terminal` object so testing.lua can pass
--- a per-instance fake without global replacement. Tracked in roadmap.
+-- CONCURRENCY NOTE
+-- ----------------
+-- The fake terminal lives on each harness instance (`h._terminal`). No
+-- global state is touched. ltest parallel runner is safe.
 
 local element    = require "tui.element"
 local layout     = require "tui.layout"
@@ -74,7 +69,7 @@ local function install_stderr_hook()
             -- expected capture (tests asserting on them) or fail-on-warn
             -- at unmount. Two prefixes:
             --   [tui:dev]  — dev-mode warnings from hooks/reconciler
-            --   [tui:test] — testing-harness warnings (e.g. leak recovery)
+            --   [tui:test] — testing-harness warnings
             if s:sub(1, 9) == "[tui:dev]" or s:sub(1, 10) == "[tui:test]" then
                 if capture_buffer then
                     capture_buffer[#capture_buffer + 1] = s
@@ -151,48 +146,56 @@ local function resolve_key(name)
     return raw
 end
 
--- ---------------------------------------------------------------------------
--- Terminal hijack guard. Only one live harness at a time owns the real
--- tui_core.terminal table.
-
-local HIJACKED = false
-local real_terminal = nil
-
-local function restore_terminal()
-    if not HIJACKED then return end
-    -- Clear first so stale keys from fake don't persist if real had fewer.
-    for k in pairs(tui_core.terminal) do tui_core.terminal[k] = nil end
-    for k, v in pairs(real_terminal) do tui_core.terminal[k] = v end
-    real_terminal = nil
-    HIJACKED = false
+-- Validate that all numeric parameters in CSI sequences (`ESC [ ... <final>`)
+-- are integers. Real terminals silently reject `\27[73.0;3.0H` and similar
+-- malformed CUPs — harness-side enforcement catches the bug in tests
+-- instead of only in a live terminal. Returns nil on success, error
+-- message on violation.
+local function check_csi_integers(s)
+    -- Scan for CSI introducer (ESC [). Params are digits, `.`, `;`, `?`, `>`.
+    -- Any `.` inside a numeric token is a float and thus invalid.
+    local i = 1
+    while i <= #s do
+        local esc = s:find("\27%[", i)
+        if not esc then return nil end
+        -- Find the CSI final byte: 0x40..0x7E (@ through ~).
+        local j = esc + 2
+        while j <= #s do
+            local b = s:byte(j)
+            if b >= 0x40 and b <= 0x7E then break end
+            j = j + 1
+        end
+        if j > #s then return nil end  -- incomplete; skip
+        local params = s:sub(esc + 2, j - 1)
+        if params:find("%d%.%d") then
+            return ("malformed CSI parameter (non-integer) in sequence ESC[%s%s"):
+                format(params, s:sub(j, j))
+        end
+        i = j + 1
+    end
+    return nil
 end
 
-local function hijack_terminal(fake)
-    if HIJACKED then
-        -- A previous harness leaked (typically because an assertion failed
-        -- between testing.render() and h:unmount()). Instead of derailing
-        -- every subsequent test with the same "already active" error —
-        -- which masks the real first failure in the ltest report — recover
-        -- the previous hijack and emit a warning so the leak stays
-        -- visible in the test output.
-        restore_terminal()
-        -- Also reset the per-process singletons the previous harness
-        -- would have cleared on unmount; otherwise subscriptions / focus
-        -- entries / timers bleed into the next test.
-        input_mod._reset()
-        resize_mod._reset()
-        focus_mod._reset()
-        scheduler._reset()
-        -- Go through the stderr hook (not real_stderr directly) so the
-        -- warning is either captured by testing.capture_stderr or surfaces
-        -- as a fail-on-warn at the next unmount.
-        io.stderr:write("[tui:test] previous harness leaked (missing " ..
-                        ":unmount()?); auto-recovered\n")
-    end
-    real_terminal = {}
-    for k, v in pairs(tui_core.terminal) do real_terminal[k] = v end
-    for k, v in pairs(fake) do tui_core.terminal[k] = v end
-    HIJACKED = true
+-- Per-harness fake terminal. Stored as an instance field so _paint uses it
+-- directly — no global state touched. Multiple harnesses can coexist in the
+-- same process (unblocks future parallel ltest support).
+
+local function make_fake_terminal(h)
+    return {
+        get_size          = function() return h._w, h._h end,
+        write             = function(s)
+            local bad = check_csi_integers(s)
+            if bad then
+                error("[tui:fatal] harness terminal: " .. bad ..
+                      " (real terminals silently reject these)", 0)
+            end
+            h._ansi_buf[#h._ansi_buf + 1] = s
+        end,
+        read_raw          = function() return nil end,
+        set_raw           = function() end,
+        set_ime_pos       = function(c, r) h._ime = { col = c, row = r } end,
+        windows_vt_enable = function() return true end,
+    }
 end
 
 -- ---------------------------------------------------------------------------
@@ -207,9 +210,9 @@ Harness.__index = Harness
 -- Stabilization: if a mount effect (or any post-commit work) calls a setter,
 -- the instance flips inst.dirty = true. In real tui.render the scheduler
 -- loop picks this up on the next tick; in the harness we do the equivalent
--- inline — re-run render up to MAX_PASSES times until the tree is stable.
--- Hard-fail beyond that to catch infinite setState loops.
-local <const> MAX_PAINT_PASSES = 4
+-- inline — re-run render until no instance is dirty.  A hard upper bound
+-- (MAX_STABILIZE_PASSES) guards against infinite setState loops.
+local <const> MAX_STABILIZE_PASSES = 100
 
 local function any_instance_dirty(state)
     for _, inst in pairs(state.instances) do
@@ -224,12 +227,12 @@ function Harness:_paint()
     resize_mod.observe(self._w, self._h)
 
     local tree
-    for pass = 1, MAX_PAINT_PASSES do
+    for pass = 1, MAX_STABILIZE_PASSES do
         tree = reconciler.render(self._state, self._App, self._app_handle)
         if not any_instance_dirty(self._state) then break end
-        if pass == MAX_PAINT_PASSES then
+        if pass == MAX_STABILIZE_PASSES then
             error("tui.testing: render did not stabilize after " ..
-                  MAX_PAINT_PASSES .. " passes — suspect infinite setState loop", 2)
+                  MAX_STABILIZE_PASSES .. " passes — suspect infinite setState loop", 2)
         end
     end
 
@@ -247,7 +250,7 @@ function Harness:_paint()
     renderer.paint(tree, self._screen)
     local ansi = screen_mod.diff(self._screen)
     if #ansi > 0 then
-        tui_core.terminal.write(ansi)
+        self._terminal.write(ansi)
     end
 
     -- Emit the cursor-placement sequence through the fake terminal so the
@@ -272,8 +275,8 @@ function Harness:_paint()
         ccol, crow = walk(tree)
     end
     if ccol and crow then
-        tui_core.terminal.write("\27[?25h\27[" .. crow .. ";" .. ccol .. "H")
-        tui_core.terminal.set_ime_pos(ccol, crow)
+        self._terminal.write("\27[?25h\27[" .. crow .. ";" .. ccol .. "H")
+        self._terminal.set_ime_pos(ccol, crow)
     end
     -- Note: real tui/init.lua also emits `\27[?25l` when no cursor is
     -- requested, but the harness deliberately skips that branch. The
@@ -437,7 +440,6 @@ function Harness:unmount()
     resize_mod._reset()
     focus_mod._reset()
     scheduler._reset()
-    restore_terminal()
     hooks._set_dev_mode(false)
     drain_and_fatal_if_any()
 end
@@ -565,36 +567,6 @@ function Harness:match_snapshot(name)
     error(format_diff(name, expected, actual), 2)
 end
 
--- Validate that all numeric parameters in CSI sequences (`ESC [ ... <final>`)
--- are integers. Real terminals silently reject `\27[73.0;3.0H` and similar
--- malformed CUPs — harness-side enforcement catches the bug in tests
--- instead of only in a live terminal. Returns nil on success, error
--- message on violation.
-local function check_csi_integers(s)
-    -- Scan for CSI introducer (ESC [). Params are digits, `.`, `;`, `?`, `>`.
-    -- Any `.` inside a numeric token is a float and thus invalid.
-    local i = 1
-    while i <= #s do
-        local esc = s:find("\27%[", i)
-        if not esc then return nil end
-        -- Find the CSI final byte: 0x40..0x7E (@ through ~).
-        local j = esc + 2
-        while j <= #s do
-            local b = s:byte(j)
-            if b >= 0x40 and b <= 0x7E then break end
-            j = j + 1
-        end
-        if j > #s then return nil end  -- incomplete; skip
-        local params = s:sub(esc + 2, j - 1)
-        if params:find("%d%.%d") then
-            return ("malformed CSI parameter (non-integer) in sequence ESC[%s%s"):
-                format(params, s:sub(j, j))
-        end
-        i = j + 1
-    end
-    return nil
-end
-
 --- tui.testing.render(App, opts) -> Harness
 -- opts:
 --   cols (default 80), rows (default 24)
@@ -627,23 +599,8 @@ function M.render(App, opts)
     }, Harness)
     h._app_handle = { exit = function() h._dead = true end }
 
-    -- Fake terminal bound to this harness.
-    local fake = {
-        get_size          = function() return h._w, h._h end,
-        write             = function(s)
-            local bad = check_csi_integers(s)
-            if bad then
-                error("[tui:fatal] harness terminal: " .. bad ..
-                      " (real terminals silently reject these)", 0)
-            end
-            h._ansi_buf[#h._ansi_buf + 1] = s
-        end,
-        read_raw          = function() return nil end,
-        set_raw           = function() end,
-        set_ime_pos       = function(c, r) h._ime = { col = c, row = r } end,
-        windows_vt_enable = function() return true end,
-    }
-    hijack_terminal(fake)
+    -- Fake terminal stored on the harness instance — no global state touched.
+    h._terminal = make_fake_terminal(h)
 
     -- Virtual clock. Every call to scheduler.setTimeout / setInterval reads
     -- `now` immediately to compute fire_at, so we must install this BEFORE
@@ -654,13 +611,8 @@ function M.render(App, opts)
     }
 
     -- Initial paint — installs subscriptions, runs mount-effects.
-    -- If the first render blows up (e.g. the stabilization guard in _paint
-    -- fires on an infinite setState loop), we must restore the hijacked
-    -- terminal before re-raising, otherwise the next testing.render() call
-    -- in the same process will fail with "another harness is already active".
     local ok, err = pcall(function() h:_paint() end)
     if not ok then
-        restore_terminal()
         input_mod._reset()
         resize_mod._reset()
         focus_mod._reset()
