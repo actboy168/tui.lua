@@ -30,17 +30,23 @@
 ## 测试 harness
 
 - `testing.render(App, {cols, rows, now})` — 离屏渲染
+- `testing.mount_bare(App)` — 轻量模式（仅 reconciler + hooks，无布局/渲染）
 - `h:type(str)` / `h:press(name)` / `h:dispatch(bytes)` — 模拟输入
+- `h:press(name)` 支持 `shift+<key>` / `ctrl+<letter>` / F1-F12 / 单字符回落
 - `h:advance(ms)` — 驱动虚拟时钟
 - `h:resize(cols, rows)` — 模拟终端缩放
 - `h:frame()` / `h:row(n)` / `h:rows()` — 查看渲染输出
 - `h:cursor()` — 光标位置
 - `h:tree()` — 元素树
 - `h:ansi()` / `h:clear_ansi()` — ANSI 输出
+- `h:render_count()` / `h:reset_render_count()` / `h:expect_renders(n)` — 渲染次数追踪
 - `h:match_snapshot(name)` — 快照测试
 - `h:focus_id()` / `h:focus_next()` / `h:focus_prev()` / `h:focus(id)` — 焦点驱动
 - `testing.capture_stderr(fn)` — 捕获 dev 警告
 - `testing.find_text_with_cursor(tree)` — 查找带光标的 Text 元素
+- `testing.find_by_kind(tree, kind)` — 查找首个指定类型节点
+- `testing.find_all_by_kind(tree, kind)` — 收集所有指定类型节点
+- `testing.text_content(tree)` — 收集所有 Text 节点文本
 
 ## Dev-mode
 

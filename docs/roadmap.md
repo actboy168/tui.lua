@@ -51,7 +51,6 @@ _暂无_
   - A) reconciler 在 children 归一化时发现 function，自动包成 component element（对齐 React 直觉，但 helper function 误塞进 children 会被误认为组件）
   - B) 提供 `tui.component(fn)` 工厂助手到框架层（显式、可 grep、1 行 boilerplate）
   - 若选 A，还需 dev-mode 检测"hook 在未注册为 component 的函数里被调用"给早期报错，而不是等 hook count mismatch 才炸
-- `tui/testing.lua` `resolve_key` 支持通用 `shift+<key>` 前缀（当前只硬编码 `shift+tab`）；同时让 `h:press(ch)` 在 `ch` 是单个可打印字符时回落为 `type(ch)`，避免"unknown key '?'"这类翻车
 - ErrorBoundary fallback 接收 `{message, trace}` 而不只是字符串（保留 `debug.traceback(err, 2)`）
 - `screen.c` full-redraw 模式下行末加 `reset_sgr`，避免 SGR 状态跨行继承导致视觉 bug
 - `tui._VERSION` 字符串常量

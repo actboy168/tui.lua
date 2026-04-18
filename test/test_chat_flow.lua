@@ -1,90 +1,16 @@
 -- test/test_chat_flow.lua — end-to-end offscreen simulation of the chat demo.
 --
--- Mirrors examples/chat_mock.lua but inlined so the test doesn't require
--- examples/ to be a module. Exercises Static + TextInput + useInterval +
--- useWindowSize in one flow: type → submit → stream → resize → unmount.
+-- Mirrors examples/chat_mock.lua but uses shared helper from helpers.lua.
+-- Exercises Static + TextInput + useInterval + useWindowSize in one flow.
 
 local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
+local helpers = require "test.helpers"
 
 local suite = lt.test "chat_flow"
 
--- Build a chat-mock App with a single scripted reply.
-local function make_chat_app(reply_text)
-    return function()
-        local history, setHistory  = tui.useState({})
-        local input, setInput      = tui.useState("")
-        local streaming, setStream = tui.useState(nil)
-        local size                 = tui.useWindowSize()
-
-        tui.useInterval(function()
-            if not streaming then return end
-            local s = streaming
-            if s.shown >= #s.target then
-                setHistory(function(h)
-                    local nh = {}
-                    for i, m in ipairs(h) do nh[i] = m end
-                    nh[#nh + 1] = { who = "bot", text = s.target }
-                    return nh
-                end)
-                setStream(nil)
-                return
-            end
-            setStream({ target = s.target, shown = s.shown + 1 })
-        end, 40)
-
-        local function submit(value)
-            if value == "" then return end
-            setHistory(function(h)
-                local nh = {}
-                for i, m in ipairs(h) do nh[i] = m end
-                nh[#nh + 1] = { who = "user", text = value }
-                return nh
-            end)
-            setInput("")
-            setStream({ target = reply_text, shown = 0 })
-        end
-
-        local function fmt(m)
-            local tag = m.who == "user" and "you" or "bot"
-            return tui.Text { ("[%s] %s"):format(tag, m.text) }
-        end
-
-        return tui.Box {
-            flexDirection = "column",
-            width  = size.cols,
-            height = size.rows,
-            tui.Static { items = history, render = fmt, key = "history" },
-            streaming and tui.Text { ("[bot] %s"):format(streaming.target:sub(1, streaming.shown)), key = "stream" } or nil,
-            tui.Box { flexGrow = 1, key = "spacer" },
-            tui.Box {
-                borderStyle = "round",
-                paddingX = 1,
-                key = "prompt",
-                tui.TextInput {
-                    value    = input,
-                    onChange = setInput,
-                    onSubmit = submit,
-                },
-            },
-        }
-    end
-end
-
--- Helper: flatten the laid-out tree to a list of visible Text strings.
-local function collect_texts(tree)
-    local out = {}
-    local function walk(e)
-        if not e then return end
-        if e.kind == "text" then
-            out[#out + 1] = e.text or ""
-        end
-        for _, c in ipairs(e.children or {}) do walk(c) end
-    end
-    walk(tree)
-    return out
-end
+local make_chat_app = helpers.make_chat_app
 
 function suite:test_type_submit_stream_resize_flow()
     local App = make_chat_app("hello")
@@ -97,7 +23,7 @@ function suite:test_type_submit_stream_resize_flow()
 
     -- After submit: history gains [you] hi; streaming starts at shown=0 so
     -- no streaming row text rendered yet.
-    local texts = collect_texts(h:tree())
+    local texts = testing.text_content(h:tree())
     local found_user = false
     for _, t in ipairs(texts) do
         if t:find("[you] hi", 1, true) then found_user = true; break end
@@ -107,7 +33,7 @@ function suite:test_type_submit_stream_resize_flow()
     -- Advance 40ms three times → streaming shown = 3 → "[bot] hel".
     h:advance(40):advance(40):advance(40)
     local partial_found = false
-    for _, t in ipairs(collect_texts(h:tree())) do
+    for _, t in ipairs(testing.text_content(h:tree())) do
         if t == "[bot] hel" then partial_found = true; break end
     end
     lt.assertEquals(partial_found, true, "streaming partial 'hel' should render")
@@ -116,7 +42,7 @@ function suite:test_type_submit_stream_resize_flow()
     -- on the following tick, so advance enough to land on finalize).
     h:advance(40):advance(40):advance(40)
     local final_found = false
-    for _, t in ipairs(collect_texts(h:tree())) do
+    for _, t in ipairs(testing.text_content(h:tree())) do
         if t == "[bot] hello" then final_found = true; break end
     end
     lt.assertEquals(final_found, true, "bot reply should finalize into history")

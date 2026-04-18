@@ -11,73 +11,12 @@
 -- renderer + screen diff pipeline.
 
 local lt      = require "ltest"
-local tui     = require "tui"
 local testing = require "tui.testing"
+local helpers = require "test.helpers"
 
 local suite = lt.test "snapshots"
 
--- Inline the same chat app as test_chat_flow so snapshots exercise Static +
--- TextInput + useInterval + useWindowSize in combination.
-local function make_chat_app(reply_text)
-    return function()
-        local history, setHistory  = tui.useState({})
-        local input, setInput      = tui.useState("")
-        local streaming, setStream = tui.useState(nil)
-        local size                 = tui.useWindowSize()
-
-        tui.useInterval(function()
-            if not streaming then return end
-            local s = streaming
-            if s.shown >= #s.target then
-                setHistory(function(h)
-                    local nh = {}
-                    for i, m in ipairs(h) do nh[i] = m end
-                    nh[#nh + 1] = { who = "bot", text = s.target }
-                    return nh
-                end)
-                setStream(nil)
-                return
-            end
-            setStream({ target = s.target, shown = s.shown + 1 })
-        end, 40)
-
-        local function submit(value)
-            if value == "" then return end
-            setHistory(function(h)
-                local nh = {}
-                for i, m in ipairs(h) do nh[i] = m end
-                nh[#nh + 1] = { who = "user", text = value }
-                return nh
-            end)
-            setInput("")
-            setStream({ target = reply_text, shown = 0 })
-        end
-
-        local function fmt(m)
-            local tag = m.who == "user" and "you" or "bot"
-            return tui.Text { ("[%s] %s"):format(tag, m.text) }
-        end
-
-        return tui.Box {
-            flexDirection = "column",
-            width  = size.cols,
-            height = size.rows,
-            tui.Static { items = history, render = fmt, key = "history" },
-            streaming and tui.Text { ("[bot] %s"):format(streaming.target:sub(1, streaming.shown)), key = "stream" } or nil,
-            tui.Box { flexGrow = 1, key = "spacer" },
-            tui.Box {
-                borderStyle = "round",
-                paddingX = 1,
-                key = "prompt",
-                tui.TextInput {
-                    value    = input,
-                    onChange = setInput,
-                    onSubmit = submit,
-                },
-            },
-        }
-    end
-end
+local make_chat_app = helpers.make_chat_app
 
 -- Scenario 1: idle app with an empty input box — the simplest baseline.
 function suite:test_chat_idle()

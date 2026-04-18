@@ -38,21 +38,19 @@ end
 
 -- Mutating .current does NOT cause a rerender.
 function suite:test_ref_mutation_does_not_trigger_rerender()
-    local renders = 0
     local captured_ref
     local function Comp()
-        renders = renders + 1
         local r = tui.useRef(0)
         captured_ref = r
         return tui.Text { "" }
     end
     local b = testing.mount_bare(Comp)
-    lt.assertEquals(renders, 1)
+    b:expect_renders(1)
     captured_ref.current = 999
     -- No rerender should be forced; calling rerender() explicitly still
     -- preserves the mutated value (not reinitialized to 0).
     b:rerender()
-    lt.assertEquals(renders, 2)
+    b:expect_renders(2)
     lt.assertEquals(captured_ref.current, 999)
     b:unmount()
 end

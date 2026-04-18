@@ -67,16 +67,14 @@ end
 
 -- When reducer returns the same state (rawequal), no rerender is scheduled.
 function suite:test_reducer_noop_when_state_unchanged()
-    local renders = 0
     local dispatch_ref
     local function Comp()
-        renders = renders + 1
         local _, d = tui.useReducer(counter, 7)
         dispatch_ref = d
         return tui.Text { "" }
     end
     local b = testing.mount_bare(Comp)
-    lt.assertEquals(renders, 1)
+    b:expect_renders(1)
     -- noop action returns same state -> should not mark dirty
     dispatch_ref("noop")
     -- Inst shouldn't be dirty now; verify via state traversal.

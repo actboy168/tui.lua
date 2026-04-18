@@ -13,6 +13,12 @@ end
 
 local suite = lt.test "scheduler"
 
+function suite:teardown()
+    -- Reset scheduler to pristine state (timers + backend) after each test
+    scheduler._reset()
+    scheduler.configure { now = nil, sleep = nil }
+end
+
 function suite:test_configure_accepts_custom_backend()
     local b = make_fake_backend()
     scheduler.configure { now = b.now, sleep = b.sleep }
@@ -89,7 +95,7 @@ function suite:test_interval_reschedules_itself()
 
     tick_to(10);  lt.assertEquals(hits, 1)
     tick_to(20);  lt.assertEquals(hits, 2)
-    tick_to(55);  lt.assertEquals(hits, 3)  -- one fire at 30; next scheduled 40..; at 55 one more due
+    tick_to(55);      lt.assertEquals(hits, 3)  -- one fire at 30; next scheduled 40..; at 55 one more due
 end
 
 function suite:test_timer_apis_require_backend()

@@ -116,16 +116,29 @@ local KEYS = {
     left      = "\27[D",
     home      = "\27[H",
     ["end"]   = "\27[F",
+    insert    = "\27[2~",
     delete    = "\27[3~",
     pageup    = "\27[5~",
     pagedown  = "\27[6~",
+    -- F1-F4: SS3 sequences (ESC O ...)
     f1        = "\27OP",
     f2        = "\27OQ",
     f3        = "\27OR",
     f4        = "\27OS",
+    -- F5-F12: CSI tilde sequences
+    f5        = "\27[15~",
+    f6        = "\27[17~",
+    f7        = "\27[18~",
+    f8        = "\27[19~",
+    f9        = "\27[20~",
+    f10       = "\27[21~",
+    f11       = "\27[23~",
+    f12       = "\27[24~",
 }
 
+
 -- Translate one key spec ("enter" / "left" / "ctrl+c") into raw bytes.
+-- Returns: raw_bytes or nil (if single printable char, let caller handle via type())
 local function resolve_key(name)
     if type(name) ~= "string" or #name == 0 then
         error("press/keys: expected non-empty string, got " .. tostring(name), 3)
@@ -139,11 +152,51 @@ local function resolve_key(name)
         end
         return string.char(b - 96)
     end
-    local raw = KEYS[name:lower()]
-    if not raw then
-        error("press: unknown key '" .. name .. "'", 3)
+    -- shift+<key> → modifier suffix form.
+    -- CSI modifier: mod = 1 + bitmask(shift=1, meta=2, ctrl=4)
+    -- So shift adds ";2" before the final byte for CSI sequences.
+    local sk = name:match("^shift%+(.+)$")
+    if sk then
+        local base = KEYS[sk:lower()]
+        if not base then
+            error("press: unknown key '" .. name .. "'", 3)
+        end
+        -- Convert base CSI to shift-modified form.
+        -- ESC [ <params> <final> → ESC [ <params>;2 <final>
+        -- ESC O <final> (SS3) → ESC [ 1;2 <final> (convert SS3 to CSI)
+        if base:sub(1, 2) == "\27[" then
+            -- Already CSI: insert ;2 before final byte
+            return base:sub(1, -2) .. ";2" .. base:sub(-1)
+        elseif base:sub(1, 2) == "\27O" then
+            -- SS3: convert to CSI with 1;2 prefix
+            return "\27[1;2" .. base:sub(3)
+        end
+        -- For non-CSI keys (like tab \t), fall through to normal lookup
+        -- (shift+tab is already handled by KEYS["shift+tab"])
     end
-    return raw
+    local raw = KEYS[name:lower()]
+    if raw then
+        return raw
+    end
+    -- Single printable char (ASCII or multi-byte UTF-8 like CJK) → use type()
+    -- Check if it's a valid UTF-8 sequence (1-4 bytes, no control chars)
+    if #name >= 1 and #name <= 4 then
+        local b0 = name:byte(1)
+        local expected_len
+        if b0 >= 0x20 and b0 <= 0x7E then
+            expected_len = 1  -- ASCII printable
+        elseif b0 >= 0xC0 and b0 <= 0xDF then
+            expected_len = 2  -- 2-byte UTF-8
+        elseif b0 >= 0xE0 and b0 <= 0xEF then
+            expected_len = 3  -- 3-byte UTF-8 (CJK)
+        elseif b0 >= 0xF0 and b0 <= 0xF4 then
+            expected_len = 4  -- 4-byte UTF-8
+        end
+        if expected_len and #name == expected_len then
+            return nil  -- signal: use type() instead
+        end
+    end
+    error("press: unknown key '" .. name .. "'", 3)
 end
 
 -- Validate that all numeric parameters in CSI sequences (`ESC [ ... <final>`)
@@ -226,10 +279,12 @@ function Harness:_paint()
     -- subscribers installed on prior renders.
     resize_mod.observe(self._w, self._h)
 
+    self._render_count = (self._render_count or 0) + 1
     local tree
     for pass = 1, MAX_STABILIZE_PASSES do
         tree = reconciler.render(self._state, self._App, self._app_handle)
         if not any_instance_dirty(self._state) then break end
+        self._render_count = self._render_count + 1
         if pass == MAX_STABILIZE_PASSES then
             error("tui.testing: render did not stabilize after " ..
                   MAX_STABILIZE_PASSES .. " passes — suspect infinite setState loop", 2)
@@ -311,6 +366,30 @@ function Harness:frame()
 end
 function Harness:tree()   return self._tree end
 
+-- Performance testing: render count tracking.
+-- Returns the total number of reconciler.render() calls since mount.
+function Harness:render_count()
+    return self._render_count or 0
+end
+
+-- Reset render counter to 0. Useful when you want to measure renders
+-- starting from a specific point in the test.
+function Harness:reset_render_count()
+    self._render_count = 0
+    return self
+end
+
+-- Assert that render count matches expected value.
+-- On mismatch, raises with detailed error message.
+function Harness:expect_renders(expected, msg)
+    local actual = self._render_count or 0
+    if actual ~= expected then
+        error((msg or "render count mismatch") .. ": expected " .. expected ..
+              ", got " .. actual, 2)
+    end
+    return self
+end
+
 -- Return (col, row) 1-based absolute coords of the focused TextInput's
 -- caret, or nil if no input is focused. Mirrors `find_cursor` in
 -- tui/init.lua's paint loop so tests can assert cursor placement and,
@@ -374,7 +453,12 @@ function Harness:type(str)
 end
 
 function Harness:press(name)
-    input_mod.dispatch(resolve_key(name))
+    local raw = resolve_key(name)
+    if raw == nil then
+        -- Single printable char: delegate to type() for UTF-8 handling
+        return self:type(name)
+    end
+    input_mod.dispatch(raw)
     self:_paint()
     return self
 end
@@ -596,6 +680,7 @@ function M.render(App, opts)
         _tree        = nil,
         _dead        = false,
         _ime         = nil,
+        _render_count = 0,
     }, Harness)
     h._app_handle = { exit = function() h._dead = true end }
 
@@ -631,12 +716,95 @@ Bare.__index = Bare
 
 function Bare:rerender()
     if self._tree then self._tree = nil end
+    self._render_count = (self._render_count or 0) + 1
     self._tree = reconciler.render(self._state, self._App, self._app_handle)
+    return self
+end
+
+-- Performance testing: render count tracking.
+function Bare:render_count()
+    return self._render_count or 0
+end
+
+function Bare:reset_render_count()
+    self._render_count = 0
+    return self
+end
+
+function Bare:expect_renders(expected, msg)
+    local actual = self._render_count or 0
+    if actual ~= expected then
+        error((msg or "render count mismatch") .. ": expected " .. expected ..
+              ", got " .. actual, 2)
+    end
     return self
 end
 
 function Bare:dispatch(bytes)
     if bytes and #bytes > 0 then input_mod.dispatch(bytes) end
+    return self
+end
+
+-- Type a string: each character/UTF-8 codepoint is dispatched separately.
+-- Unlike Harness:type(), this does NOT auto-rerender after each char.
+function Bare:type(str)
+    if type(str) ~= "string" then
+        error("type: expected string, got " .. type(str), 2)
+    end
+    local i = 1
+    while i <= #str do
+        local b = str:byte(i)
+        local n
+        if b < 0x80     then n = 1
+        elseif b < 0xC0 then n = 1
+        elseif b < 0xE0 then n = 2
+        elseif b < 0xF0 then n = 3
+        else                 n = 4 end
+        local chunk = str:sub(i, i + n - 1)
+        input_mod.dispatch(chunk)
+        i = i + n
+    end
+    return self
+end
+
+-- Press a named key ("enter", "ctrl+c", etc).
+-- Unlike Harness:press(), this does NOT auto-rerender.
+function Bare:press(name)
+    local raw = resolve_key(name)
+    if raw == nil then
+        -- Single printable char: delegate to type() for UTF-8 handling
+        return self:type(name)
+    end
+    input_mod.dispatch(raw)
+    return self
+end
+
+-- Advance virtual clock and fire due timers.
+-- Unlike Harness:advance(), this does NOT auto-rerender.
+function Bare:advance(ms)
+    assert(type(ms) == "number" and ms >= 0, "advance: non-negative ms required")
+    self._fake_now = self._fake_now + ms
+    scheduler.step(self._fake_now)
+    return self
+end
+
+-- Focus helpers (drive focus chain directly, no rerender).
+function Bare:focus_id()
+    return focus_mod.get_focused_id()
+end
+
+function Bare:focus_next()
+    focus_mod.focus_next()
+    return self
+end
+
+function Bare:focus_prev()
+    focus_mod.focus_prev()
+    return self
+end
+
+function Bare:focus(id)
+    focus_mod.focus(id)
     return self
 end
 
@@ -664,17 +832,19 @@ function M.mount_bare(App)
     focus_mod._reset()
     scheduler._reset()
     hooks._set_dev_mode(true)
-    scheduler.configure {
-        now   = function() return 0 end,
-        sleep = function() end,
-    }
     local b = setmetatable({
         _App         = App,
         _state       = reconciler.new(),
         _tree        = nil,
         _dead        = false,
+        _fake_now    = 0,
+        _render_count = 1,  -- initial render
     }, Bare)
     b._app_handle = { exit = function() b._dead = true end }
+    scheduler.configure {
+        now   = function() return b._fake_now end,
+        sleep = function() end,
+    }
     b._tree = reconciler.render(b._state, App, b._app_handle)
     return b
 end
@@ -706,6 +876,51 @@ function M.find_text_with_cursor(tree)
         end
     end
     return walk(tree)
+end
+
+-- ---------------------------------------------------------------------------
+-- Tree query utilities.
+
+-- Find the first node matching `kind` in a depth-first walk.
+-- Returns the node table or nil.
+function M.find_by_kind(tree, kind)
+    local function walk(e)
+        if not e then return nil end
+        if e.kind == kind then return e end
+        for _, c in ipairs(e.children or {}) do
+            local r = walk(c)
+            if r then return r end
+        end
+    end
+    return walk(tree)
+end
+
+-- Collect all nodes matching `kind` in depth-first order.
+-- Returns a list of node tables.
+function M.find_all_by_kind(tree, kind)
+    local out = {}
+    local function walk(e)
+        if not e then return end
+        if e.kind == kind then out[#out + 1] = e end
+        for _, c in ipairs(e.children or {}) do walk(c) end
+    end
+    walk(tree)
+    return out
+end
+
+-- Collect the text content of all Text nodes in depth-first order.
+-- Returns a list of strings (one per Text node found).
+function M.text_content(tree)
+    local out = {}
+    local function walk(e)
+        if not e then return end
+        if e.kind == "text" then
+            out[#out + 1] = e.text or ""
+        end
+        for _, c in ipairs(e.children or {}) do walk(c) end
+    end
+    walk(tree)
+    return out
 end
 
 return M
