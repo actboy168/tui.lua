@@ -1,10 +1,10 @@
 # tui.lua 路线图
 
 本文件是 tui.lua 的主路线图，由用户与助手共同维护。**新增/调整规划时先改这里**，
-实施完毕再把条目挪到 [changelog.md](changelog.md)。当前会话的细项由 TaskCreate 辅助
+实施完毕再把条目挪到 [features.md](features.md)。当前会话的细项由 TaskCreate 辅助
 跟踪，不在此处重复罗列。
 
-已完成的 stage 见 [changelog.md](changelog.md)。
+已支持特性见 [features.md](features.md)。
 
 ---
 
