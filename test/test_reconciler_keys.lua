@@ -148,66 +148,70 @@ end
 --    behavior). State resets to the initial value at each new position.
 
 function suite:test_no_key_positional_regression()
-    local log, setters = {}, {}
-    local Tagger = make_tagger(log, setters)
+    testing.capture_stderr(function()
+        local log, setters = {}, {}
+        local Tagger = make_tagger(log, setters)
 
-    local order = { "a", "b" }
-    local function App()
-        local kids = {}
-        for _, id in ipairs(order) do
-            -- no key
-            kids[#kids + 1] = comp(Tagger, { id = id })
+        local order = { "a", "b" }
+        local function App()
+            local kids = {}
+            for _, id in ipairs(order) do
+                -- no key
+                kids[#kids + 1] = comp(Tagger, { id = id })
+            end
+            return tui.Box { flexDirection = "column", table.unpack(kids) }
         end
-        return tui.Box { flexDirection = "column", table.unpack(kids) }
-    end
 
-    local h = testing.render(App, { cols = 5, rows = 2 })
-    setters.a(5); setters.b(6)
-    h:rerender()
-    lt.assertEquals(log.a, 5)
-    lt.assertEquals(log.b, 6)
+        local h = testing.render(App, { cols = 5, rows = 2 })
+        setters.a(5); setters.b(6)
+        h:rerender()
+        lt.assertEquals(log.a, 5)
+        lt.assertEquals(log.b, 6)
 
-    -- Swap order. Positions 1 and 2 keep their instances; props.id changes
-    -- under them, so the captured state at each slot stays (5, 6) but the
-    -- displayed id flips. (That is: slot-1's instance now writes log["b"]=5
-    -- because it re-ran with id="b".)
-    order = { "b", "a" }
-    h:rerender()
-    lt.assertEquals(log.b, 5, "slot 1's instance persisted; id label changed")
-    lt.assertEquals(log.a, 6, "slot 2's instance persisted; id label changed")
+        -- Swap order. Positions 1 and 2 keep their instances; props.id changes
+        -- under them, so the captured state at each slot stays (5, 6) but the
+        -- displayed id flips. (That is: slot-1's instance now writes log["b"]=5
+        -- because it re-ran with id="b".)
+        order = { "b", "a" }
+        h:rerender()
+        lt.assertEquals(log.b, 5, "slot 1's instance persisted; id label changed")
+        lt.assertEquals(log.a, 6, "slot 2's instance persisted; id label changed")
 
-    h:unmount()
+        h:unmount()
+    end)
 end
 
 -- ---------------------------------------------------------------------------
 -- 5. Mixed keyed + unkeyed siblings coexist (separate namespaces).
 
 function suite:test_mixed_keyed_and_unkeyed()
-    local log, setters = {}, {}
-    local Tagger = make_tagger(log, setters)
+    testing.capture_stderr(function()
+        local log, setters = {}, {}
+        local Tagger = make_tagger(log, setters)
 
-    local function App()
-        return tui.Box {
-            flexDirection = "column",
-            comp(Tagger, { id = "a" }, "a"),   -- keyed
-            comp(Tagger, { id = "X" }),         -- unkeyed at index 2
-            comp(Tagger, { id = "c" }, "c"),   -- keyed
-        }
-    end
+        local function App()
+            return tui.Box {
+                flexDirection = "column",
+                comp(Tagger, { id = "a" }, "a"),   -- keyed
+                comp(Tagger, { id = "X" }),         -- unkeyed at index 2
+                comp(Tagger, { id = "c" }, "c"),   -- keyed
+            }
+        end
 
-    local h = testing.render(App, { cols = 5, rows = 3 })
-    setters.a(1); setters.X(2); setters.c(3)
-    h:rerender()
-    lt.assertEquals(log.a, 1)
-    lt.assertEquals(log.X, 2)
-    lt.assertEquals(log.c, 3)
-    -- All three instances still work on next rerender.
-    h:rerender()
-    lt.assertEquals(log.a, 1)
-    lt.assertEquals(log.X, 2)
-    lt.assertEquals(log.c, 3)
+        local h = testing.render(App, { cols = 5, rows = 3 })
+        setters.a(1); setters.X(2); setters.c(3)
+        h:rerender()
+        lt.assertEquals(log.a, 1)
+        lt.assertEquals(log.X, 2)
+        lt.assertEquals(log.c, 3)
+        -- All three instances still work on next rerender.
+        h:rerender()
+        lt.assertEquals(log.a, 1)
+        lt.assertEquals(log.X, 2)
+        lt.assertEquals(log.c, 3)
 
-    h:unmount()
+        h:unmount()
+    end)
 end
 
 -- ---------------------------------------------------------------------------
@@ -367,49 +371,51 @@ end
 --    *within* the unkeyed subsequence.
 
 function suite:test_interleaved_insert_delete_mixed_keys()
-    local log, setters = {}, {}
-    local Tagger = make_tagger(log, setters)
+    testing.capture_stderr(function()
+        local log, setters = {}, {}
+        local Tagger = make_tagger(log, setters)
 
-    -- Each entry is { id, use_key }. If use_key is true the element has a
-    -- `key` equal to its id; otherwise it is unkeyed.
-    local items = {
-        { "a", true  },
-        { "x", false },
-        { "b", true  },
-        { "y", false },
-        { "c", true  },
-    }
+        -- Each entry is { id, use_key }. If use_key is true the element has a
+        -- `key` equal to its id; otherwise it is unkeyed.
+        local items = {
+            { "a", true  },
+            { "x", false },
+            { "b", true  },
+            { "y", false },
+            { "c", true  },
+        }
 
-    local function App()
-        local kids = {}
-        for _, it in ipairs(items) do
-            local id, use_key = it[1], it[2]
-            kids[#kids + 1] = comp(Tagger, { id = id }, use_key and id or nil)
+        local function App()
+            local kids = {}
+            for _, it in ipairs(items) do
+                local id, use_key = it[1], it[2]
+                kids[#kids + 1] = comp(Tagger, { id = id }, use_key and id or nil)
+            end
+            return tui.Box { flexDirection = "column", table.unpack(kids) }
         end
-        return tui.Box { flexDirection = "column", table.unpack(kids) }
-    end
 
-    local h = testing.render(App, { cols = 5, rows = 10 })
-    setters.a(1); setters.x(2); setters.b(3); setters.y(4); setters.c(5)
-    h:rerender()
-    lt.assertEquals(log.a, 1); lt.assertEquals(log.b, 3); lt.assertEquals(log.c, 5)
+        local h = testing.render(App, { cols = 5, rows = 10 })
+        setters.a(1); setters.x(2); setters.b(3); setters.y(4); setters.c(5)
+        h:rerender()
+        lt.assertEquals(log.a, 1); lt.assertEquals(log.b, 3); lt.assertEquals(log.c, 5)
 
-    -- Delete one keyed ("b") and one unkeyed ("y"), then insert a new keyed
-    -- child ("d") at the front. Keyed survivors must retain state; the
-    -- remaining unkeyed slot is now occupied by a relabeled instance, as
-    -- per unkeyed-positional semantics from test #4.
-    items = {
-        { "d", true  },  -- new keyed, mounts fresh
-        { "a", true  },
-        { "x", false },
-        { "c", true  },
-    }
-    h:rerender()
-    lt.assertEquals(log.a, 1, "keyed 'a' survived delete+insert")
-    lt.assertEquals(log.c, 5, "keyed 'c' survived delete+insert")
-    lt.assertEquals(log.d, 0, "new keyed 'd' mounted fresh")
+        -- Delete one keyed ("b") and one unkeyed ("y"), then insert a new keyed
+        -- child ("d") at the front. Keyed survivors must retain state; the
+        -- remaining unkeyed slot is now occupied by a relabeled instance, as
+        -- per unkeyed-positional semantics from test #4.
+        items = {
+            { "d", true  },  -- new keyed, mounts fresh
+            { "a", true  },
+            { "x", false },
+            { "c", true  },
+        }
+        h:rerender()
+        lt.assertEquals(log.a, 1, "keyed 'a' survived delete+insert")
+        lt.assertEquals(log.c, 5, "keyed 'c' survived delete+insert")
+        lt.assertEquals(log.d, 0, "new keyed 'd' mounted fresh")
 
-    h:unmount()
+        h:unmount()
+    end)
 end
 
 -- ---------------------------------------------------------------------------

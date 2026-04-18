@@ -18,19 +18,106 @@ local scheduler = require "tui.scheduler"
 local M = {}
 
 -- ---------------------------------------------------------------------------
+-- Dev mode (Stage 17). When enabled:
+--   * Hook order is validated across renders; drift is a [tui:fatal] error.
+--   * useState/useReducer setters warn if called synchronously during render.
+--   * Reconciler warns on >1 element children with any unkeyed child.
+-- Disabled by default -> all checks compile out behind a single `if` each.
+
+local dev_mode = false
+
+function M._set_dev_mode(on)
+    dev_mode = on and true or false
+end
+
+function M._is_dev_mode() return dev_mode end
+
+-- Walk up the call stack to find the first frame whose source file is NOT
+-- inside the framework itself (tui/*.lua or tui_core). That's the user code
+-- that triggered the warning — far more useful than a hook-internal line.
+-- Returns "file.lua:NN: " ready to be prepended, or "" if no user frame was
+-- found (framework-internal call path).
+local function _source_prefix()
+    for lvl = 2, 20 do
+        local info = debug.getinfo(lvl, "Sl")
+        if not info then break end
+        local src = info.source or ""
+        -- Skip C frames, =[C] tags, and any source inside the framework tree.
+        -- Match on "/tui/" or "\tui\" — cross-platform path separators.
+        if src:sub(1, 1) == "@"
+            and not src:find("[/\\]tui[/\\]", 1, false)
+            and not src:find("[/\\]ltest%.lua$")
+        then
+            -- Strip leading "@" and any directory prefix for readability.
+            local path = src:sub(2)
+            local tail = path:match("[^/\\]+$") or path
+            return tail .. ":" .. tostring(info.currentline) .. ": "
+        end
+    end
+    return ""
+end
+M._source_prefix = _source_prefix
+
+local function _warn(msg)
+    if dev_mode then
+        io.stderr:write("[tui:dev] " .. _source_prefix() .. msg .. "\n")
+    end
+end
+M._warn = _warn
+
+-- ---------------------------------------------------------------------------
 -- Current instance (set by reconciler during a render pass)
 
 local current   = nil
 local cursor    = 0
+
+-- Set while a component fn is actively executing; cleared when it returns.
+-- setState/dispatch compare against this to detect synchronous state writes
+-- inside render (an anti-pattern). Post-commit effects run with this cleared,
+-- so `setN(...)` inside useEffect bodies is legal and won't warn.
+M._rendering_inst = nil
 
 function M._begin_render(instance)
     current = instance
     cursor  = 0
     instance.hooks         = instance.hooks         or {}
     instance.pending_fx    = {}
+    if dev_mode then
+        instance._hook_kinds = {}
+    end
+    M._rendering_inst = instance
 end
 
 function M._end_render()
+    if dev_mode and current then
+        local prev = current._prev_hook_kinds
+        local curr = current._hook_kinds
+        if prev and curr then
+            if #prev ~= #curr then
+                local err = ("[tui:fatal] hook count mismatch: last render used %d hooks, this render used %d")
+                    :format(#prev, #curr)
+                current._prev_hook_kinds = nil
+                current._hook_kinds = nil
+                M._rendering_inst = nil
+                current = nil; cursor = 0
+                error(err, 0)
+            end
+            for i = 1, #curr do
+                if prev[i] ~= curr[i] then
+                    local err = ("[tui:fatal] hook order violation at slot %d: expected %s, got %s")
+                        :format(i, tostring(prev[i]), tostring(curr[i]))
+                    current._prev_hook_kinds = nil
+                    current._hook_kinds = nil
+                    M._rendering_inst = nil
+                    current = nil; cursor = 0
+                    error(err, 0)
+                end
+            end
+        end
+        current._prev_hook_kinds = curr
+        current._hook_kinds = nil
+    end
+    M._rendering_inst = nil
     current = nil
     cursor  = 0
 end
@@ -175,9 +262,12 @@ end
 -- ---------------------------------------------------------------------------
 -- Internal helpers
 
-local function require_instance()
+local function require_instance(kind)
     assert(current, "hook called outside of a component render")
     cursor = cursor + 1
+    if dev_mode and kind then
+        current._hook_kinds[cursor] = kind
+    end
     return current, cursor
 end
 
@@ -185,13 +275,17 @@ end
 -- useState
 
 function M.useState(initial)
-    local inst, i = require_instance()
+    local inst, i = require_instance("state")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "state", value = initial }
         inst.hooks[i] = slot
         -- Setter is stable across renders (captures slot + inst).
         slot.setter = function(v)
+            if dev_mode and M._rendering_inst == inst then
+                _warn("setState called synchronously during render of a component; " ..
+                      "move it to useEffect or an event handler")
+            end
             if type(v) == "function" then v = v(slot.value) end
             if slot.value == v then return end
             slot.value = v
@@ -206,7 +300,7 @@ end
 -- useEffect
 
 function M.useEffect(fn, deps)
-    local inst, i = require_instance()
+    local inst, i = require_instance("effect")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "effect", ran = false, cleanup = nil }
@@ -221,7 +315,7 @@ end
 -- Caches the result of `fn()` across renders; recomputes when `deps` shallow-
 -- changes. Passing `deps == nil` recomputes every render (React-aligned).
 function M.useMemo(fn, deps)
-    local inst, i = require_instance()
+    local inst, i = require_instance("memo")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "memo", value = nil, deps = nil }
@@ -250,7 +344,7 @@ end
 -- because that would return a fresh `fn` each time deps change. Here the
 -- outer wrapper object is created once and never replaced.
 function M.useCallback(fn, deps)
-    local inst, i = require_instance()
+    local inst, i = require_instance("callback")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "callback", fn = fn, wrapper = nil, deps = deps }
@@ -273,7 +367,7 @@ end
 -- ignore the argument and return the existing ref untouched (distinct from
 -- useLatestRef, which refreshes .current every render).
 function M.useRef(initial)
-    local inst, i = require_instance()
+    local inst, i = require_instance("ref_user")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "ref_user", ref = { current = initial } }
@@ -289,7 +383,7 @@ end
 -- internally, and exposed publicly for user code that needs stale-closure
 -- avoidance without the deps ergonomics of useCallback.
 function M.useLatestRef(value)
-    local inst, i = require_instance()
+    local inst, i = require_instance("ref")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "ref", ref = { current = value } }
@@ -312,7 +406,7 @@ local useLatestRef = M.useLatestRef
 -- same state value (rawequal) the hook performs no work — no rerender is
 -- scheduled, matching React's bail-out semantics.
 function M.useReducer(reducer, initial, init)
-    local inst, i = require_instance()
+    local inst, i = require_instance("reducer")
     local slot = inst.hooks[i]
     if not slot then
         local state0
@@ -320,6 +414,10 @@ function M.useReducer(reducer, initial, init)
         slot = { kind = "reducer", state = state0 }
         inst.hooks[i] = slot
         slot.dispatch = function(action)
+            if dev_mode and M._rendering_inst == inst then
+                _warn("dispatch called synchronously during render of a component; " ..
+                      "move it to useEffect or an event handler")
+            end
             local next_state = reducer(slot.state, action)
             if rawequal(next_state, slot.state) then return end
             slot.state = next_state
@@ -338,7 +436,7 @@ end
 -- actual lookup goes through the reconciler's context_stack so Provider
 -- changes reflect immediately.
 function M.useContext(ctx)
-    local inst, i = require_instance()
+    local inst, i = require_instance("context")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "context" }
@@ -460,7 +558,7 @@ function M.useFocus(opts)
 
     -- A dedicated slot holds the live focus entry so the returned `focus()`
     -- closure can reach it even though subscribe happens in a later effect.
-    local inst, i = require_instance()
+    local inst, i = require_instance("focus")
     local slot = inst.hooks[i]
     if not slot then
         slot = { kind = "focus", entry = nil }

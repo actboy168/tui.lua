@@ -43,9 +43,6 @@ _暂无_
 
 ### 开发者体验
 
-- dev-mode hook 调用顺序校验：对比上次 render 的 hook 类型序列，错位告警
-- render 期间 setState 卫兵：设标志位，render 中调 setter 发 warn（避免死循环）
-- dev-mode 同级多孩子缺 key 告警（类似 React DevTools 的 "each child should have a unique key"）
 - `Harness:_paint` 稳定化循环改为基于 dirty 集合收敛的严格终止条件（当前硬编码 4 轮上限）
 - `tui/testing.lua` `resolve_key` 支持通用 `shift+<key>` 前缀（当前只硬编码 `shift+tab`）
 - ErrorBoundary 保留 `debug.traceback(err, 2)`，fallback 函数接收 `{message, trace}` 而不只是字符串

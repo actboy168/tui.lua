@@ -87,9 +87,9 @@ function suite:test_focus_manager_jump()
         jump_to = fm.focus
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "x", autoFocus = true } },
-            { kind = "component", fn = Child, props = { id = "y" } },
-            { kind = "component", fn = Child, props = { id = "z" } },
+            { kind = "component", fn = Child, props = { id = "x", autoFocus = true }, key = "x" },
+            { kind = "component", fn = Child, props = { id = "y" },                   key = "y" },
+            { kind = "component", fn = Child, props = { id = "z" },                   key = "z" },
         }
     end
 
@@ -150,11 +150,11 @@ function suite:test_unmount_transfers_focus()
         set_show = setS
         local children = {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "a", autoFocus = true } },
-            { kind = "component", fn = Child, props = { id = "b" } },
+            { kind = "component", fn = Child, props = { id = "a", autoFocus = true }, key = "a" },
+            { kind = "component", fn = Child, props = { id = "b" },                   key = "b" },
         }
         if s then
-            children[#children + 1] = { kind = "component", fn = Child, props = { id = "c" } }
+            children[#children + 1] = { kind = "component", fn = Child, props = { id = "c" }, key = "c" }
         end
         return tui.Box(children)
     end
@@ -254,9 +254,9 @@ function suite:test_tab_order_stable_across_rerenders()
         bump = function() setN(n + 1) end
         return tui.Box {
             flexDirection = "column",
-            tui.Text { ("n=%d"):format(n) },
-            { kind = "component", fn = Child, props = { id = "p", autoFocus = true } },
-            { kind = "component", fn = Child, props = { id = "q" } },
+            tui.Text { ("n=%d"):format(n), key = "heading" },
+            { kind = "component", fn = Child, props = { id = "p", autoFocus = true }, key = "p" },
+            { kind = "component", fn = Child, props = { id = "q" },                   key = "q" },
         }
     end
 
@@ -328,9 +328,9 @@ function suite:test_inactive_entry_is_skipped_by_tab()
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "a", autoFocus = true } },
-            { kind = "component", fn = Child, props = { id = "b", isActive = false } },
-            { kind = "component", fn = Child, props = { id = "c" } },
+            { kind = "component", fn = Child, props = { id = "a", autoFocus = true }, key = "a" },
+            { kind = "component", fn = Child, props = { id = "b", isActive = false }, key = "b" },
+            { kind = "component", fn = Child, props = { id = "c" },                   key = "c" },
         }
     end
 
@@ -380,9 +380,9 @@ function suite:test_isactive_hot_update_transfers_focus()
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = A, props = {} },
-            { kind = "component", fn = B, props = {} },
-            { kind = "component", fn = C, props = {} },
+            { kind = "component", fn = A, props = {}, key = "a" },
+            { kind = "component", fn = B, props = {}, key = "b" },
+            { kind = "component", fn = C, props = {}, key = "c" },
         }
     end
 
@@ -440,9 +440,9 @@ function suite:test_id_hot_update_resubscribes()
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = Static, props = { id = "a" } },
-            { kind = "component", fn = B,      props = {} },
-            { kind = "component", fn = Static, props = { id = "c" } },
+            { kind = "component", fn = Static, props = { id = "a" }, key = "a" },
+            { kind = "component", fn = B,      props = {},            key = "b" },
+            { kind = "component", fn = Static, props = { id = "c" }, key = "c" },
         }
     end
 
@@ -472,9 +472,9 @@ function suite:test_textinput_disabled_is_inactive_entry()
         return tui.Box {
             flexDirection = "column",
             width = 20, height = 3,
-            tui.TextInput { focusId = "top",    value = "" },
-            tui.TextInput { focusId = "middle", value = "", focus = false },
-            tui.TextInput { focusId = "bottom", value = "" },
+            tui.TextInput { focusId = "top",    value = "",                  key = "top" },
+            tui.TextInput { focusId = "middle", value = "", focus = false, key = "middle" },
+            tui.TextInput { focusId = "bottom", value = "",                  key = "bottom" },
         }
     end
 

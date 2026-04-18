@@ -50,11 +50,21 @@ local function StaticImpl(props)
     end
     ref.n = #items
 
-    -- Assemble children in order. Skip nils.
+    -- Assemble children in order. Skip nils. Each slot gets a position-based
+    -- `key` so the reconciler sees a properly-keyed list (Static is append-only,
+    -- and its own `ref.cache` already guarantees per-item identity, so keying
+    -- by index is correct and suppresses the dev-mode missing-key warning).
     local children = {}
     for i = 1, ref.n do
         local slot = ref.cache[i]
         if slot and slot.el ~= nil then
+            -- Don't mutate cached element: shallow-copy only if key missing.
+            if slot.el.key == nil then
+                local copy = {}
+                for k, v in pairs(slot.el) do copy[k] = v end
+                copy.key = "static:" .. tostring(i)
+                slot.el = copy
+            end
             children[#children + 1] = slot.el
         end
     end
@@ -75,9 +85,13 @@ local function StaticImpl(props)
 end
 
 -- Public factory: wraps the implementation as a component element so the
--- reconciler creates a stable hook-bearing instance for it.
+-- reconciler creates a stable hook-bearing instance for it. `key` (if any)
+-- is hoisted to the element for sibling identity.
 function M.Static(props)
-    return { kind = "component", fn = StaticImpl, props = props or {} }
+    props = props or {}
+    local key = props.key
+    props.key = nil
+    return { kind = "component", fn = StaticImpl, props = props, key = key }
 end
 
 return M

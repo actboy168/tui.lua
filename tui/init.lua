@@ -51,6 +51,18 @@ install_default_backend()
 
 local M = {}
 
+-- Dev-mode (Stage 17). Enable in-framework validation of hook order,
+-- setState-during-render, and missing key warnings. Default OFF in
+-- production (zero overhead — each check is a single early-return branch).
+-- The test harness (tui.testing) force-enables it; flip manually with
+-- tui.setDevMode(true/false) from a demo or REPL if needed.
+M._dev_mode = false
+
+function M.setDevMode(on)
+    M._dev_mode = on and true or false
+    hooks._set_dev_mode(M._dev_mode)
+end
+
 -- Expose scheduler configuration for production integrators.
 M.configureScheduler = scheduler.configure
 

@@ -49,6 +49,8 @@ local function make_state()
         app            = nil,  -- app handle injected by tui.render
         boundary_stack = {},   -- ancestor ErrorBoundary instances, innermost last
         context_stack  = {},   -- ancestor Provider entries { context=ctx, value=v }
+        _key_warned    = {},   -- parent_path -> true, reset each render pass
+                               -- (dev_mode missing-key warning dedup)
     }
 end
 
@@ -73,6 +75,38 @@ end
 
 local function is_provider(e)
     return type(e) == "table" and e.kind == "provider"
+end
+
+-- Dev-mode helper: warn once per (parent_path, render pass) if a list of
+-- element children lacks keys. Mirrors the React DevTools heuristic:
+--
+--   * only lists with three-or-more *element* children are candidates
+--     (static two-child compositions like `Box { A, B }` are almost never
+--     the site of keying bugs; DevTools/Ink only warn on larger lists,
+--     which in practice are iteration-built and where reuse correctness
+--     actually matters)
+--   * text (string) children never trigger
+--   * if any element child has key == nil, warn — identifies the whole list
+--
+-- The warning is deduped per parent path within a single render pass via
+-- state._key_warned (cleared at the top of M.render).
+local function dev_check_keys(state, parent_path, children)
+    if not hooks._is_dev_mode() then return end
+    if state._key_warned[parent_path] then return end
+    if type(children) ~= "table" or #children < 3 then return end
+    local elem_count = 0
+    local missing = false
+    for _, c in ipairs(children) do
+        if type(c) == "table" then
+            elem_count = elem_count + 1
+            if c.key == nil then missing = true end
+        end
+    end
+    if elem_count < 3 or not missing then return end
+    state._key_warned[parent_path] = true
+    hooks._warn("children of '" .. parent_path ..
+        "' should each have a unique `key` prop; missing keys can cause " ..
+        "incorrect reuse across renders")
 end
 
 -- Compute the path for the i-th child under `parent_path`. If the child has
@@ -188,6 +222,7 @@ local function expand(state, element, path)
 
         local out = { kind = "box", props = {}, children = {} }
         local ok, err = pcall(function()
+            dev_check_keys(state, path, element.children)
             local seen_keys = {}
             for i, c in ipairs(element.children or {}) do
                 local cp = child_path_for(path, i, c, seen_keys)
@@ -224,6 +259,7 @@ local function expand(state, element, path)
         ctx_stack[#ctx_stack + 1] = { context = element.context, value = element.value }
         local out = { kind = "box", props = {}, children = {} }
         local ok, err = pcall(function()
+            dev_check_keys(state, path, element.children)
             local seen_keys = {}
             for i, c in ipairs(element.children or {}) do
                 local cp = child_path_for(path, i, c, seen_keys)
@@ -248,6 +284,7 @@ local function expand(state, element, path)
             -- Propagate metadata fields used by builtin components.
             out._cursor_offset = element._cursor_offset
         else
+            dev_check_keys(state, path, element.children)
             local seen_keys = {}
             for i, c in ipairs(element.children or {}) do
                 local cp = child_path_for(path, i, c, seen_keys)
@@ -376,6 +413,7 @@ function M.render(state, root, app_handle)
     state.app  = app_handle
     state._effects_to_flush = {}
     state.context_stack = state.context_stack or {}
+    state._key_warned = {}
 
     -- Publish the state so hooks.useContext can look up Providers. Wrap in
     -- pcall so _current_state is always cleared even if expand() throws.

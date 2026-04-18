@@ -120,18 +120,22 @@ local function TextInputImpl(props)
     -- one useFocus path keeps the hook call order stable across props.
     local disabled = (props.focus == false)
 
-    -- Caret: persistent state. Reset if value shrank past caret externally.
+    -- Caret: persistent state. If the external `value` prop shrank so the
+    -- caret is now past the end, we clamp locally for this render and
+    -- schedule the persisted clamp via useEffect (moving the setCaret out
+    -- of render-time satisfies the dev-mode render-phase setState guard).
     local chars = to_chars(value)
     local caret_state, setCaret = hooks.useState(#chars)
-    if caret_state > #chars then
-        caret_state = #chars
-        setCaret(caret_state)
-    end
+    local caret_clamped = caret_state
+    if caret_clamped > #chars then caret_clamped = #chars end
+    hooks.useEffect(function()
+        if caret_state > #chars then setCaret(#chars) end
+    end, { caret_state, #chars })
 
     -- Keep a ref to latest props so the useFocus callback sees fresh value.
     local ctxRef, _ = hooks.useState({})
     ctxRef.chars    = chars
-    ctxRef.caret    = caret_state
+    ctxRef.caret    = caret_clamped
     ctxRef.onChange = onChange
     ctxRef.onSubmit = onSubmit
     ctxRef.setCaret = setCaret
@@ -203,7 +207,7 @@ local function TextInputImpl(props)
     if show_placeholder then
         visible, caret_col = placeholder, 0
     else
-        visible, caret_col = make_window(chars, caret_state, render_width, mask)
+        visible, caret_col = make_window(chars, caret_clamped, render_width, mask)
     end
 
     -- Build the Text child; user may apply styling via a wrapper Box.
@@ -217,9 +221,13 @@ local function TextInputImpl(props)
     return text_el
 end
 
--- Public factory.
+-- Public factory. `key` (if any) is hoisted to the element for reconciler
+-- sibling identity, matching the Box/Text factories.
 function M.TextInput(props)
-    return { kind = "component", fn = TextInputImpl, props = props or {} }
+    props = props or {}
+    local key = props.key
+    props.key = nil
+    return { kind = "component", fn = TextInputImpl, props = props, key = key }
 end
 
 return M

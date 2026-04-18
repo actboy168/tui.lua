@@ -5,6 +5,15 @@
 
 ---
 
+## Stage 17 — Dev-mode 三件套
+- `tui.setDevMode(bool)` 开关（默认关，测试 harness 自动启用）
+- Hook 顺序校验：hook 数量或类型在两次 render 间变化即抛 `[tui:fatal]`
+- Render 期间 `setState` / `dispatch` 同步调用发 `[tui:dev]` stderr 警告
+- 3+ element 子节点中任一缺 `key` 发 `[tui:dev]` stderr 警告（对齐 Ink/React DevTools；按父路径每次 render 去重）
+- 所有 `[tui:dev]` 告警带源位置前缀 `basename.lua:NN:`（跳过框架与测试 runner 栈帧）
+- Fail-on-warn：测试 harness 在 unmount 时把未预期的 dev 警告升级为 `[tui:fatal]`
+- `testing.capture_stderr(fn)`：opt-in stderr 捕获器，用于断言预期警告（支持嵌套）
+
 ## Stage 16 — Hook 家族补齐
 - `useMemo(fn, deps)` / `useCallback(fn, deps)` / `useRef(initial)` / `useReducer(reducer, initial[, init])`
 - `createContext(default)` + `ctx.Provider { value=..., children }` + `useContext(ctx)`（支持嵌套就近优先、兄弟 context 独立）

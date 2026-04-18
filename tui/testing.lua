@@ -39,9 +39,62 @@ local scheduler  = require "tui.scheduler"
 local input_mod  = require "tui.input"
 local resize_mod = require "tui.resize"
 local focus_mod  = require "tui.focus"
+local hooks      = require "tui.hooks"
 local tui_core   = require "tui_core"
 
 local M = {}
+
+-- ---------------------------------------------------------------------------
+-- stderr interception for [tui:dev] warnings (fail-on-warn).
+--
+-- While a harness is mounted, any stderr write starting with "[tui:dev]" is
+-- routed to either:
+--   * capture_buffer, if the test wrapped its work in M.capture_stderr (the
+--     test is asserting against the warning itself — expected); or
+--   * unexpected_warnings, the shared module-level sink. When a harness
+--     unmounts and this sink is non-empty, unmount raises a [tui:fatal] error
+--     naming the warnings, so the test suite cannot silently drift past them.
+--
+-- Non-dev writes fall through to the real stderr unchanged so genuine errors
+-- from the test runner (ltest output, stack traces) are still visible.
+
+local real_stderr          = io.stderr
+local stderr_hook_installed = false
+local unexpected_warnings   = {}
+local capture_buffer        = nil     -- non-nil ⇒ inside M.capture_stderr
+
+local function install_stderr_hook()
+    if stderr_hook_installed then return end
+    stderr_hook_installed = true
+    real_stderr = io.stderr
+    io.stderr = {
+        write = function(self, ...)
+            local s = table.concat({ ... })
+            if s:sub(1, 9) == "[tui:dev]" then
+                if capture_buffer then
+                    capture_buffer[#capture_buffer + 1] = s
+                else
+                    unexpected_warnings[#unexpected_warnings + 1] = s
+                end
+                return self
+            end
+            return real_stderr:write(...)
+        end,
+    }
+end
+
+-- Called by mount/unmount paths to check-and-reset the unexpected warning
+-- sink. If any warnings accumulated outside a capture_stderr scope, raise a
+-- fatal error listing them so the test fails loudly.
+local function drain_and_fatal_if_any()
+    if #unexpected_warnings == 0 then return end
+    local msg = table.concat(unexpected_warnings)
+    unexpected_warnings = {}
+    error("[tui:fatal] unexpected dev warning(s) (wrap the offending work " ..
+          "in testing.capture_stderr if expected):\n" .. msg, 0)
+end
+
+install_stderr_hook()
 
 -- ---------------------------------------------------------------------------
 -- Named-key table used by Harness:press(). Values are the raw byte sequences
@@ -319,6 +372,8 @@ function Harness:unmount()
     focus_mod._reset()
     scheduler._reset()
     restore_terminal()
+    hooks._set_dev_mode(false)
+    drain_and_fatal_if_any()
 end
 
 -- ---------------------------------------------------------------------------
@@ -460,6 +515,7 @@ function M.render(App, opts)
     resize_mod._reset()
     focus_mod._reset()
     scheduler._reset()
+    hooks._set_dev_mode(true)
 
     local h = setmetatable({
         _App         = App,
@@ -540,6 +596,8 @@ function Bare:unmount()
     resize_mod._reset()
     focus_mod._reset()
     scheduler._reset()
+    hooks._set_dev_mode(false)
+    drain_and_fatal_if_any()
 end
 
 --- tui.testing.mount_bare(App) -> BareHarness
@@ -550,6 +608,7 @@ function M.mount_bare(App)
     resize_mod._reset()
     focus_mod._reset()
     scheduler._reset()
+    hooks._set_dev_mode(true)
     scheduler.configure {
         now   = function() return 0 end,
         sleep = function() end,
@@ -563,6 +622,21 @@ function M.mount_bare(App)
     b._app_handle = { exit = function() b._dead = true end }
     b._tree = reconciler.render(b._state, App, b._app_handle)
     return b
+end
+
+-- Capture [tui:dev] warnings emitted by fn() into a string, suppressing them
+-- from both the real stderr AND the "unexpected" sink (declares "I expect
+-- these warnings"). Nested capture_stderr calls are supported — inner calls
+-- capture to their own buffer without leaking to the outer. Non-dev stderr
+-- writes always pass through to the real stderr.
+function M.capture_stderr(fn)
+    local prev = capture_buffer
+    capture_buffer = {}
+    local ok, err = pcall(fn)
+    local s = table.concat(capture_buffer)
+    capture_buffer = prev
+    if not ok then error(err, 2) end
+    return s
 end
 
 -- Handy tree-walker exported for tests that need to locate a Text node by
