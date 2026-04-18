@@ -105,9 +105,9 @@ M.setTimeout  = scheduler.setTimeout
 M.clearTimer  = scheduler.clearTimer
 
 -- ANSI helpers
-local CLEAR    = "\27[2J\27[H"
-local HIDE_CUR = "\27[?25l"
-local SHOW_CUR = "\27[?25h"
+local <const> CLEAR    = "\27[2J\27[H"
+local <const> HIDE_CUR = "\27[?25l"
+local <const> SHOW_CUR = "\27[?25h"
 
 -- Walk the laid-out tree and record the first Text node that requested a
 -- cursor. 1-based (col, row) returned for direct use in `\27[<row>;<col>H`.

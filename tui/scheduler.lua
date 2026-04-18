@@ -56,8 +56,8 @@ local timers        = {}    -- id -> { fire_at, interval, fn }
 local next_timer_id = 1
 local dirty         = true  -- force first paint
 local running       = false
-local frame_ms      = 16    -- ~60 fps cap
-local input_poll_ms = 8     -- how often to look at stdin
+local <const> frame_ms      = 16    -- ~60 fps cap
+local <const> input_poll_ms = 8     -- how often to look at stdin
 
 -- ---------------------------------------------------------------------------
 -- Public timer API

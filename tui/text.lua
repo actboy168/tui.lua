@@ -30,7 +30,10 @@ local function iter_chars(s)
     return function()
         if i > n then return nil end
         local ch, cw, ni = wcwidth.grapheme_next(s, i)
-        if ch == "" then i = n + 1; return nil end
+        if ch == "" then
+            i = n + 1
+            return nil
+        end
         i = ni
         return ch, cw
     end

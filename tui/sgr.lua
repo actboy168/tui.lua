@@ -95,13 +95,13 @@ end
 -- Attribute bits — must stay in lock-step with src/tui_core/screen.c.
 -- The C layer consumes these two bytes unchanged; any mismatch shows up as
 -- wrong SGR output and the test suite fails loudly.
-local ATTR_BOLD       = 0x01
-local ATTR_DIM        = 0x02
-local ATTR_UNDERLINE  = 0x04
-local ATTR_INVERSE    = 0x08
-local ATTR_FG_DEFAULT = 0x10
-local ATTR_BG_DEFAULT = 0x20
-local ATTR_DEFAULT    = ATTR_FG_DEFAULT | ATTR_BG_DEFAULT
+local <const> ATTR_BOLD       = 0x01
+local <const> ATTR_DIM        = 0x02
+local <const> ATTR_UNDERLINE  = 0x04
+local <const> ATTR_INVERSE    = 0x08
+local <const> ATTR_FG_DEFAULT = 0x10
+local <const> ATTR_BG_DEFAULT = 0x20
+local <const> ATTR_DEFAULT    = ATTR_FG_DEFAULT | ATTR_BG_DEFAULT
 
 --- pack_bytes(props) -> fg_bg:uint8, attrs:uint8
 -- Packs element props directly into the two style bytes the C cell format

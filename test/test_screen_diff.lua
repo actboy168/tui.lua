@@ -10,7 +10,7 @@ local screen = require "tui.screen"
 
 local suite = lt.test "screen_diff"
 
-local ESC = "\27"
+local <const> ESC = "\27"
 
 -- ---------------------------------------------------------------------------
 -- Helpers.

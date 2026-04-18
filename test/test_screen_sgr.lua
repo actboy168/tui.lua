@@ -14,11 +14,11 @@ local tui_core = require "tui_core"
 
 local suite = lt.test "screen_sgr"
 
-local ESC = "\27"
+local <const> ESC = "\27"
 
-local ATTR_BOLD, ATTR_DIM, ATTR_UNDERLINE, ATTR_INVERSE = 0x01, 0x02, 0x04, 0x08
-local ATTR_FG_DEFAULT, ATTR_BG_DEFAULT = 0x10, 0x20
-local ATTR_DEFAULT = ATTR_FG_DEFAULT | ATTR_BG_DEFAULT
+local <const> ATTR_BOLD, ATTR_DIM, ATTR_UNDERLINE, ATTR_INVERSE = 0x01, 0x02, 0x04, 0x08
+local <const> ATTR_FG_DEFAULT, ATTR_BG_DEFAULT = 0x10, 0x20
+local <const> ATTR_DEFAULT = ATTR_FG_DEFAULT | ATTR_BG_DEFAULT
 
 -- Back-compat packer matching the old inline {fg=, bg=, bold=, ...} shape
 -- used throughout this file. Does not go through tui.sgr because the public

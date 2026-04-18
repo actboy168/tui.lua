@@ -16,7 +16,10 @@ function M.subscribe(fn)
         if not active then return end
         active = false
         for i = #subs, 1, -1 do
-            if subs[i] == fn then table.remove(subs, i); break end
+            if subs[i] == fn then
+                table.remove(subs, i)
+                break
+            end
         end
     end
 end

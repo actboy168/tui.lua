@@ -99,7 +99,8 @@ function M._end_render()
                 current._prev_hook_kinds = nil
                 current._hook_kinds = nil
                 M._rendering_inst = nil
-                current = nil; cursor = 0
+                current = nil
+                cursor = 0
                 error(err, 0)
             end
             for i = 1, #curr do
@@ -109,7 +110,8 @@ function M._end_render()
                     current._prev_hook_kinds = nil
                     current._hook_kinds = nil
                     M._rendering_inst = nil
-                    current = nil; cursor = 0
+                    current = nil
+                    cursor = 0
                     error(err, 0)
                 end
             end
@@ -506,7 +508,8 @@ function M.createContext(default_value)
     ctx.Provider = function(t)
         t = t or {}
         local props, children = element_mod._split_props_children(t)
-        local key = props.key; props.key = nil
+        local key = props.key
+        props.key = nil
         if props.value == nil then
             error("Context.Provider: missing required `value` prop", 2)
         end

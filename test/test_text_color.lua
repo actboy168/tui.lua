@@ -11,7 +11,7 @@ local Box     = tui.Box
 
 local suite = lt.test "text_color"
 
-local ESC = "\27"
+local <const> ESC = "\27"
 
 -- ---------------------------------------------------------------------------
 -- Case 1: red Text produces SGR in ANSI output but plain text in rows().

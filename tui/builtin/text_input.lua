@@ -176,13 +176,21 @@ local function TextInputImpl(props)
                     emit(nc, c)
                 end
             elseif name == "left" then
-                if c > 0 then ctxRef.setCaret(c - 1); ctxRef.caret = c - 1 end
+                if c > 0 then
+                    ctxRef.setCaret(c - 1)
+                    ctxRef.caret = c - 1
+                end
             elseif name == "right" then
-                if c < #cs then ctxRef.setCaret(c + 1); ctxRef.caret = c + 1 end
+                if c < #cs then
+                    ctxRef.setCaret(c + 1)
+                    ctxRef.caret = c + 1
+                end
             elseif name == "home" then
-                ctxRef.setCaret(0); ctxRef.caret = 0
+                ctxRef.setCaret(0)
+                ctxRef.caret = 0
             elseif name == "end" then
-                ctxRef.setCaret(#cs); ctxRef.caret = #cs
+                ctxRef.setCaret(#cs)
+                ctxRef.caret = #cs
             elseif name == "char" and input and input ~= "" then
                 -- Insert printable UTF-8 character(s) at caret.
                 local ins = to_chars(input)

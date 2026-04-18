@@ -29,7 +29,7 @@ local M = {}
 -- Regular user errors (throw inside a component's render, etc.) have no
 -- prefix and are caught normally.
 
-local FATAL_PREFIX = "[tui:fatal] "
+local <const> FATAL_PREFIX = "[tui:fatal] "
 
 function M.fatal(msg)
     error(FATAL_PREFIX .. tostring(msg), 0)

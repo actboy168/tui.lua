@@ -19,8 +19,8 @@ local element = require "tui.element"
 
 local M = {}
 
-local DEFAULT_FILL  = "\u{2588}"  -- █
-local DEFAULT_EMPTY = "\u{2591}"  -- ░
+local <const> DEFAULT_FILL  = "\u{2588}"  -- █
+local <const> DEFAULT_EMPTY = "\u{2591}"  -- ░
 
 local function clamp01(v)
     if type(v) ~= "number" or v ~= v then return 0 end  -- nil/nan/non-number

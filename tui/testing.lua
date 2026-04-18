@@ -209,7 +209,7 @@ Harness.__index = Harness
 -- loop picks this up on the next tick; in the harness we do the equivalent
 -- inline — re-run render up to MAX_PASSES times until the tree is stable.
 -- Hard-fail beyond that to catch infinite setState loops.
-local MAX_PAINT_PASSES = 4
+local <const> MAX_PAINT_PASSES = 4
 
 local function any_instance_dirty(state)
     for _, inst in pairs(state.instances) do
@@ -429,7 +429,10 @@ function Harness:unmount()
     if self._dead then return end
     self._dead = true
     reconciler.shutdown(self._state)
-    if self._tree then layout.free(self._tree); self._tree = nil end
+    if self._tree then
+        layout.free(self._tree)
+        self._tree = nil
+    end
     input_mod._reset()
     resize_mod._reset()
     focus_mod._reset()
@@ -451,7 +454,7 @@ end
 -- env var TUI_UPDATE_SNAPSHOTS=1 to overwrite all snapshots on a run (for
 -- intentional updates).
 
-local SNAPSHOT_DIR = "test/__snapshots__"
+local <const> SNAPSHOT_DIR = "test/__snapshots__"
 
 local function snapshot_path(name)
     if type(name) ~= "string" or #name == 0 then
@@ -514,7 +517,10 @@ local function format_diff(name, expected, actual)
     local n = math.max(#e_lines, #a_lines)
     local first = nil
     for i = 1, n do
-        if e_lines[i] ~= a_lines[i] then first = i; break end
+        if e_lines[i] ~= a_lines[i] then
+            first = i
+            break
+        end
     end
     if not first then
         return ("snapshot %s: contents differ but no line-level diff found"):format(name)
@@ -743,7 +749,8 @@ function M.find_text_with_cursor(tree)
         if not e then return nil end
         if e.kind == "text" and e._cursor_offset ~= nil then return e end
         for _, c in ipairs(e.children or {}) do
-            local r = walk(c); if r then return r end
+            local r = walk(c)
+            if r then return r end
         end
     end
     return walk(tree)

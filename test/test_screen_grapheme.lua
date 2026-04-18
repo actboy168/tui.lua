@@ -10,7 +10,7 @@ local tui_core = require "tui_core"
 
 local suite = lt.test "screen_grapheme"
 
-local ESC = "\27"
+local <const> ESC = "\27"
 
 -- Helper: draw a single line on a fresh screen, commit frame 1 (discard
 -- its clear-screen noise), and return the first row bytes.

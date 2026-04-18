@@ -114,7 +114,8 @@ function M.subscribe(opts)
                 for step = 0, n - 1 do
                     local idx = ((start + step - 1) % n) + 1
                     if entries[idx].isActive then
-                        landed = entries[idx]; break
+                        landed = entries[idx]
+                        break
                     end
                 end
                 if landed then
@@ -152,11 +153,19 @@ function M.set_active(id, flag)
     -- Was focused but just went inactive — pick the next active neighbor,
     -- scanning forward from this entry's index with wrap.
     local cur_idx
-    for i, x in ipairs(entries) do if x == e then cur_idx = i; break end end
+    for i, x in ipairs(entries) do
+        if x == e then
+            cur_idx = i
+            break
+        end
+    end
     local n, landed = #entries, nil
     for step = 1, n - 1 do
         local idx = ((cur_idx + step - 1) % n) + 1
-        if entries[idx].isActive then landed = entries[idx]; break end
+        if entries[idx].isActive then
+            landed = entries[idx]
+            break
+        end
     end
     set_focused(landed)  -- nil if none found → clears focus
 end
@@ -173,7 +182,12 @@ function M.focus_next()
     local cur = focused_id and by_id[focused_id] or nil
     local start_idx = 1
     if cur then
-        for i, e in ipairs(entries) do if e == cur then start_idx = i; break end end
+        for i, e in ipairs(entries) do
+            if e == cur then
+                start_idx = i
+                break
+            end
+        end
     else
         start_idx = 0
     end
@@ -192,7 +206,12 @@ function M.focus_prev()
     local cur = focused_id and by_id[focused_id] or nil
     local start_idx = 1
     if cur then
-        for i, e in ipairs(entries) do if e == cur then start_idx = i; break end end
+        for i, e in ipairs(entries) do
+            if e == cur then
+                start_idx = i
+                break
+            end
+        end
     else
         start_idx = #entries + 1
     end
