@@ -41,6 +41,28 @@
 
 /* ── cell / slab / screen structs ─────────────────────────────── */
 
+/* SGR attribute layout (Stage 10):
+ *
+ *   fg_bg:  high nibble = fg (0..15 = ANSI 16-color), low nibble = bg (0..15).
+ *           Values 0..7 map to normal 30-37 / 40-47; 8..15 map to bright
+ *           90-97 / 100-107. Default (no-color) is tracked by the is_default
+ *           bits in `attrs` — fg_bg bits are ignored when that bit is set.
+ *
+ *   attrs:  bit0 bold     bit1 dim       bit2 underline  bit3 inverse
+ *           bit4 fg_def   bit5 bg_def    bit6..7 reserved
+ *           When bit4/bit5 is set, the corresponding nibble in fg_bg must
+ *           be treated as "terminal default" regardless of its value. The
+ *           default-filled cell is `attrs = ATTR_DEFAULT_STYLE` = 0x30.
+ */
+#define ATTR_BOLD       0x01u
+#define ATTR_DIM        0x02u
+#define ATTR_UNDERLINE  0x04u
+#define ATTR_INVERSE    0x08u
+#define ATTR_FG_DEFAULT 0x10u
+#define ATTR_BG_DEFAULT 0x20u
+#define ATTR_STYLE_MASK (ATTR_BOLD | ATTR_DIM | ATTR_UNDERLINE | ATTR_INVERSE)
+#define ATTR_DEFAULT    (ATTR_FG_DEFAULT | ATTR_BG_DEFAULT)
+
 typedef struct {
     union {
         uint8_t inline_bytes[8];
@@ -52,7 +74,8 @@ typedef struct {
     } u;
     uint8_t len;    /* 1..8 inline, 0xFF slab, 0 WIDE_TAIL */
     uint8_t width;  /* 0 tail, 1 narrow, 2 wide head */
-    uint8_t _pad[2];
+    uint8_t fg_bg;  /* high nibble fg, low nibble bg (see ATTR_*_DEFAULT) */
+    uint8_t attrs;  /* ATTR_* bitmask */
 } cell_t;
 
 /* Compile-time guard: must stay 12 bytes / 4-byte alignment. */
@@ -102,6 +125,8 @@ cell_set_space(cell_t *c) {
     c->u.inline_bytes[0] = ' ';
     c->len   = 1;
     c->width = 1;
+    c->fg_bg = 0;
+    c->attrs = ATTR_DEFAULT;
 }
 
 static void
@@ -113,6 +138,7 @@ fill_space(cell_t *buf, int n) {
         c->u.inline_bytes[0] = ' ';
         c->len = 1;
         c->width = 1;
+        c->attrs = ATTR_DEFAULT;
     }
 }
 
@@ -133,6 +159,7 @@ cell_eq(const cell_t *a, const slab_t *slab_a,
         const cell_t *b, const slab_t *slab_b) {
     if (a->len != b->len || a->width != b->width) return 0;
     if (a->len == 0)    return 1;                  /* both WIDE_TAIL */
+    if (a->fg_bg != b->fg_bg || a->attrs != b->attrs) return 0;
     if (a->len == 0xFF) {
         if (a->u.ext.slab_len != b->u.ext.slab_len) return 0;
         return memcmp(slab_a->buf + a->u.ext.slab_off,
@@ -183,6 +210,77 @@ row_pool_free(row_pool_t *p) {
 static screen_t *
 check_screen(lua_State *L, int idx) {
     return (screen_t *)luaL_checkudata(L, idx, SCREEN_MT);
+}
+
+/* ── style packing: Lua table → (fg_bg, attrs) ──────────────────
+ *
+ * Lua style table keys (all optional):
+ *   fg          integer 0..15 or nil           — ANSI 16-color foreground
+ *   bg          integer 0..15 or nil           — ANSI 16-color background
+ *   bold        any truthy → ATTR_BOLD
+ *   dim         any truthy → ATTR_DIM
+ *   underline   any truthy → ATTR_UNDERLINE
+ *   inverse     any truthy → ATTR_INVERSE
+ *
+ * `idx` may be a nil / missing argument → returns (0, ATTR_DEFAULT).
+ * Non-table non-nil values raise a Lua error.
+ *
+ * Invalid color values (out of 0..15) raise Lua errors — fail fast so user
+ * code with typos doesn't silently render as default. */
+static void
+pack_style(lua_State *L, int idx, uint8_t *out_fg_bg, uint8_t *out_attrs) {
+    *out_fg_bg = 0;
+    *out_attrs = ATTR_DEFAULT;
+
+    int t = lua_type(L, idx);
+    if (t == LUA_TNONE || t == LUA_TNIL) return;
+    if (t != LUA_TTABLE) {
+        luaL_error(L, "style: expected table or nil, got %s",
+                   lua_typename(L, t));
+    }
+
+    uint8_t fg_nib = 0, bg_nib = 0;
+    uint8_t attrs = ATTR_DEFAULT;
+
+    lua_getfield(L, idx, "fg");
+    if (!lua_isnil(L, -1)) {
+        lua_Integer fg = luaL_checkinteger(L, -1);
+        if (fg < 0 || fg > 15) {
+            lua_pop(L, 1);
+            luaL_error(L, "style.fg out of range: %d (want 0..15)", (int)fg);
+        }
+        fg_nib = (uint8_t)fg;
+        attrs &= (uint8_t)~ATTR_FG_DEFAULT;
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, idx, "bg");
+    if (!lua_isnil(L, -1)) {
+        lua_Integer bg = luaL_checkinteger(L, -1);
+        if (bg < 0 || bg > 15) {
+            lua_pop(L, 1);
+            luaL_error(L, "style.bg out of range: %d (want 0..15)", (int)bg);
+        }
+        bg_nib = (uint8_t)bg;
+        attrs &= (uint8_t)~ATTR_BG_DEFAULT;
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, idx, "bold");
+    if (lua_toboolean(L, -1)) attrs |= ATTR_BOLD;
+    lua_pop(L, 1);
+    lua_getfield(L, idx, "dim");
+    if (lua_toboolean(L, -1)) attrs |= ATTR_DIM;
+    lua_pop(L, 1);
+    lua_getfield(L, idx, "underline");
+    if (lua_toboolean(L, -1)) attrs |= ATTR_UNDERLINE;
+    lua_pop(L, 1);
+    lua_getfield(L, idx, "inverse");
+    if (lua_toboolean(L, -1)) attrs |= ATTR_INVERSE;
+    lua_pop(L, 1);
+
+    *out_fg_bg = (uint8_t)((fg_nib << 4) | (bg_nib & 0x0F));
+    *out_attrs = attrs;
 }
 
 /* ── Lua API: new / size / resize / invalidate / clear / __gc ── */
@@ -270,10 +368,14 @@ lclear(lua_State *L) {
  * x,y 0-based. Length-0 strings are rejected. Returns 1 on success, 0 OOB.
  * Uses inline_bytes for len <= 8; falls through to next_slab for longer
  * grapheme clusters (up to UINT16_MAX bytes; practical limit is 255 per
- * slab_len field width is fine; we allow up to 16-bit). */
+ * slab_len field width is fine; we allow up to 16-bit).
+ *
+ * style parameters (fg_bg, attrs) are written as-is; wide-char tail gets
+ * the same style so cell_eq is stable pair-wise. */
 static int
 put_cell(screen_t *s, int x, int y,
-         const char *str, size_t slen, int cw) {
+         const char *str, size_t slen, int cw,
+         uint8_t fg_bg, uint8_t attrs) {
     if (x < 0 || y < 0 || x >= s->w || y >= s->h) return 0;
     if (cw == 2 && x + 1 >= s->w) return 0;
     if (slen == 0 || slen > 0xFFFFu) return 0;  /* slab_len is uint16 */
@@ -293,12 +395,18 @@ put_cell(screen_t *s, int x, int y,
         c->len = 0xFF;
     }
     c->width = (uint8_t)cw;
+    c->fg_bg = fg_bg;
+    c->attrs = attrs;
 
     if (cw == 2) {
         cell_t *tail = cell_at(s->next, s->w, x + 1, y);
         memset(tail, 0, sizeof(*tail));
         tail->len   = 0;  /* WIDE_TAIL */
         tail->width = 0;
+        /* Tail keeps the head's style so a diff over (head,tail) is
+         * consistent when the style changes but bytes don't. */
+        tail->fg_bg = fg_bg;
+        tail->attrs = attrs;
     }
     return 1;
 }
@@ -313,7 +421,10 @@ lput(lua_State *L) {
     int cw = (int)luaL_checkinteger(L, 5);
 
     if (cw != 1 && cw != 2) luaL_error(L, "screen.put: width must be 1 or 2");
-    put_cell(s, x, y, str, slen, cw);
+
+    uint8_t fg_bg, attrs;
+    pack_style(L, 6, &fg_bg, &attrs);
+    put_cell(s, x, y, str, slen, cw, fg_bg, attrs);
     return 0;
 }
 
@@ -368,20 +479,23 @@ lput_border(lua_State *L) {
     int h = (int)luaL_checkinteger(L, 5);
     const char *style = luaL_optstring(L, 6, "single");
 
+    uint8_t fg_bg, attrs;
+    pack_style(L, 7, &fg_bg, &attrs);
+
     if (w < 2 || h < 2) return 0;
     const border_glyphs_t *g = border_lookup(style);
 
-    put_cell(s, x,           y,           g->tl, 3, 1);
-    put_cell(s, x + w - 1,   y,           g->tr, 3, 1);
-    put_cell(s, x,           y + h - 1,   g->bl, 3, 1);
-    put_cell(s, x + w - 1,   y + h - 1,   g->br, 3, 1);
+    put_cell(s, x,           y,           g->tl, 3, 1, fg_bg, attrs);
+    put_cell(s, x + w - 1,   y,           g->tr, 3, 1, fg_bg, attrs);
+    put_cell(s, x,           y + h - 1,   g->bl, 3, 1, fg_bg, attrs);
+    put_cell(s, x + w - 1,   y + h - 1,   g->br, 3, 1, fg_bg, attrs);
     for (int i = 1; i < w - 1; i++) {
-        put_cell(s, x + i,   y,           g->hh, 3, 1);
-        put_cell(s, x + i,   y + h - 1,   g->hh, 3, 1);
+        put_cell(s, x + i,   y,           g->hh, 3, 1, fg_bg, attrs);
+        put_cell(s, x + i,   y + h - 1,   g->hh, 3, 1, fg_bg, attrs);
     }
     for (int i = 1; i < h - 1; i++) {
-        put_cell(s, x,       y + i,       g->vv, 3, 1);
-        put_cell(s, x + w - 1, y + i,     g->vv, 3, 1);
+        put_cell(s, x,       y + i,       g->vv, 3, 1, fg_bg, attrs);
+        put_cell(s, x + w - 1, y + i,     g->vv, 3, 1, fg_bg, attrs);
     }
     return 0;
 }
@@ -402,6 +516,9 @@ ldraw_line(lua_State *L) {
     const char *text = luaL_checklstring(L, 4, &tlen);
     int max_w = (int)luaL_optinteger(L, 5, s->w);
 
+    uint8_t fg_bg, attrs;
+    pack_style(L, 6, &fg_bg, &attrs);
+
     int cx = x;
     int stop = x + max_w;
     size_t i = 0;
@@ -412,7 +529,7 @@ ldraw_line(lua_State *L) {
         if (cw <= 0) continue;  /* combining marks / controls: skip */
         if (cx + cw > stop) break;
         size_t seglen = i - i0;
-        put_cell(s, cx, y, text + i0, seglen, cw);
+        put_cell(s, cx, y, text + i0, seglen, cw, fg_bg, attrs);
         cx += cw;
     }
     return 0;
@@ -456,6 +573,71 @@ bytes_append_cup(bytes_t *b, int y, int x) {
     bytes_append(b, tmp, (size_t)n);
 }
 
+/* Map a 4-bit color nibble (0..15) to its ANSI SGR fg/bg parameter.
+ * 0..7 → 30..37 (normal), 8..15 → 90..97 (bright). Caller passes the base
+ * (30 for fg normal, 40 for bg normal); bright offset is +60 (standard). */
+static int
+sgr_color_param(uint8_t nibble, int base) {
+    if (nibble < 8) return base + (int)nibble;
+    return base + 60 + (int)(nibble - 8);
+}
+
+/* Emit a SGR sequence so the terminal state transitions to (next_fg_bg,
+ * next_attrs). We always emit a full spec starting from reset: that keeps
+ * the writer stateless at the cost of ~8 bytes per transition, which is
+ * cheap next to a CUP. If the target is the default (nothing set), we
+ * emit just "\x1b[0m".
+ *
+ * `cur_fg_bg / cur_attrs` are updated in place. If the state already
+ * matches, nothing is emitted. */
+static void
+emit_sgr(bytes_t *b,
+         uint8_t *cur_fg_bg, uint8_t *cur_attrs,
+         uint8_t next_fg_bg, uint8_t next_attrs) {
+    if (*cur_fg_bg == next_fg_bg && *cur_attrs == next_attrs) return;
+
+    int is_default = (next_attrs == ATTR_DEFAULT);
+    if (is_default) {
+        bytes_append_cstr(b, "\x1b[0m");
+        *cur_fg_bg = 0;
+        *cur_attrs = ATTR_DEFAULT;
+        return;
+    }
+
+    /* Build "\x1b[0;<p1>;<p2>;...m" — always lead with 0 to reset any
+     * previous attributes, then add all currently-set parameters. */
+    char tmp[64];
+    int n = 0;
+    n += snprintf(tmp + n, sizeof(tmp) - n, "\x1b[0");
+    if (next_attrs & ATTR_BOLD)      n += snprintf(tmp + n, sizeof(tmp) - n, ";1");
+    if (next_attrs & ATTR_DIM)       n += snprintf(tmp + n, sizeof(tmp) - n, ";2");
+    if (next_attrs & ATTR_UNDERLINE) n += snprintf(tmp + n, sizeof(tmp) - n, ";4");
+    if (next_attrs & ATTR_INVERSE)   n += snprintf(tmp + n, sizeof(tmp) - n, ";7");
+    if (!(next_attrs & ATTR_FG_DEFAULT)) {
+        uint8_t fg = (uint8_t)((next_fg_bg >> 4) & 0x0F);
+        n += snprintf(tmp + n, sizeof(tmp) - n, ";%d", sgr_color_param(fg, 30));
+    }
+    if (!(next_attrs & ATTR_BG_DEFAULT)) {
+        uint8_t bg = (uint8_t)(next_fg_bg & 0x0F);
+        n += snprintf(tmp + n, sizeof(tmp) - n, ";%d", sgr_color_param(bg, 40));
+    }
+    n += snprintf(tmp + n, sizeof(tmp) - n, "m");
+    bytes_append(b, tmp, (size_t)n);
+
+    *cur_fg_bg = next_fg_bg;
+    *cur_attrs = next_attrs;
+}
+
+/* Reset SGR state if currently non-default. Used at line boundaries so
+ * unchanged trailing whitespace on the next row doesn't inherit color. */
+static void
+reset_sgr(bytes_t *b, uint8_t *cur_fg_bg, uint8_t *cur_attrs) {
+    if (*cur_attrs == ATTR_DEFAULT && *cur_fg_bg == 0) return;
+    bytes_append_cstr(b, "\x1b[0m");
+    *cur_fg_bg = 0;
+    *cur_attrs = ATTR_DEFAULT;
+}
+
 /* Segment-merge diff: adjacent changed cells within MERGE_GAP unchanged
  * cells still merge into a single CUP + content run. Emitting unchanged
  * bytes for the gap is cheaper than a second CUP sequence (~6-9 bytes). */
@@ -465,19 +647,24 @@ static int
 ldiff(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     bytes_t out = {0};
+    uint8_t cur_fg_bg = 0;
+    uint8_t cur_attrs = ATTR_DEFAULT;
 
     if (!s->prev_valid) {
         /* first-frame / invalidated: clear-screen + full redraw */
-        bytes_append_cstr(&out, "\x1b[H\x1b[2J");
+        bytes_append_cstr(&out, "\x1b[H\x1b[2J\x1b[0m");
         for (int y = 0; y < s->h; y++) {
             bytes_append_cup(&out, y, 0);
             for (int x = 0; x < s->w; x++) {
                 const cell_t *c = cell_at(s->next, s->w, x, y);
                 if (c->len == 0) continue;  /* WIDE_TAIL: skip */
+                emit_sgr(&out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
                 const uint8_t *p; size_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(&out, p, n);
             }
+            /* row end: reset so next row starts from default. */
+            reset_sgr(&out, &cur_fg_bg, &cur_attrs);
         }
     } else {
         /* Per-row segment-merge. Scan each row left-to-right tracking a
@@ -489,6 +676,7 @@ ldiff(lua_State *L) {
         for (int y = 0; y < s->h; y++) {
             int run_start = -1;      /* x of first changed cell in current run */
             int last_change = -1;    /* x of last changed cell emitted so far */
+            int row_dirty = 0;       /* any emit on this row? */
 
             /* helper lambda substitute: flush current run if pending. */
             for (int x = 0; x < s->w; x++) {
@@ -504,11 +692,14 @@ ldiff(lua_State *L) {
                 if (run_start < 0) {
                     /* open new run */
                     bytes_append_cup(&out, y, x);
+                    emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                             cn->fg_bg, cn->attrs);
                     const uint8_t *p; size_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
                     bytes_append(&out, p, n);
                     run_start = x;
                     last_change = x;
+                    row_dirty = 1;
                     /* skip over wide-char tail so we don't double-emit */
                     if (cn->width == 2) x++;  /* outer loop will ++ again; */
                 } else {
@@ -517,14 +708,19 @@ ldiff(lua_State *L) {
                         /* bridge: emit the unchanged cells between
                          * last_change+1 .. x-1 (using next_slab since after
                          * the swap that happens post-diff, these are the
-                         * bytes the terminal should hold). Skip WIDE_TAIL. */
+                         * bytes the terminal should hold). Skip WIDE_TAIL.
+                         * Honor per-cell style during the bridge too. */
                         for (int k = last_change + 1; k < x; k++) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
+                            emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                                     bc->fg_bg, bc->attrs);
                             const uint8_t *bp; size_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
                             bytes_append(&out, bp, bn);
                         }
+                        emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                                 cn->fg_bg, cn->attrs);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(&out, p, n);
@@ -533,6 +729,8 @@ ldiff(lua_State *L) {
                     } else {
                         /* gap too big: close old run, open new one */
                         bytes_append_cup(&out, y, x);
+                        emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                                 cn->fg_bg, cn->attrs);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(&out, p, n);
@@ -542,8 +740,16 @@ ldiff(lua_State *L) {
                     }
                 }
             }
+
+            /* row end: reset SGR so the next row's CUP + unchanged cells
+             * never inherit color from this one. */
+            if (row_dirty) reset_sgr(&out, &cur_fg_bg, &cur_attrs);
         }
     }
+
+    /* Final safety: if any SGR state is still non-default, reset it so
+     * post-diff terminal output (status line, etc.) stays uncolored. */
+    reset_sgr(&out, &cur_fg_bg, &cur_attrs);
 
     /* swap next/prev (both cells and slabs) so next frame diffs against this. */
     cell_t *tc = s->prev; s->prev = s->next; s->next = tc;

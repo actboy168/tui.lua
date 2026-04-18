@@ -16,5 +16,7 @@ require "test.test_focus"
 require "test.test_error_boundary"
 require "test.test_reconciler_keys"
 require "test.test_screen_diff"
+require "test.test_screen_sgr"
+require "test.test_text_color"
 
 os.exit(lt.run(), true)

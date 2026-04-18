@@ -90,6 +90,19 @@
 - `test/test_screen_diff.lua` 11 用例：首帧全画 / 幂等 / 单点局部更新 / MERGE_GAP 内合并 / MERGE_GAP 外拆段 / 宽字符 + WIDE_TAIL / 长 cluster 走 slab / slab 增长 / ring pool 4 代稳定 / resize 全画 / invalidate 全画
 - 修掉 snprintf 用 `\27`（C 里是八进制 023，非 ESC）的 bug，改为 `\x1b`；全量 128 测试通过（117 老测 + 11 新测）
 
+### Stage 10 — Text SGR / 颜色支持
+- `cell_t` 利用末尾 2 字节 `_pad` 扩出 `fg_bg`（高 4 bit fg + 低 4 bit bg）和 `attrs`（bold/dim/underline/inverse + fg_default/bg_default sentinel bits）；`_Static_assert(sizeof == 12)` 保持不变
+- C 侧新增 `pack_style(L, idx, *fg_bg, *attrs)`：从 Lua style table 读 `{fg, bg, bold, dim, underline, inverse}`，非法 0..15 范围外抛 Lua error；三个 binding（`put / draw_line / put_border`）都接末尾可选 style 参数
+- `put_cell` wide-tail cell 复制 head 的 style，保证 cell_eq 对 head+tail 稳定
+- `cell_eq` 扩展比较 `fg_bg + attrs`；WIDE_TAIL 特判保留
+- `diff` 引入 `cur_fg_bg / cur_attrs` 状态机：每次要 emit cell bytes 前 `emit_sgr` 发一次性 `ESC[0;p1;p2;...m`（leading reset + 全量参数，策略无态）；每行末若 row_dirty 则 `reset_sgr` 发 `ESC[0m`；首帧 `ESC[H\x1b[2J\x1b[0m` 硬复位；段合并 bridging 时 unchanged cell 的 style 也正确驱动 cur_*
+- fg/bg 0..7 → `30-37 / 40-47`，8..15 → `90-97 / 100-107`；纯 default 无输出（零 SGR 字节，老测零回归）
+- 新增 `tui/sgr.lua`：COLORS 表（black..brightWhite 16 个常量 + gray/grey 别名）+ `pack_props(props)` 把 Text/Box 的 `color / backgroundColor / bold / dim / underline / inverse` props 规范化成 style table；非法 color 名称 / 越界整数 render 期 error
+- `tui/renderer.lua` 在 text 与 box(border) 分支调用 `sgr.pack_props` 把 style 传给 `screen_c.draw_line / put_border`
+- `test/test_screen_sgr.lua` 12 用例（C 层 byte-level）：单 cell / draw_line+bold / 同色 merge 只 1 次 SGR / 跨色 / bg / bright / 上一帧红下一帧默认不串色 / 行末 reset / bridge gap 保 style / rows 无 SGR / 宽字符带色幂等 / bold-only 切换
+- `test/test_text_color.lua` 5 用例（harness 层）：Text 红 ansi 有 SGR 但 rows 纯文本 / Box color 不向 Text 继承 / 未知 color 抛错 / border 染色 / bold+bg 组合
+- 全测 145/145 通过（128 老 + 17 新）
+
 ---
 
 ## 正在进行
@@ -134,9 +147,12 @@ _暂无_
 ### 渲染性能与稳定性
 
 - alternate screen buffer（类 vim 进出全屏）
-- Text 节点颜色 / SGR 属性：cell 结构扩属性位，C diff 端 emit SGR 前缀
 - grapheme cluster 合并（combining mark 应粘附前 cell 而非独占）
 - `put` 的 cluster 长度校验（防止恶意长字符串爆 slab）
+- truecolor / 256 色扩展：cell_t 扩到 16 字节 or 引入独立 style pool，给 `fg / bg` 加 16/24 bit 值
+- Text per-run inline style：`Text { "plain ", {text="red", color="red"} }` 形式，wrap 需沿 run 边界切片
+- Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text（当前每个 Text 独立）
+- SGR diff 增量模式：用 `ESC[22m / 24m / 27m / 39m / 49m` 按需切换某一维属性，减少每次 `ESC[0;...` 重发的带宽
 
 ### 开发者体验
 

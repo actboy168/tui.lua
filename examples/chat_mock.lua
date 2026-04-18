@@ -20,7 +20,8 @@ local replies = {
 local function formatMsg(msg)
     -- msg = { who = "user"|"bot", text = string }
     local tag = msg.who == "user" and "you" or "bot"
-    return tui.Text { ("[%s] %s"):format(tag, msg.text) }
+    local color = msg.who == "user" and "green" or "cyan"
+    return tui.Text { color = color, ("[%s] %s"):format(tag, msg.text) }
 end
 
 local function App()
@@ -75,12 +76,16 @@ local function App()
             render = function(m) return formatMsg(m) end,
         },
         -- Streaming partial reply (dynamic).
-        streaming and tui.Text { ("[bot] %s▍"):format(streaming.target:sub(1, streaming.shown)) } or nil,
+        streaming and tui.Text {
+            color = "cyan", dim = true,
+            ("[bot] %s▍"):format(streaming.target:sub(1, streaming.shown))
+        } or nil,
         -- Spacer pushes the input to the bottom.
         tui.Box { flexGrow = 1 },
         -- Input row.
         tui.Box {
             border = "round",
+            color  = "yellow",
             paddingX = 1,
             tui.TextInput {
                 value    = input,
