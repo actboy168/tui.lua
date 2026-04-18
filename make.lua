@@ -21,6 +21,9 @@ lm:source_set "yoga_core" {
         "yoga/node/*.cpp",
     },
     includes = ".",
+    linux = {
+        flags = { "-fPIC" },
+    },
     msvc = {
         flags = { "/wd4819" },
     },

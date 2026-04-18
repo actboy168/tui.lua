@@ -22,6 +22,12 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#if defined(__GNUC__)
+#define DLL_EXPORT __attribute__((visibility("default")))
+#else
+#define DLL_EXPORT
+#endif
+
 /* Forward declarations of the sub-module openers defined in other .c files
  * that are compiled into this DLL. They follow the standard Lua loader
  * signature and push a single table on the stack. */
@@ -31,7 +37,7 @@ int luaopen_wcwidth(lua_State *L);
 int luaopen_screen(lua_State *L);
 int luaopen_tui_core_text(lua_State *L);
 
-LUAMOD_API int
+DLL_EXPORT LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
     luaL_checkversion(L);
     lua_createtable(L, 0, 5);

@@ -7,6 +7,12 @@
 #include <math.h>
 #include "yoga/Yoga.h"
 
+#if defined(__GNUC__)
+#define DLL_EXPORT __attribute__((visibility("default")))
+#else
+#define DLL_EXPORT
+#endif
+
 #define FlexDirection 1
 #define Justify 2
 #define Align 4
@@ -354,6 +360,8 @@ setBorderEdge(lua_State *L, YGNodeRef node, YGEdge edge) {
 	}
 }
 
+static int getEnum(lua_State *L, int type, const char *pname);
+
 static void lsetBorderTop(lua_State *L, YGNodeRef node)    { setBorderEdge(L, node, YGEdgeTop); }
 static void lsetBorderBottom(lua_State *L, YGNodeRef node) { setBorderEdge(L, node, YGEdgeBottom); }
 static void lsetBorderLeft(lua_State *L, YGNodeRef node)   { setBorderEdge(L, node, YGEdgeLeft); }
@@ -518,7 +526,7 @@ lnodeSet(lua_State *L) {
 	return 0;
 }
 
-LUAMOD_API int
+DLL_EXPORT LUAMOD_API int
 luaopen_yoga(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
@@ -643,7 +651,8 @@ luaopen_yoga(lua_State *L) {
 	// Set PointScaleFactor=1 on default config so all Yoga nodes produce
 	// integer coordinates (TUI is cell-based; fractional positions like
 	// \27[73.0;3.0H are rejected by terminals).
-	YGConfigSetPointScaleFactor(YGConfigGetDefault(), 1.0f);
+	YGConfigRef cfg = (YGConfigRef)YGConfigGetDefault();
+	YGConfigSetPointScaleFactor(cfg, 1.0f);
 
 	return 1;
 }

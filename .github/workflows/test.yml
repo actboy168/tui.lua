@@ -1,8 +1,13 @@
 name: test
 on: push
 jobs:
-  windows:
-    runs-on: windows-latest
+  test:
+    strategy:
+      matrix:
+        os:
+        - windows-latest
+        - ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
       with:
