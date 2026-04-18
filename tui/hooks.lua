@@ -189,17 +189,31 @@ end
 -- useFocus(opts) — register this component into the focus chain.
 --
 -- opts = {
---   autoFocus = bool?,       -- explicitly take focus on mount
+--   autoFocus = bool?,       -- explicitly take focus on mount / re-subscribe
 --   id        = string?,     -- manual id; generated otherwise
+--   isActive  = bool?,       -- default true. When false, entry is registered
+--                            --   but skipped by Tab navigation and never
+--                            --   auto-focuses.
 --   on_input  = fn?,         -- called when a key is delivered to us
 -- }
 --
+-- Hot-update semantics:
+--   * id        — changing the explicit id triggers a re-subscribe (old
+--                 entry unmounts, new entry appended at the tail). autoFocus
+--                 is re-evaluated against the new entry.
+--   * isActive  — hot-updates in place via focus_mod.set_active(); the
+--                 entry's position in the Tab order is preserved.
+--   * autoFocus — read at each subscribe time only; toggling it alone on
+--                 a rerender is a no-op (matches Ink: autoFocus is a mount
+--                 intent, not an imperative command — use the returned
+--                 focus() instead).
+--   * on_input  — always sees latest closure via useLatestRef.
+--
 -- returns { isFocused : bool, focus : fn }
 --
--- Implementation note: subscription MUST happen inside a mount-once
--- useEffect (`deps = {}`). Registering on every render would re-append the
--- entry each frame, permanently shifting Tab order and likely clearing
--- focus. The effect's cleanup unsubscribes on unmount.
+-- Implementation note: subscription happens inside a useEffect whose deps
+-- are the sanitized id. Registering on every render would re-append the
+-- entry each frame, permanently shifting Tab order.
 
 local focus_mod
 
@@ -219,13 +233,18 @@ function M.useFocus(opts)
         inst.hooks[i] = slot
     end
 
-    local auto = opts.autoFocus
-    local id   = opts.id
+    local auto     = opts.autoFocus
+    local id       = opts.id
+    local isActive = opts.isActive
 
+    -- Effect 1: (re-)subscribe when id changes. deps={id} — a nil id stays
+    -- stable across rerenders (shallow-equal), so auto-id entries never
+    -- remount; a string id change triggers cleanup + new subscribe.
     M.useEffect(function()
         local entry, unsub = focus_mod.subscribe {
             id        = id,
             autoFocus = auto,
+            isActive  = isActive,
             on_change = function(b) setFocused(b) end,
             on_input  = function(input, key)
                 if onInputRef.current then onInputRef.current(input, key) end
@@ -236,7 +255,15 @@ function M.useFocus(opts)
             slot.entry = nil
             unsub()
         end
-    end, {})
+    end, { id })
+
+    -- Effect 2: hot-update isActive when it changes. No-op on first mount
+    -- (subscribe already saw the initial value) but cheap to run.
+    M.useEffect(function()
+        if slot.entry then
+            focus_mod.set_active(slot.entry.id, isActive)
+        end
+    end, { isActive })
 
     return {
         isFocused = isFocused,

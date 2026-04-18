@@ -5,11 +5,11 @@
 --   onChange    : fn(new_value) — called when the user edits the buffer.
 --   onSubmit    : fn(value)     — called on Enter.
 --   placeholder : string shown when value is empty and unfocused.
---   focus       : legacy escape hatch. Only meaningful when explicitly set to
---                 false — the component then skips the focus system entirely
---                 (renders as read-only placeholder). Omit it (or any other
---                 value) to use the focus chain: the component calls
---                 useFocus({ autoFocus = props.autoFocus ~= false }).
+--   focus       : when explicitly set to false, the input is disabled —
+--                 it still registers a focus entry (stable hook order)
+--                 but with isActive=false, so Tab navigation skips it
+--                 and autoFocus is ignored. Omit it (or any other value)
+--                 to use the focus chain normally.
 --   autoFocus   : default true. Forwarded to useFocus.
 --   focusId     : optional id passed to useFocus.
 --   mask        : string (default nil). If set, each visible char is replaced
@@ -113,10 +113,11 @@ local function TextInputImpl(props)
     local placeholder = props.placeholder or ""
     local mask        = props.mask
 
-    -- Legacy escape hatch: props.focus == false explicitly opts out of the
-    -- focus chain entirely. The component behaves as a read-only placeholder
-    -- and never subscribes via useFocus. Any other value (nil, true, etc.)
-    -- routes through the focus system.
+    -- props.focus == false opts out of focus acquisition: the entry still
+    -- registers in the Tab chain but with isActive=false, so navigation
+    -- skips it and autoFocus has no effect. Any other value (nil, true)
+    -- routes through the focus system normally. Merging this into the
+    -- one useFocus path keeps the hook call order stable across props.
     local disabled = (props.focus == false)
 
     -- Caret: persistent state. Reset if value shrank past caret externally.
@@ -136,63 +137,58 @@ local function TextInputImpl(props)
     ctxRef.setCaret = setCaret
     ctxRef.value    = value
 
-    local focus_flag
-    if disabled then
-        -- Skip focus subscription entirely; nothing to do.
-        focus_flag = false
-    else
-        local f = hooks.useFocus {
-            autoFocus = props.autoFocus ~= false,
-            id        = props.focusId,
-            on_input  = function(input, key)
-                local cs = ctxRef.chars
-                local c  = ctxRef.caret
-                local name = key.name
+    local f = hooks.useFocus {
+        autoFocus = (not disabled) and (props.autoFocus ~= false),
+        id        = props.focusId,
+        isActive  = not disabled,
+        on_input  = function(input, key)
+            local cs = ctxRef.chars
+            local c  = ctxRef.caret
+            local name = key.name
 
-                local function emit(new_chars, new_caret)
-                    ctxRef.setCaret(new_caret)
-                    if ctxRef.onChange then
-                        ctxRef.onChange(chars_to_string(new_chars))
-                    end
+            local function emit(new_chars, new_caret)
+                ctxRef.setCaret(new_caret)
+                if ctxRef.onChange then
+                    ctxRef.onChange(chars_to_string(new_chars))
                 end
+            end
 
-                if name == "enter" then
-                    if ctxRef.onSubmit then ctxRef.onSubmit(ctxRef.value) end
-                elseif name == "backspace" then
-                    if c > 0 then
-                        local nc = {}
-                        for i = 1, c - 1 do nc[i] = cs[i] end
-                        for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-                        emit(nc, c - 1)
-                    end
-                elseif name == "delete" then
-                    if c < #cs then
-                        local nc = {}
-                        for i = 1, c do nc[i] = cs[i] end
-                        for i = c + 2, #cs do nc[#nc + 1] = cs[i] end
-                        emit(nc, c)
-                    end
-                elseif name == "left" then
-                    if c > 0 then ctxRef.setCaret(c - 1) end
-                elseif name == "right" then
-                    if c < #cs then ctxRef.setCaret(c + 1) end
-                elseif name == "home" then
-                    ctxRef.setCaret(0)
-                elseif name == "end" then
-                    ctxRef.setCaret(#cs)
-                elseif name == "char" and input and input ~= "" then
-                    -- Insert printable UTF-8 character(s) at caret.
-                    local ins = to_chars(input)
+            if name == "enter" then
+                if ctxRef.onSubmit then ctxRef.onSubmit(ctxRef.value) end
+            elseif name == "backspace" then
+                if c > 0 then
+                    local nc = {}
+                    for i = 1, c - 1 do nc[i] = cs[i] end
+                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
+                    emit(nc, c - 1)
+                end
+            elseif name == "delete" then
+                if c < #cs then
                     local nc = {}
                     for i = 1, c do nc[i] = cs[i] end
-                    for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
-                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-                    emit(nc, c + #ins)
+                    for i = c + 2, #cs do nc[#nc + 1] = cs[i] end
+                    emit(nc, c)
                 end
-            end,
-        }
-        focus_flag = f.isFocused
-    end
+            elseif name == "left" then
+                if c > 0 then ctxRef.setCaret(c - 1) end
+            elseif name == "right" then
+                if c < #cs then ctxRef.setCaret(c + 1) end
+            elseif name == "home" then
+                ctxRef.setCaret(0)
+            elseif name == "end" then
+                ctxRef.setCaret(#cs)
+            elseif name == "char" and input and input ~= "" then
+                -- Insert printable UTF-8 character(s) at caret.
+                local ins = to_chars(input)
+                local nc = {}
+                for i = 1, c do nc[i] = cs[i] end
+                for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
+                for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
+                emit(nc, c + #ins)
+            end
+        end,
+    }
+    local focus_flag = f.isFocused
 
     -- Visible text + caret column.
     local width = props.width or props.minWidth or nil

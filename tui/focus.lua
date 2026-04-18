@@ -22,11 +22,8 @@
 --
 -- Simplifications (see docs/roadmap.md for upgrade paths)
 -- ------------------------------------------------------
--- * id conflicts are suffixed with "#<seq>" rather than hard-failed.
--- * A single-entry chain auto-focuses even without autoFocus=true,
---   so that writing a lone <TextInput> "just works". Ink is stricter.
--- * No per-entry isActive flag; use unmount (or in the future, a
---   `useFocus({ isActive = false })` extension).
+-- * isActive is captured at subscribe time; it cannot be hot-updated via
+--   a rerender (see `useFocus` opts hot-update roadmap item).
 
 local M = {}
 
@@ -55,7 +52,10 @@ end
 --- subscribe(opts) -> entry, unsubscribe
 -- opts = {
 --   id        = string?,     -- optional; auto-generated "f1"/"f2"/... otherwise
---   autoFocus = bool?,       -- force-take focus on registration
+--   autoFocus = bool?,       -- force-take focus on registration (ignored if isActive=false)
+--   isActive  = bool?,       -- default true. When false, entry is skipped by
+--                            --   focus_next / focus_prev and will not auto-focus
+--                            --   on registration. Explicit focus(id) still lands.
 --   on_change = fn(bool),    -- called when this entry's focused state flips
 --   on_input  = fn(input, key),  -- invoked when a key is dispatched to us
 -- }
@@ -68,23 +68,23 @@ function M.subscribe(opts)
         id = "f" .. auto_id_counter
     end
     if by_id[id] then
-        -- Non-fatal conflict: suffix. See "更完善方案" note in roadmap.
-        id = id .. "#" .. seq_counter
+        error(("tui.focus: duplicate focus id %q — each useFocus must " ..
+               "have a unique id (or omit id for auto-generated one)"):format(id), 0)
     end
 
     local entry = {
         id        = id,
         seq       = seq_counter,
+        isActive  = opts.isActive ~= false,
         on_change = opts.on_change,
         on_input  = opts.on_input,
     }
     entries[#entries + 1] = entry
     by_id[id] = entry
 
-    -- Ink semantics: explicit autoFocus → take focus. Additional
-    -- convenience: if this is the only focusable and nobody else is
-    -- focused, take it too — makes single-TextInput demos just work.
-    if focused_id == nil and (opts.autoFocus or #entries == 1) then
+    -- Ink semantics: explicit autoFocus=true takes focus on registration.
+    -- Inactive entries never auto-focus, even with autoFocus=true.
+    if focused_id == nil and opts.autoFocus and entry.isActive then
         set_focused(entry)
     end
 
@@ -105,9 +105,22 @@ function M.subscribe(opts)
             if #entries == 0 then
                 focused_id = nil
             else
-                -- Transfer to the entry now at the same index (or last one).
-                local next_idx = math.min(removed_idx or 1, #entries)
-                set_focused(entries[next_idx])
+                -- Transfer to the entry now at the same index (or last one),
+                -- but skip isActive=false entries. If none are active, clear.
+                local start = math.min(removed_idx or 1, #entries)
+                local n = #entries
+                local landed
+                for step = 0, n - 1 do
+                    local idx = ((start + step - 1) % n) + 1
+                    if entries[idx].isActive then
+                        landed = entries[idx]; break
+                    end
+                end
+                if landed then
+                    set_focused(landed)
+                else
+                    set_focused(nil)
+                end
             end
         end
     end
@@ -119,27 +132,77 @@ function M.focus(id)
     if e then set_focused(e) end
 end
 
---- focus_next / focus_prev: wrap-around. No-op when disabled or chain empty.
-function M.focus_next()
-    if not enabled or #entries == 0 then return end
-    local cur = focused_id and by_id[focused_id] or nil
-    local idx = 1
-    if cur then
-        for i, e in ipairs(entries) do if e == cur then idx = i; break end end
-        idx = (idx % #entries) + 1
+--- set_active(id, flag): mark an existing entry active/inactive.
+-- When flag=false and the entry currently holds focus, focus transfers
+-- to the next active entry (wrap-around from the old index); if no entry
+-- is active, focus clears. When flag=true nothing auto-focuses — inactive
+-- entries regaining activity do not steal focus from whoever has it.
+-- No-op if the id is not registered or the flag is unchanged.
+function M.set_active(id, flag)
+    local e = by_id[id]
+    if not e then return end
+    flag = flag ~= false
+    if e.isActive == flag then return end
+    e.isActive = flag
+
+    if flag then return end  -- flipping to active: never auto-grab focus
+    if focused_id ~= id then return end
+
+    -- Was focused but just went inactive — pick the next active neighbor,
+    -- scanning forward from this entry's index with wrap.
+    local cur_idx
+    for i, x in ipairs(entries) do if x == e then cur_idx = i; break end end
+    local n, landed = #entries, nil
+    for step = 1, n - 1 do
+        local idx = ((cur_idx + step - 1) % n) + 1
+        if entries[idx].isActive then landed = entries[idx]; break end
     end
-    set_focused(entries[idx])
+    set_focused(landed)  -- nil if none found → clears focus
+end
+
+--- focus_next / focus_prev: wrap-around, skipping isActive=false entries.
+-- No-op when disabled, chain empty, or no active entries exist.
+local function has_active()
+    for _, e in ipairs(entries) do if e.isActive then return true end end
+    return false
+end
+
+function M.focus_next()
+    if not enabled or #entries == 0 or not has_active() then return end
+    local cur = focused_id and by_id[focused_id] or nil
+    local start_idx = 1
+    if cur then
+        for i, e in ipairs(entries) do if e == cur then start_idx = i; break end end
+    else
+        start_idx = 0
+    end
+    local n = #entries
+    for step = 1, n do
+        local idx = ((start_idx + step - 1) % n) + 1
+        if entries[idx].isActive then
+            set_focused(entries[idx])
+            return
+        end
+    end
 end
 
 function M.focus_prev()
-    if not enabled or #entries == 0 then return end
+    if not enabled or #entries == 0 or not has_active() then return end
     local cur = focused_id and by_id[focused_id] or nil
-    local idx = 1
+    local start_idx = 1
     if cur then
-        for i, e in ipairs(entries) do if e == cur then idx = i; break end end
-        idx = ((idx - 2) % #entries) + 1
+        for i, e in ipairs(entries) do if e == cur then start_idx = i; break end end
+    else
+        start_idx = #entries + 1
     end
-    set_focused(entries[idx])
+    local n = #entries
+    for step = 1, n do
+        local idx = ((start_idx - step - 1) % n) + 1
+        if entries[idx].isActive then
+            set_focused(entries[idx])
+            return
+        end
+    end
 end
 
 function M.enable()      enabled = true  end

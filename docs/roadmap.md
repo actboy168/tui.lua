@@ -87,6 +87,13 @@
 - `wcwidth.grapheme_next(s, i)` Lua 绑定；`wcwidth.string_width` 改用 grapheme 累加，与渲染列数一致
 - `tui.text.iter` 和 `TextInput.to_chars` 切到 grapheme，方向键 / backspace 按 cluster 跳
 
+### Stage 13 — 焦点系统完善
+- `useFocus` 重复 id 在 `focus.subscribe` 内硬 assert（替换掉静默追加 `#seq` 后缀的行为）
+- 严格 Ink 语义：移除"单 entry 自动获焦"的便利规则，只有 `autoFocus=true` 触发；`TextInput` 默认 `autoFocus=true` 不受影响
+- `useFocus({ isActive = false })` 支持：entry 保留在 Tab 链但被 `focus_next / focus_prev` 跳过；inactive 时即便 `autoFocus=true` 也不获焦
+- `useFocus` 支持 `id` 与 `isActive` 的热更新：`id` 变化走 unsubscribe + resubscribe 到链尾；`isActive` 变化通过 `focus.set_active(id, flag)` 原地更新，变 inactive 时持焦者自动转给下一个 active entry
+- `TextInput` `focus=false` 合回 useFocus 单一路径：注册成 `isActive=false` 的 entry，Tab 跳过 + autoFocus 忽略，hook 调用顺序在两种路径下一致
+
 ---
 
 ## 正在进行
@@ -98,13 +105,6 @@ _暂无_
 ## 未完成 · 按类别
 
 ### 功能增强
-
-**焦点系统完善**
-- `useFocus` id 冲突改为 render 期 assert 硬失败（当前仅后缀 `#seq`，易掩盖重复注册）
-- `useFocus` 支持 opts 热更新（当前 id / autoFocus 在 mount 时固化，运行时改不生效）
-- 严格按 Ink 语义：仅 `autoFocus=true` 才自动拿焦点（当前 `#entries==1` 也会自动，为 demo 方便）
-- `useFocus({ isActive = false })` 支持临时禁用某 entry 而不 unmount
-- `TextInput` 的 disabled 语义并回 useFocus：`focus.subscribe` 加 `suppress_initial`，移除独立分支
 
 **高阶组件**
 - `useStdout` / `useStderr`

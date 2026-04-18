@@ -12,15 +12,25 @@ local testing = require "tui.testing"
 local suite = lt.test "focus"
 
 -- ---------------------------------------------------------------------------
--- 1. Single useFocus with autoFocus default takes focus on first frame.
---
--- The hook uses `useEffect({}, [])` to subscribe, and subscription triggers
--- set_focused → setState(true). The harness stabilization loop rolls the
--- extra render into the first paint so isFocused=true is visible up front.
+-- 1. Bare useFocus (no autoFocus) does NOT auto-focus — strict Ink semantics.
+-- Explicit autoFocus=true is required; the hook otherwise just registers
+-- the entry into the Tab chain.
 
-function suite:test_single_autofocus_by_default()
+function suite:test_bare_useFocus_does_not_autofocus()
     local function App()
         local f = tui.useFocus { id = "only" }
+        return tui.Text { f.isFocused and "Y" or "N" }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 1 })
+    lt.assertEquals(h:focus_id(), nil)
+    lt.assertEquals(h:frame(), "N")
+    h:unmount()
+end
+
+function suite:test_autofocus_true_takes_focus()
+    local function App()
+        local f = tui.useFocus { id = "only", autoFocus = true }
         return tui.Text { f.isFocused and "Y" or "N" }
     end
 
@@ -34,11 +44,11 @@ end
 -- 2. Two entries + Tab / Shift-Tab cycle.
 --
 -- Entry ordering == subscription order == reconciler DFS preorder == Tab
--- order. First entry auto-focuses (single entry rule at the time of its
--- mount); after the second subscribes, focus stays on the first.
+-- order. Only "a" has autoFocus=true (strict Ink semantics); once it
+-- grabs focus, Tab/Shift-Tab navigate between both.
 
 function suite:test_tab_and_shift_tab_cycle()
-    local function A() local f = tui.useFocus { id = "a" }; return tui.Text { f.isFocused and "A*" or "A " } end
+    local function A() local f = tui.useFocus { id = "a", autoFocus = true }; return tui.Text { f.isFocused and "A*" or "A " } end
     local B_impl = function()
         local f = tui.useFocus { id = "b" }
         return tui.Text { f.isFocused and "B*" or "B " }
@@ -69,7 +79,7 @@ end
 function suite:test_focus_manager_jump()
     local jump_to
     local function Child(props)
-        tui.useFocus { id = props.id }
+        tui.useFocus { id = props.id, autoFocus = props.autoFocus }
         return tui.Text { props.id }
     end
     local function App()
@@ -77,7 +87,7 @@ function suite:test_focus_manager_jump()
         jump_to = fm.focus
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "x" } },
+            { kind = "component", fn = Child, props = { id = "x", autoFocus = true } },
             { kind = "component", fn = Child, props = { id = "y" } },
             { kind = "component", fn = Child, props = { id = "z" } },
         }
@@ -106,7 +116,7 @@ function suite:test_disable_focus_falls_back_to_broadcast()
     local function App()
         local fm = tui.useFocusManager()
         disable_it = fm.disableFocus
-        tui.useFocus { id = "only" }
+        tui.useFocus { id = "only", autoFocus = true }
         tui.useInput(function(_, key)
             if key.name == "tab" then seen_tab = true end
         end)
@@ -132,7 +142,7 @@ end
 function suite:test_unmount_transfers_focus()
     local set_show
     local function Child(props)
-        tui.useFocus { id = props.id }
+        tui.useFocus { id = props.id, autoFocus = props.autoFocus }
         return tui.Text { props.id }
     end
     local function App()
@@ -140,7 +150,7 @@ function suite:test_unmount_transfers_focus()
         set_show = setS
         local children = {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "a" } },
+            { kind = "component", fn = Child, props = { id = "a", autoFocus = true } },
             { kind = "component", fn = Child, props = { id = "b" } },
         }
         if s then
@@ -236,7 +246,7 @@ end
 function suite:test_tab_order_stable_across_rerenders()
     local bump
     local function Child(props)
-        tui.useFocus { id = props.id }
+        tui.useFocus { id = props.id, autoFocus = props.autoFocus }
         return tui.Text { props.id }
     end
     local function App()
@@ -245,7 +255,7 @@ function suite:test_tab_order_stable_across_rerenders()
         return tui.Box {
             flexDirection = "column",
             tui.Text { ("n=%d"):format(n) },
-            { kind = "component", fn = Child, props = { id = "p" } },
+            { kind = "component", fn = Child, props = { id = "p", autoFocus = true } },
             { kind = "component", fn = Child, props = { id = "q" } },
         }
     end
@@ -266,5 +276,216 @@ function suite:test_tab_order_stable_across_rerenders()
     -- Tab traversal still cleanly flips p ↔ q.
     h:press("tab"); lt.assertEquals(h:focus_id(), "q")
     h:press("tab"); lt.assertEquals(h:focus_id(), "p")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 9. Duplicate useFocus id must hard-fail, not silently suffix.
+--
+-- Two components registering the same explicit id is a user bug — the
+-- previous behavior (append "#<seq>") masked it and produced surprising
+-- focus targets. subscribe() now raises; the reconciler surfaces the
+-- error out of render via the harness's pcall boundary.
+
+function suite:test_duplicate_focus_id_raises()
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            { kind = "component", fn = function()
+                tui.useFocus { id = "dup" }
+                return tui.Text { "a" }
+            end },
+            { kind = "component", fn = function()
+                tui.useFocus { id = "dup" }
+                return tui.Text { "b" }
+            end },
+        }
+    end
+
+    local ok, err = pcall(function()
+        testing.render(App, { cols = 2, rows = 2 })
+    end)
+    lt.assertEquals(ok, false)
+    lt.assertEquals(type(err) == "string" and err:find("duplicate focus id", 1, true) ~= nil, true,
+        "expected 'duplicate focus id' in error, got: " .. tostring(err))
+    lt.assertEquals(err:find("\"dup\"", 1, true) ~= nil, true,
+        "error should name the offending id")
+
+    -- clean up module state so later tests aren't contaminated
+    require("tui.focus")._reset()
+end
+
+-- ---------------------------------------------------------------------------
+-- 10. isActive=false: entry is registered (keeps its slot in Tab order) but
+-- is skipped by focus_next / focus_prev, and never auto-focuses even with
+-- autoFocus=true.
+
+function suite:test_inactive_entry_is_skipped_by_tab()
+    local function Child(props)
+        tui.useFocus { id = props.id, autoFocus = props.autoFocus, isActive = props.isActive }
+        return tui.Text { props.id }
+    end
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            { kind = "component", fn = Child, props = { id = "a", autoFocus = true } },
+            { kind = "component", fn = Child, props = { id = "b", isActive = false } },
+            { kind = "component", fn = Child, props = { id = "c" } },
+        }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 3 })
+    lt.assertEquals(h:focus_id(), "a")
+
+    -- Tab skips the inactive "b" and lands on "c".
+    h:press("tab");       lt.assertEquals(h:focus_id(), "c")
+    h:press("tab");       lt.assertEquals(h:focus_id(), "a")   -- wraps, still skipping b
+    h:press("shift+tab"); lt.assertEquals(h:focus_id(), "c")   -- wrap back, skip b
+    h:press("shift+tab"); lt.assertEquals(h:focus_id(), "a")
+
+    -- Explicit focus(id) still lands on an inactive entry (user intent).
+    require("tui.focus").focus("b")
+    lt.assertEquals(h:focus_id(), "b")
+    h:unmount()
+end
+
+function suite:test_inactive_does_not_autofocus()
+    local function App()
+        local f = tui.useFocus { id = "only", autoFocus = true, isActive = false }
+        return tui.Text { f.isFocused and "Y" or "N" }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 1 })
+    lt.assertEquals(h:focus_id(), nil, "autoFocus should be ignored when isActive=false")
+    lt.assertEquals(h:frame(), "N")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 11. Hot-updating isActive.
+-- Flipping the flag on a rerender updates the entry in place: Tab
+-- navigation honors the new value and the focused entry transfers when
+-- it goes inactive.
+
+function suite:test_isactive_hot_update_transfers_focus()
+    local set_b_active
+    local function A() tui.useFocus { id = "a" }; return tui.Text { "a" } end
+    local function B()
+        local active, setActive = tui.useState(true)
+        set_b_active = setActive
+        tui.useFocus { id = "b", autoFocus = true, isActive = active }
+        return tui.Text { "b" }
+    end
+    local function C() tui.useFocus { id = "c" }; return tui.Text { "c" } end
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            { kind = "component", fn = A, props = {} },
+            { kind = "component", fn = B, props = {} },
+            { kind = "component", fn = C, props = {} },
+        }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 3 })
+    lt.assertEquals(h:focus_id(), "b")
+
+    -- Deactivate b: focus should walk forward to c (next active neighbor).
+    set_b_active(false)
+    h:rerender()
+    lt.assertEquals(h:focus_id(), "c")
+
+    -- Tab now skips b.
+    h:press("tab"); lt.assertEquals(h:focus_id(), "a")
+    h:press("tab"); lt.assertEquals(h:focus_id(), "c")    -- skips b
+
+    -- Reactivating b does not steal focus, but b is reachable via Tab again.
+    set_b_active(true)
+    h:rerender()
+    lt.assertEquals(h:focus_id(), "c")
+    h:press("shift+tab"); lt.assertEquals(h:focus_id(), "b")
+    h:unmount()
+end
+
+function suite:test_isactive_hot_update_clears_when_all_inactive()
+    local set_active
+    local function App()
+        local a, setA = tui.useState(true)
+        set_active = setA
+        tui.useFocus { id = "only", autoFocus = true, isActive = a }
+        return tui.Text { "x" }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 1 })
+    lt.assertEquals(h:focus_id(), "only")
+    set_active(false)
+    h:rerender()
+    lt.assertEquals(h:focus_id(), nil, "focus clears when the only entry goes inactive")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 12. Hot-updating id triggers re-subscribe (old entry unmounts, new entry
+-- appends at the tail). The hot-updated component ends up last in Tab
+-- order and its autoFocus is re-evaluated against the new registration.
+
+function suite:test_id_hot_update_resubscribes()
+    local set_id
+    local function B()
+        local id, setId = tui.useState("b")
+        set_id = setId
+        tui.useFocus { id = id }
+        return tui.Text { id }
+    end
+    local function Static(props) tui.useFocus { id = props.id }; return tui.Text { props.id } end
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            { kind = "component", fn = Static, props = { id = "a" } },
+            { kind = "component", fn = B,      props = {} },
+            { kind = "component", fn = Static, props = { id = "c" } },
+        }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 3 })
+    local focus_mod = require "tui.focus"
+    local ids = function()
+        local out = {}
+        for _, e in ipairs(focus_mod._entries()) do out[#out + 1] = e.id end
+        return table.concat(out, ",")
+    end
+    lt.assertEquals(ids(), "a,b,c")
+
+    set_id("b2")
+    h:rerender()
+    -- "b" unsubscribed; "b2" appended at tail.
+    lt.assertEquals(ids(), "a,c,b2")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 13. TextInput with focus=false still registers as an inactive entry.
+-- Tab navigation skips it; focus lands on the active siblings only.
+-- This verifies the merged (single-branch) useFocus path in text_input.
+
+function suite:test_textinput_disabled_is_inactive_entry()
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            width = 20, height = 3,
+            tui.TextInput { focusId = "top",    value = "" },
+            tui.TextInput { focusId = "middle", value = "", focus = false },
+            tui.TextInput { focusId = "bottom", value = "" },
+        }
+    end
+
+    local h = testing.render(App, { cols = 20, rows = 3 })
+    local focus_mod = require "tui.focus"
+    -- All three are in the chain (stable hook call order).
+    lt.assertEquals(#focus_mod._entries(), 3)
+    -- First active one autoFocuses (TextInput default).
+    lt.assertEquals(h:focus_id(), "top")
+    -- Tab skips the inactive middle input.
+    h:press("tab"); lt.assertEquals(h:focus_id(), "bottom")
+    h:press("tab"); lt.assertEquals(h:focus_id(), "top")
     h:unmount()
 end
