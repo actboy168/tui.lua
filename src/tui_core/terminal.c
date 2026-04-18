@@ -6,8 +6,6 @@
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
-#  include <imm.h>
-#  pragma comment(lib, "imm32.lib")
 
 /* ── 输出 ─────────────────────────────────────────────────────── */
 
@@ -70,7 +68,6 @@ utf16_to_utf8(WCHAR high, WCHAR low, int use_surrogate, char *out) {
 static DWORD s_orig_in_mode  = 0;
 static DWORD s_orig_out_mode = 0;
 static int   s_raw_saved     = 0;
-static HIMC  s_orig_imc      = NULL;
 
 static int
 lset_raw(lua_State *L) {
@@ -89,20 +86,11 @@ lset_raw(lua_State *L) {
             & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
         raw_in |= ENABLE_WINDOW_INPUT;
         SetConsoleMode(hin, raw_in);
-
-        HWND hwnd = GetConsoleWindow();
-        if (hwnd && !s_orig_imc)
-            s_orig_imc = ImmAssociateContext(hwnd, NULL);
     } else {
         if (s_raw_saved) {
             SetConsoleMode(hin,  s_orig_in_mode);
             SetConsoleMode(hout, s_orig_out_mode);
             s_raw_saved = 0;
-        }
-        HWND hwnd = GetConsoleWindow();
-        if (hwnd && s_orig_imc) {
-            ImmAssociateContext(hwnd, s_orig_imc);
-            s_orig_imc = NULL;
         }
     }
     return 0;
@@ -185,49 +173,6 @@ lread_raw(lua_State *L) {
     return 1;
 }
 
-/* ── IME 候选框位置 ────────────────────────────────────────────── */
-
-static int
-lset_ime_pos(lua_State *L) {
-    int col = (int)luaL_checkinteger(L, 1);
-    int row = (int)luaL_checkinteger(L, 2);
-    HWND hwnd = GetConsoleWindow();
-    if (!hwnd) return 0;
-    HIMC himc = ImmGetContext(hwnd);
-    if (!himc) return 0;
-    HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
-    COORD font_size = {8, 16};
-    if (hout != INVALID_HANDLE_VALUE) {
-        CONSOLE_FONT_INFO cfi;
-        if (GetCurrentConsoleFont(hout, FALSE, &cfi)) {
-            COORD fs = GetConsoleFontSize(hout, cfi.nFont);
-            if (fs.X > 0 && fs.Y > 0) font_size = fs;
-        }
-    }
-    int scroll_left = 0, scroll_top = 0;
-    if (hout != INVALID_HANDLE_VALUE) {
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        if (GetConsoleScreenBufferInfo(hout, &csbi)) {
-            scroll_left = csbi.srWindow.Left;
-            scroll_top  = csbi.srWindow.Top;
-        }
-    }
-    int px = ((col - 1) - scroll_left) * font_size.X;
-    int py = ((row - 1) - scroll_top)  * font_size.Y;
-    CANDIDATEFORM cf = {0};
-    cf.dwStyle        = CFS_CANDIDATEPOS;
-    cf.ptCurrentPos.x = px;
-    cf.ptCurrentPos.y = py + font_size.Y;
-    ImmSetCandidateWindow(himc, &cf);
-    COMPOSITIONFORM compf = {0};
-    compf.dwStyle        = CFS_POINT;
-    compf.ptCurrentPos.x = px;
-    compf.ptCurrentPos.y = py;
-    ImmSetCompositionWindow(himc, &compf);
-    ImmReleaseContext(hwnd, himc);
-    return 0;
-}
-
 #else /* POSIX */
 
 #include <termios.h>
@@ -302,16 +247,6 @@ lwrite(lua_State *L) {
     return 0;
 }
 
-static int
-lset_ime_pos(lua_State *L) {
-    /* POSIX: IME positioning is handled entirely by ime.lua via
-     * terminal.write() with terminal-specific escape sequences.
-     * This stub exists solely to keep the module API consistent
-     * across platforms; it is never called in production. */
-    (void)L;
-    return 0;
-}
-
 #endif /* _WIN32 */
 
 LUAMOD_API int
@@ -323,7 +258,6 @@ luaopen_terminal(lua_State *L) {
         { "windows_vt_enable", lwindows_vt_enable },
         { "read_raw",          lread_raw          },
         { "write",             lwrite             },
-        { "set_ime_pos",       lset_ime_pos       },
         { NULL, NULL },
     };
     luaL_newlib(L, l);

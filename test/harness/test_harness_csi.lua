@@ -50,6 +50,8 @@ function suite:test_cursor_coords_are_integers_simple()
         }
     end
     local h = testing.render(App, { cols = 40, rows = 3 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
     local col, row = h:cursor()
     lt.assertEquals(is_integer(col), true,
         ("cursor col must be integer, got %s"):format(tostring(col)))
@@ -74,6 +76,8 @@ function suite:test_cursor_coords_are_integers_nested_flex()
         }
     end
     local h = testing.render(App, { cols = 80, rows = 75 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
     local col, row = h:cursor()
     lt.assertEquals(is_integer(col), true,
         ("cursor col must be integer, got %s"):format(tostring(col)))
@@ -109,6 +113,9 @@ function suite.test_csi_rejects_float_coords()
             tui.TextInput { value = "test", focus = true }
         }
     end, { cols = 20, rows = 10 })
+    -- focus=true implies autoFocus=true; isFocused state takes effect on
+    -- the next paint.
+    h:rerender()
 
     local col, row = h:cursor()
     if col and row then
@@ -151,8 +158,7 @@ end
 -- Render count tracking (performance testing)
 -- ============================================================================
 
-function suite.test_harness_render_count_tracks_stabilization()
-    -- Harness _paint includes stabilization loop which may render multiple times
+function suite.test_harness_render_count_tracks_renders()
     local renders = 0
     local set_val
     local function App()
@@ -163,7 +169,10 @@ function suite.test_harness_render_count_tracks_stabilization()
     end
     local h = testing.render(App, { cols = 10, rows = 2 })
 
-    -- Trigger setState then rerender (simulating state update flow)
+    -- Initial render only (no stabilization loop)
+    h:expect_renders(1, "after initial render")
+
+    -- Trigger setState then rerender
     set_val(1)
     h:rerender()
 

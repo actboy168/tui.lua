@@ -2,109 +2,12 @@
 local lt       = require "ltest"
 local tui      = require "tui"
 local testing  = require "tui.testing"
-local info     = require "tui.terminal_info"
-local ime_mod  = require "tui.ime"
+local ansi_mod = require "tui.ansi"
 
 local test_ime = lt.test "ime"
 
 -- ---------------------------------------------------------------------------
--- 1. terminal_info: terminal type detection
-
-function test_ime:test_detect_returns_string()
-    local t = info.detect()
-    lt.assertEquals(type(t), "string")
-    -- Must be one of the known identifiers.
-    local valid = {
-        iterm2 = true, kitty = true, apple_terminal = true,
-        alacritty = true, wezterm = true, unknown = true,
-    }
-    lt.assertEquals(valid[t] ~= nil, true)
-end
-
-function test_ime:test_capabilities_returns_table()
-    local caps = info.capabilities()
-    lt.assertEquals(type(caps), "table")
-    lt.assertEquals(type(caps.ime_osc1337), "boolean")
-    lt.assertEquals(type(caps.ime_kitty_proto), "boolean")
-    lt.assertEquals(type(caps.ime_csi_cup), "boolean")
-end
-
-function test_ime:test_csi_cup_always_true()
-    -- Every terminal supports the CSI CUP fallback.
-    local caps = info.capabilities()
-    lt.assertEquals(caps.ime_csi_cup, true)
-end
-
-function test_ime:test_terminal_type_cached()
-    local a = info.terminal_type()
-    local b = info.terminal_type()
-    lt.assertEquals(a, b)
-end
-
-function test_ime:test_reset_clears_cache()
-    info.terminal_type()
-    info._reset()
-    -- After reset, next call re-detects (still returns a valid string).
-    local t = info.terminal_type()
-    lt.assertEquals(type(t), "string")
-end
-
--- ---------------------------------------------------------------------------
--- 2. ime module: sequence generation
-
-function test_ime:test_csi_cup_sequence_format()
-    local seq = ime_mod._csi_cup_sequence(5, 3)
-    -- Should contain DECSC + CUP(3,5) + DECRC
-    lt.assertEquals(seq:find("\0277", 1, true) ~= nil, true)     -- DECSC
-    lt.assertEquals(seq:find("\0278", 1, true) ~= nil, true)     -- DECRC
-    lt.assertEquals(seq:find("\027%[3;5H") ~= nil, true) -- CUP row=3 col=5
-end
-
-function test_ime:test_iterm2_sequence_contains_osc1337()
-    local seq = ime_mod._iterm2_sequence(10, 2)
-    lt.assertEquals(seq:find("1337;SetMark", 1, true) ~= nil, true)
-    lt.assertEquals(seq:find("\0277", 1, true) ~= nil, true)       -- DECSC
-    lt.assertEquals(seq:find("\0278", 1, true) ~= nil, true)       -- DECRC
-end
-
-function test_ime:test_kitty_sequence_is_cup_fallback()
-    -- kitty sequence is the same as CSI CUP (no OSC 1337).
-    local kitty_seq = ime_mod._kitty_sequence(7, 4)
-    local cup_seq   = ime_mod._csi_cup_sequence(7, 4)
-    lt.assertEquals(kitty_seq, cup_seq)
-end
-
--- ---------------------------------------------------------------------------
--- 3. ime.set_pos: dispatches through fake terminal
-
-function test_ime:test_set_pos_writes_to_terminal()
-    local h = testing.render(function()
-        return tui.Text { "hello" }
-    end)
-    -- Clear any prior ansi buffer content.
-    h:clear_ansi()
-
-    ime_mod.set_pos(h._terminal, 5, 3)
-    local ansi = h:ansi()
-    -- Something should have been written (DECSC + CUP + DECRC at minimum).
-    lt.assertEquals(#ansi > 0, true)
-    h:unmount()
-end
-
-function test_ime:test_set_pos_nil_coords_noop()
-    local h = testing.render(function()
-        return tui.Text { "hello" }
-    end)
-    h:clear_ansi()
-    ime_mod.set_pos(h._terminal, nil, nil)
-    lt.assertEquals(h:ansi(), "")
-    ime_mod.set_pos(h._terminal, 5, nil)
-    lt.assertEquals(h:ansi(), "")
-    h:unmount()
-end
-
--- ---------------------------------------------------------------------------
--- 4. IME position tracked in harness
+-- 1. IME position tracked in harness
 
 function test_ime:test_ime_pos_after_paint()
     local value, setValue = "", nil
@@ -116,6 +19,8 @@ function test_ime:test_ime_pos_after_paint()
     local h = testing.render(App)
 
     -- After initial render with focused TextInput, IME pos should be set.
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
     local col, row = h:ime_pos()
     lt.assertEquals(col ~= nil, true)
     lt.assertEquals(row ~= nil, true)
@@ -145,7 +50,7 @@ function test_ime:test_ime_pos_updates_after_typing()
 end
 
 -- ---------------------------------------------------------------------------
--- 5. Composing text: composing → confirm
+-- 2. Composing text: composing → confirm
 
 function test_ime:test_composing_then_confirm()
     local lastValue = ""
@@ -210,7 +115,7 @@ function test_ime:test_composing_shown_at_caret()
 end
 
 -- ---------------------------------------------------------------------------
--- 6. Focus linkage: composing cleared on blur
+-- 3. Focus linkage: composing cleared on blur
 
 function test_ime:test_composing_cleared_on_focus_loss()
     local lastValue = ""
@@ -239,7 +144,7 @@ function test_ime:test_composing_cleared_on_focus_loss()
 end
 
 -- ---------------------------------------------------------------------------
--- 7. IME position cleared when no cursor
+-- 4. IME position cleared when no cursor
 
 function test_ime:test_no_ime_pos_without_focused_input()
     local function App()
@@ -250,6 +155,134 @@ function test_ime:test_no_ime_pos_without_focused_input()
     -- No focused TextInput → no IME position.
     local col, row = h:ime_pos()
     lt.assertEquals(col, nil)
+
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 5. Physical cursor position tests
+--
+-- IME candidate window placement depends on the physical cursor position.
+-- These tests verify that the physical cursor coordinates (returned by
+-- cursor()) match the IME position (returned by ime_pos()), ensuring
+-- IME placement is driven by physical cursor position.
+
+function test_ime:test_physical_cursor_matches_ime_position()
+    -- After paint, the physical cursor position and the IME position
+    -- should be identical — IME candidate window follows the physical cursor.
+    local function App()
+        local v, setV = tui.useState("")
+        return tui.TextInput { value = v, onChange = setV, width = 20, autoFocus = true }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
+
+    -- Empty TextInput at top-left: cursor and IME both at (1, 1).
+    local cursor_col, cursor_row = h:cursor()
+    local ime_col, ime_row = h:ime_pos()
+    lt.assertEquals(cursor_col, ime_col)
+    lt.assertEquals(cursor_row, ime_row)
+
+    h:unmount()
+end
+
+function test_ime:test_physical_cursor_tracks_typing()
+    -- After typing, both cursor() and ime_pos() advance in lockstep.
+    local function App()
+        local v, setV = tui.useState("")
+        return tui.TextInput { value = v, onChange = setV, width = 20, autoFocus = true }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- autoFocus sets isFocused state on the next paint; the first
+    -- character's _paint() also consumes this dirty flag.
+    h:type("abc")
+
+    local cursor_col, cursor_row = h:cursor()
+    local ime_col, ime_row = h:ime_pos()
+    lt.assertEquals(cursor_col, ime_col)
+    lt.assertEquals(cursor_row, ime_row)
+    -- "abc" = 3 chars, caret at end → col 4 (1-based).
+    lt.assertEquals(ime_col, 4)
+    lt.assertEquals(ime_row, 1)
+
+    h:unmount()
+end
+
+function test_ime:test_physical_cursor_inside_bordered_box()
+    -- Inside a bordered/padded parent, both cursor() and ime_pos()
+    -- account for the offset applied by Yoga.
+    local function App()
+        local v, setV = tui.useState("x")
+        return tui.Box {
+            width = 20, height = 3,
+            borderStyle = "round", paddingX = 1,
+            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 3 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
+
+    local cursor_col, cursor_row = h:cursor()
+    local ime_col, ime_row = h:ime_pos()
+    lt.assertEquals(cursor_col, ime_col)
+    lt.assertEquals(cursor_row, ime_row)
+    -- Border adds 1 to x/y, paddingX adds 1 to x.
+    -- "x" is 1 char, caret at end → offset 1.
+    -- Absolute position = (1+1+1+1, 1+1) = (4, 2).
+    lt.assertEquals(ime_col, 4)
+    lt.assertEquals(ime_row, 2)
+
+    h:unmount()
+end
+
+function test_ime:test_physical_cursor_with_cjk_chars()
+    -- CJK characters are 2 columns wide; both cursor() and ime_pos()
+    -- account for this.
+    local function App()
+        local v, setV = tui.useState("\228\184\173")  -- "中": 2 columns
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
+
+    local cursor_col, cursor_row = h:cursor()
+    local ime_col, ime_row = h:ime_pos()
+    lt.assertEquals(cursor_col, ime_col)
+    lt.assertEquals(cursor_row, ime_row)
+    -- "中" occupies 2 display columns; caret at end → col 3 (1-based).
+    lt.assertEquals(ime_col, 3)
+    lt.assertEquals(ime_row, 1)
+
+    h:unmount()
+end
+
+function test_ime:test_physical_cursor_integer_coords_only()
+    -- Physical cursor CUP parameters must always be integers.
+    -- Float coords would produce malformed CUP sequences like
+    -- ESC[73.0;3.0H that real terminals silently reject.
+    local function App()
+        local v, setV = tui.useState("hello")
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
+
+    -- "hello" is 5 chars, caret at end -> col 6 (1-based).
+    local ime_col, ime_row = h:ime_pos()
+    lt.assertEquals(type(ime_col), "number")
+    lt.assertEquals(type(ime_row), "number")
+    lt.assertEquals(ime_col == math.floor(ime_col), true)
+    lt.assertEquals(ime_row == math.floor(ime_row), true)
 
     h:unmount()
 end

@@ -46,9 +46,6 @@ lm:lua_dll "tui_core" {
         "src/tui_core/screen.c",
         "src/tui_core/text.c",
     },
-    windows = {
-        links = { "imm32" },
-    },
 }
 
 lm:default { "yoga", "tui_core" }

@@ -2,7 +2,7 @@
  * tui_core.c — Aggregator entry for the tui_core Lua DLL.
  *
  * Exposes:
- *   terminal — raw I/O, size, VT enable, IME position
+ *   terminal — raw I/O, size, VT enable
  *   keys     — stateless ANSI/UTF-8 parser (keys.parse)
  *   wcwidth  — display-width table (wcwidth/string_width/char_width)
  *   screen   — cell buffer + ANSI diff renderer (Stage 9)
@@ -10,7 +10,7 @@
  * Layout after `require "tui_core"`:
  *   tui_core = {
  *       terminal = { set_raw, get_size, windows_vt_enable, read_raw,
- *                    write, set_ime_pos },
+ *                    write },
  *       keys     = { parse },
  *       wcwidth  = { wcwidth, string_width, char_width },
  *       screen   = { new, size, resize, invalidate, clear, put, diff, rows, ... },

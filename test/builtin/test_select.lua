@@ -249,6 +249,9 @@ function suite:test_items_shrink_clamps_highlight()
     row_starts_with(h, 4, "❯ d")
     items = { "a", "b" }
     h:rerender()
+    -- Highlight clamping happens in a useEffect (dirty state); the next
+    -- paint observes the clamped highlight.
+    h:rerender()
     -- Highlight was on 4, must clamp to 2 (the new last).
     row_starts_with(h, 2, "❯ b")
     h:unmount()

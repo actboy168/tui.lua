@@ -225,6 +225,9 @@ function suite:test_useeffect_body_throw_caught_by_boundary()
     end
 
     local h = testing.render(App, { cols = 4, rows = 1 })
+    -- Effect error sets boundary.caught_error after the tree is committed;
+    -- the next paint observes the tripped boundary and swaps in fallback.
+    h:rerender()
     lt.assertEquals(h:frame(), "FB!!")
     h:rerender()
     lt.assertEquals(h:frame(), "FB!!", "boundary stays tripped after effect error")
@@ -254,6 +257,9 @@ function suite:test_useeffect_cleanup_throw_caught_by_boundary()
     lt.assertEquals(h:frame(), "C   ", "first mount OK — effect returned cleanup, not yet invoked")
     -- Flip deps so cleanup fires before the new body runs.
     phase[1] = "second"
+    h:rerender()
+    -- Cleanup error is routed during effect flush after this paint;
+    -- the next paint observes the tripped boundary.
     h:rerender()
     lt.assertEquals(h:frame(), "FB##", "cleanup throw caught by boundary on re-run")
     h:unmount()
@@ -296,6 +302,9 @@ function suite:test_boundary_caught_error_is_sticky()
     end
 
     local h = testing.render(App, { cols = 4, rows = 1 })
+    -- Effect error sets boundary.caught_error after the tree is committed;
+    -- the next paint observes the tripped boundary and swaps in fallback.
+    h:rerender()
     lt.assertEquals(h:frame(), "FBzz")
     -- Even though subsequent renders wouldn't throw (effect ran once, deps={}),
     -- boundary must stay in its tripped state.

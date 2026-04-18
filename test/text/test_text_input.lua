@@ -166,6 +166,7 @@ function suite:test_cursor_offset_tracks_caret_column()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te ~= nil, true)
     lt.assertEquals(te._cursor_offset, 3)
@@ -183,6 +184,8 @@ function suite:test_cursor_absolute_position_at_caret()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
     local col, row = h:cursor()
     -- TextInput sits at the top-left of the 20x1 Box with no padding.
     -- "hello" is 5 cols, caret at end -> offset 5; 1-based abs = (6, 1).
@@ -201,6 +204,8 @@ function suite:test_cursor_advances_on_type_and_backspace()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 1 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
     local col0 = h:cursor()
     lt.assertEquals(col0, 1, "empty input caret sits at col 1")
     h:type("abc")
@@ -224,6 +229,8 @@ function suite:test_cursor_inside_bordered_padded_box()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 3 })
+    -- autoFocus sets isFocused state on the next paint.
+    h:rerender()
     local col, row = h:cursor()
     -- Border adds 1 to x/y, paddingX adds 1 to x. "x" is 1 char wide,
     -- caret at end -> offset 1. Absolute = (1+1+1+1, 1+1) = (4, 2).
@@ -245,6 +252,7 @@ function suite:test_mask_hides_chars_but_preserves_width()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te.text, "****")
     lt.assertEquals(te._cursor_offset, 4)
@@ -284,6 +292,7 @@ function suite:test_flag_is_single_cluster()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te ~= nil, true)
     -- Caret sits after the single flag cluster (width 2).
@@ -353,6 +362,7 @@ function suite:test_left_arrow_over_wide_char_moves_one_cluster()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     -- Initial caret at end: col = 1 + 2 + 1 = 4.
     lt.assertEquals(te._cursor_offset, 4)
@@ -536,6 +546,7 @@ function suite:test_caret_clamped_on_value_shrink()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     -- caret starts at end (col 5)
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 5)
@@ -561,7 +572,9 @@ function suite:test_placeholder_hidden_when_focused()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    -- autoFocus=true by default, so placeholder should NOT be shown
+    -- autoFocus=true by default, so placeholder should NOT be shown,
+    -- but isFocused state takes effect on the next paint.
+    h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te ~= nil, true, "focused input should have cursor")
     lt.assertEquals(te.text, "", "placeholder should be hidden when focused")
@@ -605,6 +618,7 @@ function suite:test_horizontal_scroll_keeps_caret_visible()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     -- Caret sits at end; with width=5 the window scrolls so the caret
     -- column is within the visible window.
@@ -644,6 +658,7 @@ function suite:test_mask_with_cjk_chars()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     -- Each grapheme cluster is replaced by one mask char
     lt.assertEquals(te.text, "**")
@@ -684,6 +699,7 @@ function suite:test_width_prop_constrains_render()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     -- With width=5, only 5 cells of text should be visible
     lt.assertEquals(#te.text <= 5, true,
@@ -1309,6 +1325,7 @@ function suite:test_caret_clamped_to_zero_on_empty_value()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     -- Caret starts at end of "hello" = col 5
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 5)
@@ -1333,6 +1350,7 @@ function suite:test_caret_clamped_on_shrink_to_one_char()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end = col 5
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 5)
@@ -1356,6 +1374,7 @@ function suite:test_caret_clamped_on_shrink_with_wide_chars()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end: 中(2)+文(2)+a(1)+b(1)+c(1) = 7
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 7)
@@ -1380,6 +1399,7 @@ function suite:test_caret_clamped_on_progressive_shrink()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 5)
     v = "abcd"
@@ -1439,6 +1459,7 @@ function suite:test_caret_after_select_all_delete()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 11)
@@ -1494,6 +1515,7 @@ function suite:test_backspace_wide_char_caret_offset()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     -- Initial caret at end: a(1)+中(2)+b(1) = offset 4
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 4)
@@ -1551,6 +1573,7 @@ function suite:test_caret_stays_when_value_grows_externally()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
+    h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end = offset 2
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 2)

@@ -26,11 +26,12 @@ local focus_mod  = require "tui.focus"
 local static_mod = require "tui.builtin.static"
 local text_input = require "tui.builtin.text_input"
 local cursor_mod = require "tui.builtin.cursor"
-local ime_mod    = require "tui.ime"
 local spinner_mod = require "tui.builtin.spinner"
 local select_mod = require "tui.builtin.select"
 local progress_mod = require "tui.builtin.progress_bar"
+local ansi       = require "tui.ansi"
 local tui_core   = require "tui_core"
+local info       = require "tui.terminal_info"
 
 local terminal = tui_core.terminal
 
@@ -108,13 +109,9 @@ M.clearTimer  = scheduler.clearTimer
 -- Layout utilities
 M.intrinsicSize = layout.intrinsic_size
 
--- ANSI helpers
-local <const> CLEAR    = "\27[2J\27[H"
-local <const> HIDE_CUR = "\27[?25l"
-local <const> SHOW_CUR = "\27[?25h"
 
 -- Walk the laid-out tree and record the first Text node that requested a
--- cursor. 1-based (col, row) returned for direct use in `\27[<row>;<col>H`.
+-- cursor. 1-based (col, row) for use in ansi.cursorPosition().
 -- Returned coords are integers: Yoga uses PointScaleFactor=1 and the binding
 -- layer casts to int, so rect values are always whole numbers.
 local function find_cursor(tree)
@@ -183,9 +180,13 @@ end
 -- until the app calls `useApp():exit()`, or an emergency key is received
 -- (Ctrl+C / Ctrl+D — always honored by the framework).
 function M.render(root)
+    local interactive = info.interactive()
+
     terminal.windows_vt_enable()
     terminal.set_raw(true)
-    terminal.write(HIDE_CUR .. CLEAR)
+    if interactive then
+        terminal.write(ansi.cursorHide() .. ansi.clearScreen)
+    end
 
     local rec_state    = reconciler.new()
     local init_w, init_h = terminal.get_size()
@@ -197,6 +198,12 @@ function M.render(root)
     local app_handle  = {
         exit = function() scheduler.stop() end,
     }
+
+    -- Cursor state persistence: track last known cursor position for
+    -- relative movement calculations. External writes (stderr, signal
+    -- handlers) may corrupt the terminal; we treat this as the source
+    -- of truth for computing deltas between frames.
+    local last_cursor_col, last_cursor_row = 1, 1
 
     local function paint(term)
         local w, h = terminal.get_size()
@@ -210,18 +217,40 @@ function M.render(root)
         local tree = produce_tree(rec_state, root, app_handle, w, h)
         screen_mod.clear(screen_state)
         renderer.paint(tree, screen_state)
-        local ansi = screen_mod.diff(screen_state)
-        if #ansi > 0 then terminal.write(ansi) end
+        local diff = screen_mod.diff(screen_state)
 
-        -- Post-commit: cursor + IME positioning. A focused TextInput tags its
-        -- Text element with _cursor_offset; we translate that to absolute
+        -- Post-commit: cursor positioning. A focused TextInput tags its
+        -- Text element with _cursor_offset; we translate that to screen
         -- coordinates and move the terminal's real cursor there.
-        local ccol, crow = find_cursor(tree)
-        if ccol and crow then
-            terminal.write(SHOW_CUR .. "\27[" .. crow .. ";" .. ccol .. "H")
-            ime_mod.set_pos(terminal, ccol, crow)
-        else
-            terminal.write(HIDE_CUR)
+        -- Skip when non-interactive (no TTY or in CI).
+        --
+        -- Uses relative cursor movement (CSI A/B/C/D) instead of absolute
+        -- CUP (CSI row;col H) to reduce byte count. Deltas are typically
+        -- shorter than absolute coordinates.
+        local cursor_seq = ""
+        if interactive then
+            local ccol, crow = find_cursor(tree)
+            if ccol and crow then
+                -- Compute relative movement from last known position.
+                -- Ink uses this same pattern: track displayCursor and emit
+                -- cursorMove(dx, dy) on main screen.
+                local dx = ccol - last_cursor_col
+                local dy = crow - last_cursor_row
+                cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
+                last_cursor_col, last_cursor_row = ccol, crow
+            else
+                cursor_seq = ansi.cursorHide()
+                -- Cursor hidden: don't update last position; next show
+                -- will compute delta from wherever we last left it.
+            end
+        end
+
+        -- Single write: BSU + diff + cursor + ESU. The terminal buffers
+        -- everything until ESU, then refreshes atomically.
+        if interactive and (#diff > 0 or #cursor_seq > 0) then
+            terminal.write(ansi.beginSyncUpdate() .. diff .. cursor_seq .. ansi.endSyncUpdate())
+        elseif #diff > 0 then
+            terminal.write(diff)
         end
 
         layout.free(tree)
@@ -259,7 +288,9 @@ function M.render(root)
     focus_mod._reset()
 
     -- Restore terminal state regardless of error.
-    terminal.write(SHOW_CUR .. "\r\n")
+    if interactive then
+        terminal.write(ansi.cursorShow() .. "\r\n")
+    end
     terminal.set_raw(false)
 
     if not ok then error(err) end

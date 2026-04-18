@@ -36,6 +36,9 @@ function suite:test_autofocus_true_takes_focus()
 
     local h = testing.render(App, { cols = 1, rows = 1 })
     lt.assertEquals(h:focus_id(), "only")
+    -- autoFocus sets focused_id synchronously, but isFocused state is
+    -- consumed on the next paint.
+    h:rerender()
     lt.assertEquals(h:frame(), "Y")
     h:unmount()
 end

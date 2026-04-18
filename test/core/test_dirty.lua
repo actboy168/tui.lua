@@ -1,12 +1,9 @@
--- test/test_dirty.lua — regression for inst.dirty clearing and Harness
--- stabilization.
+-- test/test_dirty.lua — regression for inst.dirty clearing.
 --
 -- Background: setState schedules `inst.dirty = true` (hooks.lua). reconciler
--- clears dirty right before calling the component fn; Harness:_paint loops
--- until no instance is dirty. The two cooperate so that a mount effect which
--- calls setState is reflected in the very first frame (no manual :rerender
--- required). Without this, the focus system's autoFocus behavior would leak
--- "first frame has no cursor" into snapshot tests.
+-- clears dirty right before calling the component fn. Mount effects that call
+-- setState will be reflected on the next frame (via requestRedraw → next
+-- _paint), not the current one.
 
 local lt      = require "ltest"
 local tui     = require "tui"
@@ -14,9 +11,9 @@ local testing = require "tui.testing"
 
 local suite = lt.test "dirty"
 
--- Calling setState inside a mount-once useEffect should be visible in the
--- very first rendered frame returned by testing.render.
-function suite:test_mount_effect_setter_stabilizes()
+-- Calling setState inside a mount-once useEffect should be visible after
+-- a rerender (mount-effect state changes are consumed on the next frame).
+function suite:test_mount_effect_setter_on_next_frame()
     local function App()
         local n, setN = tui.useState(0)
         tui.useEffect(function()
@@ -26,28 +23,10 @@ function suite:test_mount_effect_setter_stabilizes()
     end
 
     local h = testing.render(App, { cols = 10, rows = 1 })
-    -- The first :_paint has already happened inside render(); the mount
-    -- effect bumped n to 42, so the stabilization loop should have re-run
-    -- render until the frame reflects n=42.
-    local frame = h:frame()
-    lt.assertEquals(frame:sub(1, 5), "n=42 ", "mount-effect setter should land on first frame")
+    -- First frame: mount effect has not fired yet (or fired but setState
+    -- is not consumed until next paint).
+    lt.assertEquals(h:frame():sub(1, 5), "n=0  ", "first frame should show n=0")
+    h:rerender()
+    lt.assertEquals(h:frame():sub(1, 5), "n=42 ", "second frame should show n=42")
     h:unmount()
-end
-
--- Infinite setState in an effect should trip the stabilization guard rather
--- than hang forever. We verify it raises an error mentioning "did not
--- stabilize".
-function suite:test_infinite_setter_raises()
-    local function App()
-        local n, setN = tui.useState(0)
-        tui.useEffect(function() setN(n + 1) end)   -- deps=nil → every render
-        return tui.Text { ("n=%d"):format(n) }
-    end
-
-    local ok, err = pcall(function()
-        testing.render(App, { cols = 10, rows = 1 })
-    end)
-    lt.assertEquals(ok, false, "infinite setter should error")
-    lt.assertEquals(type(err) == "string" and err:find("did not stabilize", 1, true) ~= nil, true,
-        "error should mention stabilization failure, got: " .. tostring(err))
 end

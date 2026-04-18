@@ -172,8 +172,8 @@ function M.run(opts)
 	local last_frame = 0
 
 	-- Initial paint so the screen isn't blank before first event.
-	opts.paint(terminal)
 	dirty = false
+	opts.paint(terminal)
 	last_frame = now_ms()
 
 	while running do
@@ -197,8 +197,8 @@ function M.run(opts)
 
 		-- Repaint if dirty and a frame worth of time has elapsed.
 		if dirty and (now - last_frame) >= frame_ms then
-			opts.paint(terminal)
 			dirty = false
+			opts.paint(terminal)
 			last_frame = now
 		end
 

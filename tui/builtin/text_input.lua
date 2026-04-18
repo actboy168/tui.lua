@@ -18,8 +18,8 @@
 --
 -- Cursor rendering: the component writes a row of text into a Text element
 -- and, post-commit, calls cursor.set(col, row) so tui/init.lua positions
--- the terminal's real cursor at the correct column. On Windows, this also
--- drives IME candidate window placement via terminal.set_ime_pos.
+-- the terminal's real cursor at the correct column. IME candidate window
+-- placement follows the physical cursor position.
 --
 -- Cursor position is a UTF-8 character index (1..#chars+1), not a byte
 -- offset. Conversions to display columns go through wcwidth.

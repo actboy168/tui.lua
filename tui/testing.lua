@@ -34,7 +34,7 @@ local scheduler  = require "tui.scheduler"
 local input_mod  = require "tui.input"
 local resize_mod = require "tui.resize"
 local focus_mod  = require "tui.focus"
-local ime_mod    = require "tui.ime"
+local ansi_mod   = require "tui.ansi"
 local hooks      = require "tui.hooks"
 local tui_core   = require "tui_core"
 
@@ -247,7 +247,6 @@ local function make_fake_terminal(h)
         end,
         read_raw          = function() return nil end,
         set_raw           = function() end,
-        set_ime_pos       = function(c, r) h._ime = { col = c, row = r } end,
         windows_vt_enable = function() return true end,
     }
 end
@@ -260,20 +259,6 @@ Harness.__index = Harness
 
 -- Produce + commit one frame. Called internally by render / rerender /
 -- type / press / advance / resize.
---
--- Stabilization: if a mount effect (or any post-commit work) calls a setter,
--- the instance flips inst.dirty = true. In real tui.render the scheduler
--- loop picks this up on the next tick; in the harness we do the equivalent
--- inline — re-run render until no instance is dirty.  A hard upper bound
--- (MAX_STABILIZE_PASSES) guards against infinite setState loops.
-local <const> MAX_STABILIZE_PASSES = 100
-
-local function any_instance_dirty(state)
-    for _, inst in pairs(state.instances) do
-        if inst.dirty then return true end
-    end
-    return false
-end
 
 function Harness:_paint()
     -- Observe the (possibly changed) terminal size; triggers useWindowSize
@@ -281,16 +266,7 @@ function Harness:_paint()
     resize_mod.observe(self._w, self._h)
 
     self._render_count = (self._render_count or 0) + 1
-    local tree
-    for pass = 1, MAX_STABILIZE_PASSES do
-        tree = reconciler.render(self._state, self._App, self._app_handle)
-        if not any_instance_dirty(self._state) then break end
-        self._render_count = self._render_count + 1
-        if pass == MAX_STABILIZE_PASSES then
-            error("tui.testing: render did not stabilize after " ..
-                  MAX_STABILIZE_PASSES .. " passes — suspect infinite setState loop", 2)
-        end
-    end
+    local tree = reconciler.render(self._state, self._App, self._app_handle)
 
     if not tree then
         tree = element.Box { width = self._w, height = self._h }
@@ -314,6 +290,9 @@ function Harness:_paint()
     -- bytes a real tui.render loop would send. This mirrors the post-paint
     -- block in tui/init.lua (Yoga uses PointScaleFactor=1 and the binding
     -- layer casts to int, so rect values are always whole numbers).
+    --
+    -- Uses relative cursor movement (cursorMove) instead of absolute
+    -- cursorPosition to reduce byte count.
     local ccol, crow
     do
         local function walk(e)
@@ -331,10 +310,11 @@ function Harness:_paint()
         ccol, crow = walk(tree)
     end
     if ccol and crow then
-        self._terminal.write("\27[?25h\27[" .. crow .. ";" .. ccol .. "H")
-        ime_mod.set_pos(self._terminal, ccol, crow)
-        -- Also record the IME position via set_ime_pos for test assertions.
-        self._terminal.set_ime_pos(ccol, crow)
+        local dx = ccol - self._last_cursor_col
+        local dy = crow - self._last_cursor_row
+        self._terminal.write(ansi_mod.cursorShow() .. ansi_mod.cursorMove(dx, dy))
+        self._last_cursor_col, self._last_cursor_row = ccol, crow
+        self._ime = { col = ccol, row = crow }
     end
     -- Note: real tui/init.lua also emits `\27[?25l` when no cursor is
     -- requested, but the harness deliberately skips that branch. The
@@ -743,6 +723,9 @@ function M.render(App, opts)
         _ime         = nil,
         _composing   = "",
         _render_count = 0,
+        -- Cursor state persistence (mirrors tui/init.lua).
+        _last_cursor_col = 1,
+        _last_cursor_row = 1,
     }, Harness)
     h._app_handle = { exit = function() h._dead = true end }
 
