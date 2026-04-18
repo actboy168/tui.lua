@@ -170,6 +170,11 @@ local function expand(state, element, path)
         -- move across the tree.
         inst.nearest_boundary = state.boundary_stack[#state.boundary_stack]
 
+        -- Record which Lua function is *this* component's render body so
+        -- hooks can detect "hook called from a plain function nested under
+        -- a component" (see detect_plain_function_hook in tui/hooks.lua).
+        inst._component_fn = fn
+
         hooks._begin_render(inst)
         -- Clear dirty BEFORE calling fn. If fn (or a mount effect queued
         -- below) calls a setter, inst.dirty flips back to true and the

@@ -70,7 +70,12 @@ local function install_stderr_hook()
     io.stderr = {
         write = function(self, ...)
             local s = table.concat({ ... })
-            if s:sub(1, 9) == "[tui:dev]" then
+            -- Intercept framework diagnostics so they either surface as
+            -- expected capture (tests asserting on them) or fail-on-warn
+            -- at unmount. Two prefixes:
+            --   [tui:dev]  — dev-mode warnings from hooks/reconciler
+            --   [tui:test] — testing-harness warnings (e.g. leak recovery)
+            if s:sub(1, 9) == "[tui:dev]" or s:sub(1, 10) == "[tui:test]" then
                 if capture_buffer then
                     capture_buffer[#capture_buffer + 1] = s
                 else
@@ -153,16 +158,6 @@ end
 local HIJACKED = false
 local real_terminal = nil
 
-local function hijack_terminal(fake)
-    if HIJACKED then
-        error("tui.testing: another harness is already active. Call :unmount() first.", 3)
-    end
-    real_terminal = {}
-    for k, v in pairs(tui_core.terminal) do real_terminal[k] = v end
-    for k, v in pairs(fake) do tui_core.terminal[k] = v end
-    HIJACKED = true
-end
-
 local function restore_terminal()
     if not HIJACKED then return end
     -- Clear first so stale keys from fake don't persist if real had fewer.
@@ -170,6 +165,34 @@ local function restore_terminal()
     for k, v in pairs(real_terminal) do tui_core.terminal[k] = v end
     real_terminal = nil
     HIJACKED = false
+end
+
+local function hijack_terminal(fake)
+    if HIJACKED then
+        -- A previous harness leaked (typically because an assertion failed
+        -- between testing.render() and h:unmount()). Instead of derailing
+        -- every subsequent test with the same "already active" error —
+        -- which masks the real first failure in the ltest report — recover
+        -- the previous hijack and emit a warning so the leak stays
+        -- visible in the test output.
+        restore_terminal()
+        -- Also reset the per-process singletons the previous harness
+        -- would have cleared on unmount; otherwise subscriptions / focus
+        -- entries / timers bleed into the next test.
+        input_mod._reset()
+        resize_mod._reset()
+        focus_mod._reset()
+        scheduler._reset()
+        -- Go through the stderr hook (not real_stderr directly) so the
+        -- warning is either captured by testing.capture_stderr or surfaces
+        -- as a fail-on-warn at the next unmount.
+        io.stderr:write("[tui:test] previous harness leaked (missing " ..
+                        ":unmount()?); auto-recovered\n")
+    end
+    real_terminal = {}
+    for k, v in pairs(tui_core.terminal) do real_terminal[k] = v end
+    for k, v in pairs(fake) do tui_core.terminal[k] = v end
+    HIJACKED = true
 end
 
 -- ---------------------------------------------------------------------------
@@ -223,7 +246,41 @@ function Harness:_paint()
     screen_mod.clear(self._screen)
     renderer.paint(tree, self._screen)
     local ansi = screen_mod.diff(self._screen)
-    if #ansi > 0 then self._ansi_buf[#self._ansi_buf + 1] = ansi end
+    if #ansi > 0 then
+        tui_core.terminal.write(ansi)
+    end
+
+    -- Emit the cursor-placement sequence through the fake terminal so the
+    -- CSI integrity check (see `fake.write` in M.render) sees the exact
+    -- bytes a real tui.render loop would send. This mirrors the post-paint
+    -- block in tui/init.lua (including `math.floor` — Yoga sometimes
+    -- returns float rect origins; flooring matches real-terminal paint).
+    local ccol, crow
+    do
+        local function walk(e)
+            if not e then return nil end
+            if e.kind == "text" and e._cursor_offset ~= nil then
+                local r = e.rect or { x = 0, y = 0 }
+                return math.floor(r.x + e._cursor_offset + 1),
+                       math.floor(r.y + 1)
+            end
+            for _, c in ipairs(e.children or {}) do
+                local col, row = walk(c)
+                if col then return col, row end
+            end
+        end
+        ccol, crow = walk(tree)
+    end
+    if ccol and crow then
+        tui_core.terminal.write("\27[?25h\27[" .. crow .. ";" .. ccol .. "H")
+        tui_core.terminal.set_ime_pos(ccol, crow)
+    end
+    -- Note: real tui/init.lua also emits `\27[?25l` when no cursor is
+    -- requested, but the harness deliberately skips that branch. The
+    -- only reason we emit cursor bytes here is to feed them through
+    -- fake.write's CSI integrity check; when there's nothing to check,
+    -- we keep the ansi buffer clean so tests that assert "zero diff"
+    -- still work without special-casing.
 
     -- Keep `tree` live for the caller (h:tree()) — don't layout.free it here,
     -- free on next paint or unmount.
@@ -250,6 +307,27 @@ function Harness:frame()
     return table.concat(screen_mod.rows(self._screen), "\n")
 end
 function Harness:tree()   return self._tree end
+
+-- Return (col, row) 1-based absolute coords of the focused TextInput's
+-- caret, or nil if no input is focused. Mirrors `find_cursor` in
+-- tui/init.lua's paint loop so tests can assert cursor placement and,
+-- critically, that the coords are integers (non-integer coords produce
+-- `\27[73.0;3.0H` CUP commands that real terminals silently reject — see
+-- test/test_cursor_integer_coords.lua).
+function Harness:cursor()
+    local function walk(e)
+        if not e then return nil end
+        if e.kind == "text" and e._cursor_offset ~= nil then
+            local r = e.rect or { x = 0, y = 0 }
+            return r.x + e._cursor_offset + 1, r.y + 1
+        end
+        for _, c in ipairs(e.children or {}) do
+            local col, row = walk(c)
+            if col then return col, row end
+        end
+    end
+    return walk(self._tree)
+end
 
 function Harness:ansi()
     return table.concat(self._ansi_buf)
@@ -481,8 +559,35 @@ function Harness:match_snapshot(name)
     error(format_diff(name, expected, actual), 2)
 end
 
--- ---------------------------------------------------------------------------
--- Public: full harness with layout + renderer.
+-- Validate that all numeric parameters in CSI sequences (`ESC [ ... <final>`)
+-- are integers. Real terminals silently reject `\27[73.0;3.0H` and similar
+-- malformed CUPs — harness-side enforcement catches the bug in tests
+-- instead of only in a live terminal. Returns nil on success, error
+-- message on violation.
+local function check_csi_integers(s)
+    -- Scan for CSI introducer (ESC [). Params are digits, `.`, `;`, `?`, `>`.
+    -- Any `.` inside a numeric token is a float and thus invalid.
+    local i = 1
+    while i <= #s do
+        local esc = s:find("\27%[", i)
+        if not esc then return nil end
+        -- Find the CSI final byte: 0x40..0x7E (@ through ~).
+        local j = esc + 2
+        while j <= #s do
+            local b = s:byte(j)
+            if b >= 0x40 and b <= 0x7E then break end
+            j = j + 1
+        end
+        if j > #s then return nil end  -- incomplete; skip
+        local params = s:sub(esc + 2, j - 1)
+        if params:find("%d%.%d") then
+            return ("malformed CSI parameter (non-integer) in sequence ESC[%s%s"):
+                format(params, s:sub(j, j))
+        end
+        i = j + 1
+    end
+    return nil
+end
 
 --- tui.testing.render(App, opts) -> Harness
 -- opts:
@@ -519,7 +624,14 @@ function M.render(App, opts)
     -- Fake terminal bound to this harness.
     local fake = {
         get_size          = function() return h._w, h._h end,
-        write             = function(s) h._ansi_buf[#h._ansi_buf + 1] = s end,
+        write             = function(s)
+            local bad = check_csi_integers(s)
+            if bad then
+                error("[tui:fatal] harness terminal: " .. bad ..
+                      " (real terminals silently reject these)", 0)
+            end
+            h._ansi_buf[#h._ansi_buf + 1] = s
+        end,
         read_raw          = function() return nil end,
         set_raw           = function() end,
         set_ime_pos       = function(c, r) h._ime = { col = c, row = r } end,

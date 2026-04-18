@@ -262,8 +262,51 @@ end
 -- ---------------------------------------------------------------------------
 -- Internal helpers
 
+-- When a plain function (not a registered component) calls a hook, Lua's
+-- `current` at hook time points at the *parent* component whose render is
+-- on the call stack — not nil. So `assert(current, ...)` won't catch this
+-- footgun; the hook silently tacks itself onto the parent's slot list,
+-- and a later conditional render produces a hook count mismatch somewhere
+-- far from the real cause.
+--
+-- Dev-mode detection: every `_begin_render` records the component's `fn`
+-- on the instance. `require_instance` finds the first user-code frame
+-- above itself (skipping all tui/hooks.lua frames — internal hooks like
+-- useInterval call useEffect) and checks whether that frame's function
+-- is the currently-rendering component. If not, some intermediate helper
+-- function is the direct caller — raise with its source location.
+local function detect_plain_function_hook()
+    if not dev_mode then return end
+    if not current then return end
+    local expected = current._component_fn
+    if not expected then return end
+
+    local user_lvl
+    for lvl = 3, 30 do
+        local info = debug.getinfo(lvl, "S")
+        if not info then break end
+        local src = info.source or ""
+        if not src:find("[/\\]tui[/\\]hooks%.lua$") then
+            user_lvl = lvl
+            break
+        end
+    end
+    if not user_lvl then return end
+
+    local info = debug.getinfo(user_lvl, "Sfl")
+    if not info then return end
+    if info.func == expected then return end
+
+    local where = (info.source or "?") .. ":" .. tostring(info.currentline)
+    error("[tui:fatal] hook called from a plain function (" .. where ..
+          ") inside the render of another component; wrap it with " ..
+          "`{ kind='component', fn=..., props=... }` (see tui/builtin/spinner.lua) " ..
+          "so its hooks live on their own instance.", 0)
+end
+
 local function require_instance(kind)
     assert(current, "hook called outside of a component render")
+    detect_plain_function_hook()
     cursor = cursor + 1
     if dev_mode and kind then
         current._hook_kinds[cursor] = kind

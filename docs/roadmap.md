@@ -28,6 +28,10 @@ _暂无_
 
 ### 渲染性能与稳定性
 
+- Box prop 命名对齐 Ink：当前 `border` / `color`（兼边框与文本色）与 Ink 的 `borderStyle` / `borderColor` 不一致，迁移成本会越积越重。改为：
+  - `borderStyle` 取代 `border`（保留 `border` 作 alias 若干版本）
+  - 新增 `borderColor` / `borderDimColor`（每边独立颜色选配）
+  - 边框样式扩充：`bold` / `singleDouble` / `doubleSingle` / `classic`
 - alternate screen buffer（类 vim 进出全屏）
 - truecolor / 256 色扩展：`cell_t` 扩到 16 字节 or 独立 style pool，给 `fg / bg` 加 16/24 bit 值
 - Text 样式补齐：`italic` / `strikethrough` / `dimColor` / `wrap` 模式（`wrap` / `hard` / `truncate` / `truncate-start` / `truncate-middle` / `truncate-end`）
@@ -35,14 +39,19 @@ _暂无_
 - Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text
 - Box 属性 passthrough 补齐：`minWidth` / `maxWidth` / `aspectRatio` / `gap` / `columnGap` / `rowGap` / `position` / `top/right/bottom/left` / `overflow` / `display`
 - Box 支持 `flexGrow` / `flexShrink` 独立 prop（当前 luayoga 只绑了 `flex` shorthand，`flexGrow=1` 静默失效；需要扩 `luayoga.c` 的 setter 表 + `tui/layout.lua` passthrough list）
-- 边框样式扩充：`bold` / `singleDouble` / `doubleSingle` / `classic` + 每边独立颜色 + `borderDimColor`
 - `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索）
 - Yoga 属性预处理：apply_box_style 每节点遍历 38 个 passthrough key + Yoga 绑定再遍历一次，改为扁平数字数组按固定索引传入
+- 启用 Yoga `PointScaleFactor=1` 强制所有 layout 坐标 snap 到整数（TUI 天然是整格，浮点 rect 会导致 `\27[73.0;3.0H` 这种 CUP 被终端拒绝；当前 `find_cursor` 在 init.lua 里 `math.floor` 补救，根治应落在 layout 层）
 
 ### 开发者体验
 
+- **UI 最小尺寸查询**：用户目前无法知道当前 UI 在当前终端下是否"会被挤烂"，只能等渲染异形。考虑通过 Yoga 的 min-content size 暴露 `tui.intrinsicMinSize(root) -> {cols, rows}` 或 hook 形式 `tui.useMinSize()`，让 app 在 `size < min` 时降级为"terminal too small"提示。
+- **组件自动包装** —— 当前规则："调 hook 的函数必须显式包装为 `{ kind="component", fn=..., props=... }`"，写 example 时极易翻车（plain function 调用把 hook 挂到父 instance，条件渲染时触发 hook count mismatch）。两种方向取一：
+  - A) reconciler 在 children 归一化时发现 function，自动包成 component element（对齐 React 直觉，但 helper function 误塞进 children 会被误认为组件）
+  - B) 提供 `tui.component(fn)` 工厂助手到框架层（显式、可 grep、1 行 boilerplate）
+  - 若选 A，还需 dev-mode 检测"hook 在未注册为 component 的函数里被调用"给早期报错，而不是等 hook count mismatch 才炸
 - `Harness:_paint` 稳定化循环改为基于 dirty 集合收敛的严格终止条件（当前硬编码 4 轮上限）
-- `tui/testing.lua` `resolve_key` 支持通用 `shift+<key>` 前缀（当前只硬编码 `shift+tab`）
+- `tui/testing.lua` `resolve_key` 支持通用 `shift+<key>` 前缀（当前只硬编码 `shift+tab`）；同时让 `h:press(ch)` 在 `ch` 是单个可打印字符时回落为 `type(ch)`，避免"unknown key '?'"这类翻车
 - ErrorBoundary 保留 `debug.traceback(err, 2)`，fallback 函数接收 `{message, trace}` 而不只是字符串
 - `tui._VERSION` 字符串常量
 - `make.lua` 加 `lm:conf_debug` / `lm:conf_release` 区分（asan / NDEBUG 开关）

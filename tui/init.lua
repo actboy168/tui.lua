@@ -111,12 +111,18 @@ local SHOW_CUR = "\27[?25h"
 
 -- Walk the laid-out tree and record the first Text node that requested a
 -- cursor. 1-based (col, row) returned for direct use in `\27[<row>;<col>H`.
+-- Returned coords are ALWAYS integers: Yoga layout can produce float rect
+-- origins, and `\27[73.0;3.0H` is rejected by most terminals as a parse
+-- error (bug observed 2026-04-18 — cursor stuck wherever the previous SGR
+-- diff left it). Round defensively here rather than trusting layout.
 local function find_cursor(tree)
     local function walk(e)
         if not e then return nil end
         if e.kind == "text" and e._cursor_offset ~= nil then
             local r = e.rect or { x = 0, y = 0 }
-            return r.x + e._cursor_offset + 1, r.y + 1
+            local col = math.floor(r.x + e._cursor_offset + 1)
+            local row = math.floor(r.y + 1)
+            return col, row
         end
         if e.children then
             for _, c in ipairs(e.children) do

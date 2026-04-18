@@ -5,6 +5,13 @@
 
 ---
 
+## Stage 20 — Dev-mode + 测试 harness 加固
+- `examples/all_in_one.lua` 覆盖全框架能力 + 配套离屏测试
+- Dev-mode 检测 hook 在非 component 函数里调用，直接 `[tui:fatal]` 指向坏调用位置
+- `Harness:cursor() -> col, row`
+- `testing.render` 遇泄漏的前一个 harness 自动恢复并警告
+- Harness fake terminal 拒收浮点参数 CSI 序列
+
 ## Stage 19 — Select + ProgressBar
 - `Select { items, onSelect, onChange?, initialIndex?, indicator?, highlightColor?, renderItem?, limit?, focusId?, autoFocus?, isDisabled? }`
 - `ProgressBar { value, width?, color?, chars? }`

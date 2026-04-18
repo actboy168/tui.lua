@@ -156,6 +156,66 @@ function suite:test_cursor_offset_tracks_caret_column()
     h:unmount()
 end
 
+-- Cursor absolute (col,row) is at the expected screen cell — catches both
+-- the float-coord regression and any off-by-one in the rect math.
+function suite:test_cursor_absolute_position_at_caret()
+    local function App()
+        local v, setV = tui.useState("hello")
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local col, row = h:cursor()
+    -- TextInput sits at the top-left of the 20x1 Box with no padding.
+    -- "hello" is 5 cols, caret at end -> offset 5; 1-based abs = (6, 1).
+    lt.assertEquals(col, 6)
+    lt.assertEquals(row, 1)
+    h:unmount()
+end
+
+-- Typing characters advances the cursor column; deleting moves it back.
+function suite:test_cursor_advances_on_type_and_backspace()
+    local function App()
+        local v, setV = tui.useState("")
+        return tui.Box {
+            width = 30, height = 1,
+            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 1 })
+    local col0 = h:cursor()
+    lt.assertEquals(col0, 1, "empty input caret sits at col 1")
+    h:type("abc")
+    local col1 = h:cursor()
+    lt.assertEquals(col1, 4, "after 'abc' caret sits at col 4")
+    h:press("backspace")
+    local col2 = h:cursor()
+    lt.assertEquals(col2, 3, "after backspace caret moves one back")
+    h:unmount()
+end
+
+-- Cursor in a padded/bordered parent must account for the offset that
+-- Yoga applies to the TextInput's rect.
+function suite:test_cursor_inside_bordered_padded_box()
+    local function App()
+        local v, setV = tui.useState("x")
+        return tui.Box {
+            width = 20, height = 3,
+            border = "round", paddingX = 1,
+            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 3 })
+    local col, row = h:cursor()
+    -- Border adds 1 to x/y, paddingX adds 1 to x. "x" is 1 char wide,
+    -- caret at end -> offset 1. Absolute = (1+1+1+1, 1+1) = (4, 2).
+    lt.assertEquals(col, 4)
+    lt.assertEquals(row, 2)
+    h:unmount()
+end
+
 function suite:test_mask_hides_chars_but_preserves_width()
     local value = "abcd"
     local function App()
