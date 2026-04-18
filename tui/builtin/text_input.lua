@@ -141,6 +141,14 @@ local function TextInputImpl(props)
     ctxRef.setCaret = setCaret
     ctxRef.value    = value
 
+    -- Composing (pre-edit) text state for IME input.
+    -- When an IME is actively composing (e.g. typing pinyin), the terminal
+    -- may send composing events. Most macOS terminals (Terminal.app, iTerm2)
+    -- handle pre-edit display internally and only send the final confirmed
+    -- text. Terminals that support protocols like kitty may send composing
+    -- sequences, which keys.parse will translate into composing events.
+    local composing, setComposing = hooks.useState("")
+
     local f = hooks.useFocus {
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
@@ -159,7 +167,29 @@ local function TextInputImpl(props)
                 ctxRef.caret = new_caret
             end
 
-            if name == "enter" then
+            if name == "composing" then
+                -- IME pre-edit text update: store for display at caret.
+                -- The text is not yet committed; it replaces any previous
+                -- composing text for this composition session.
+                setComposing(input)
+            elseif name == "composing_confirm" then
+                -- IME confirmed the composition: insert the confirmed text
+                -- and clear the composing state.
+                if input and input ~= "" then
+                    local ins = to_chars(input)
+                    local nc = {}
+                    for i = 1, c do nc[i] = cs[i] end
+                    for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
+                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
+                    emit(nc, c + #ins)
+                end
+                setComposing("")
+            elseif name == "escape" then
+                -- Escape cancels any active composition.
+                if composing ~= "" then
+                    setComposing("")
+                end
+            elseif name == "enter" then
                 if ctxRef.onSubmit then ctxRef.onSubmit(ctxRef.value) end
             elseif name == "backspace" then
                 if c > 0 then
@@ -204,6 +234,14 @@ local function TextInputImpl(props)
     }
     local focus_flag = f.isFocused
 
+    -- Clear composing state when focus is lost so that a stale pre-edit
+    -- string does not linger when the input regains focus later.
+    hooks.useEffect(function()
+        if not focus_flag and composing ~= "" then
+            setComposing("")
+        end
+    end, { focus_flag })
+
     -- Visible text + caret column.
     local width = props.width or props.minWidth or nil
     -- Fall back to a reasonable default when unset; parent Box typically
@@ -217,7 +255,20 @@ local function TextInputImpl(props)
     if show_placeholder then
         visible, caret_col = placeholder, 0
     else
-        visible, caret_col = make_window(chars, caret_clamped, render_width, mask)
+        -- Append composing text after the caret position for display.
+        -- The composing text is shown in-place but is not part of the
+        -- actual value until confirmed.
+        local display_chars = {}
+        for i = 1, caret_clamped do display_chars[i] = chars[i] end
+        local composing_chars = to_chars(composing)
+        for _, ch in ipairs(composing_chars) do
+            display_chars[#display_chars + 1] = ch
+        end
+        for i = caret_clamped + 1, #chars do
+            display_chars[#display_chars + 1] = chars[i]
+        end
+        local display_caret = caret_clamped + #composing_chars
+        visible, caret_col = make_window(display_chars, display_caret, render_width, mask)
     end
 
     -- Build the Text child; user may apply styling via a wrapper Box.

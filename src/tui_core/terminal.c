@@ -302,7 +302,15 @@ lwrite(lua_State *L) {
     return 0;
 }
 
-static int lset_ime_pos(lua_State *L) { (void)L; return 0; }
+static int
+lset_ime_pos(lua_State *L) {
+    /* POSIX: IME positioning is handled entirely by ime.lua via
+     * terminal.write() with terminal-specific escape sequences.
+     * This stub exists solely to keep the module API consistent
+     * across platforms; it is never called in production. */
+    (void)L;
+    return 0;
+}
 
 #endif /* _WIN32 */
 

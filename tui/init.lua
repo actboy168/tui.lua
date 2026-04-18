@@ -26,6 +26,7 @@ local focus_mod  = require "tui.focus"
 local static_mod = require "tui.builtin.static"
 local text_input = require "tui.builtin.text_input"
 local cursor_mod = require "tui.builtin.cursor"
+local ime_mod    = require "tui.ime"
 local spinner_mod = require "tui.builtin.spinner"
 local select_mod = require "tui.builtin.select"
 local progress_mod = require "tui.builtin.progress_bar"
@@ -218,7 +219,7 @@ function M.render(root)
         local ccol, crow = find_cursor(tree)
         if ccol and crow then
             terminal.write(SHOW_CUR .. "\27[" .. crow .. ";" .. ccol .. "H")
-            terminal.set_ime_pos(ccol, crow)
+            ime_mod.set_pos(terminal, ccol, crow)
         else
             terminal.write(HIDE_CUR)
         end

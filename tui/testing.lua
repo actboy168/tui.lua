@@ -34,6 +34,7 @@ local scheduler  = require "tui.scheduler"
 local input_mod  = require "tui.input"
 local resize_mod = require "tui.resize"
 local focus_mod  = require "tui.focus"
+local ime_mod    = require "tui.ime"
 local hooks      = require "tui.hooks"
 local tui_core   = require "tui_core"
 
@@ -331,6 +332,8 @@ function Harness:_paint()
     end
     if ccol and crow then
         self._terminal.write("\27[?25h\27[" .. crow .. ";" .. ccol .. "H")
+        ime_mod.set_pos(self._terminal, ccol, crow)
+        -- Also record the IME position via set_ime_pos for test assertions.
         self._terminal.set_ime_pos(ccol, crow)
     end
     -- Note: real tui/init.lua also emits `\27[?25l` when no cursor is
@@ -409,6 +412,51 @@ function Harness:cursor()
         end
     end
     return walk(self._tree)
+end
+
+--- Return the last IME position recorded by the fake terminal.
+-- Returns col, row (1-based) or nil if no IME position was set.
+function Harness:ime_pos()
+    local p = self._ime
+    if not p then return nil end
+    return p.col, p.row
+end
+
+--- Simulate an IME composing (pre-edit) event.
+-- Sends a "composing" key event through the input dispatcher,
+-- which TextInput's on_input handler interprets to update composing state.
+function Harness:type_composing(text)
+    input_mod._dispatch_event({
+        name  = "composing",
+        input = text or "",
+        raw   = text or "",
+        ctrl  = false,
+        meta  = false,
+        shift = false,
+    })
+    self:_paint()
+end
+
+--- Simulate an IME composing confirmation event.
+-- Sends a "composing_confirm" key event, which TextInput interprets
+-- as final committed text, inserting it at the caret and clearing
+-- the composing state.
+function Harness:type_composing_confirm(text)
+    local fake_input = text or ""
+    input_mod._dispatch_event({
+        name  = "composing_confirm",
+        input = fake_input,
+        raw   = fake_input,
+        ctrl  = false,
+        meta  = false,
+        shift = false,
+    })
+    self:_paint()
+end
+
+--- Get the current composing text from the harness state.
+function Harness:composing()
+    return self._composing
 end
 
 function Harness:ansi()
@@ -693,6 +741,7 @@ function M.render(App, opts)
         _tree        = nil,
         _dead        = false,
         _ime         = nil,
+        _composing   = "",
         _render_count = 0,
     }, Harness)
     h._app_handle = { exit = function() h._dead = true end }

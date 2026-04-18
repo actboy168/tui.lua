@@ -90,6 +90,30 @@ end
 -- Introspection for tests.
 function M._handlers() return broadcast_handlers end
 
+--- Dispatch a single pre-built event table (for testing IME composing, etc.).
+-- Routes through the same pipeline as dispatch(), but skips key parsing.
+function M._dispatch_event(ev)
+    local handled_by_focus_nav = false
+    if focus_mod.is_enabled() then
+        if ev.name == "tab" and not ev.shift then
+            focus_mod.focus_next()
+            handled_by_focus_nav = true
+        elseif ev.name == "backtab" or (ev.name == "tab" and ev.shift) then
+            focus_mod.focus_prev()
+            handled_by_focus_nav = true
+        end
+    end
+
+    if not handled_by_focus_nav then
+        focus_mod.dispatch_focused(ev.input or "", ev)
+        local snapshot = {}
+        for i, h in ipairs(broadcast_handlers) do snapshot[i] = h end
+        for _, h in ipairs(snapshot) do
+            h(ev.input or "", ev)
+        end
+    end
+end
+
 -- Reset broadcast channel only. focus is a separate singleton; callers
 -- (tui/init.lua and tui/testing.lua) reset both explicitly.
 function M._reset()
