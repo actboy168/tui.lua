@@ -533,8 +533,10 @@ end
 --
 -- Plain-text format: one line per screen row, LF-joined, single trailing LF
 -- so the file ends on a newline (git-diff friendly). Trailing spaces on each
--- row are preserved — the renderer pads with spaces and we want alignment
--- failures to surface rather than be silently normalized.
+-- row are stripped before comparison — the renderer pads with spaces but those
+-- carry no semantic meaning and cause false mismatches when git or editors
+-- strip them. Real content differences are still caught; if you need to verify
+-- row width, use an explicit assertion instead.
 --
 -- Path: <cwd>/test/__snapshots__/<name>.txt (created on first run). Set the
 -- env var TUI_UPDATE_SNAPSHOTS=1 to overwrite all snapshots on a run (for
@@ -550,6 +552,12 @@ local function snapshot_path(name)
         error("match_snapshot: name must not contain slashes or whitespace, got " .. name, 3)
     end
     return SNAPSHOT_DIR .. "/" .. name .. ".txt"
+end
+
+--- Strip trailing spaces from each line so snapshots are immune to
+--- git/editor whitespace trimming while still catching real content diffs.
+local function trim_trailing(s)
+    return (s:gsub("[ \t]+\n", "\n"):gsub("[ \t]+$", ""))
 end
 
 local function file_read(path)
@@ -632,7 +640,7 @@ end
 
 function Harness:match_snapshot(name)
     local path = snapshot_path(name)
-    local actual = self:frame() .. "\n"
+    local actual = trim_trailing(self:frame() .. "\n")
 
     if os.getenv("TUI_UPDATE_SNAPSHOTS") == "1" then
         file_write(path, actual)
@@ -646,7 +654,9 @@ function Harness:match_snapshot(name)
         return self
     end
 
-    if expected == actual then return self end
+    -- Strip trailing whitespace from the file content too, in case git or
+    -- an editor has already trimmed it on disk.
+    if trim_trailing(expected) == actual then return self end
 
     error(format_diff(name, expected, actual), 2)
 end
