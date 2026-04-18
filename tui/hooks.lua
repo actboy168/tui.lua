@@ -52,6 +52,58 @@ end
 --   nil       -> run every render; always cleanup previous first.
 --   {}        -> run exactly once on mount; cleanup on unmount.
 --   {d1,d2}   -> re-run only when any dep changed (shallow); cleanup prev first.
+--
+-- Error handling: both cleanup() and fn() are pcall-wrapped. On error:
+--   * fatal (reconciler.is_fatal)    → rethrow; produce_tree's outer pcall
+--                                       paints the banner error screen.
+--   * nearest_boundary present       → set its caught_error + mark it dirty
+--                                       + requestRedraw. Next frame skips
+--                                       the boundary's children and shows
+--                                       fallback; the throwing component
+--                                       unmounts as part of that transition.
+--   * no ancestor boundary           → rethrow; framework pcall handles it.
+-- After handling, we still advance slot.deps/ran so the faulty effect isn't
+-- retried every frame in a tight loop — the boundary transition itself is
+-- the recovery signal.
+local reconciler_mod   -- lazy require to avoid init cycle
+local scheduler_mod
+
+local function route_effect_error(instance, err)
+    if not reconciler_mod then reconciler_mod = require "tui.reconciler" end
+    if reconciler_mod.is_fatal(err) then error(err, 0) end
+
+    local boundary = instance.nearest_boundary
+    if boundary then
+        boundary.caught_error = err
+        boundary.dirty = true   -- pokes harness stabilization + main loop
+        if not scheduler_mod then scheduler_mod = require "tui.scheduler" end
+        scheduler_mod.requestRedraw()
+        return
+    end
+    -- No boundary in scope: let it propagate to the framework pcall.
+    error(err, 0)
+end
+
+-- Wrap a user-supplied event handler (useInput, useFocus on_input) so any
+-- error raised during dispatch routes to the nearest ErrorBoundary set on
+-- the owning component instance at subscribe time. The instance reference
+-- is captured *once* here; its `.nearest_boundary` field is refreshed by
+-- the reconciler every render so the lookup stays current.
+--
+-- The wrapped closure has the same calling convention as `fn`. Returning
+-- fn's first result would complicate the happy path for no benefit since
+-- input handlers are fire-and-forget — we just preserve nil.
+local function wrap_handler_for_boundary(instance, fn)
+    return function(...)
+        local ok, err = pcall(fn, ...)
+        if not ok then route_effect_error(instance, err) end
+    end
+end
+
+function M._route_handler_error(instance, err)
+    route_effect_error(instance, err)
+end
+
 function M._flush_effects(instance)
     for _, fx in ipairs(instance.pending_fx or {}) do
         local slot = fx.slot
@@ -67,22 +119,54 @@ function M._flush_effects(instance)
         end
         if should_run then
             -- Always cleanup the previous effect before running the new one
-            -- (S2.11 — React-aligned ordering).
-            if slot.cleanup then slot.cleanup(); slot.cleanup = nil end
-            slot.cleanup = fx.fn() or nil
-            slot.deps    = fx.deps
-            slot.ran     = true
+            -- (S2.11 — React-aligned ordering). Both pcalls advance deps
+            -- afterwards regardless of outcome.
+            if slot.cleanup then
+                local old = slot.cleanup
+                slot.cleanup = nil
+                local ok, err = pcall(old)
+                if not ok then route_effect_error(instance, err) end
+            end
+            local ok, result = pcall(fx.fn)
+            if ok then
+                slot.cleanup = result or nil
+            else
+                slot.cleanup = nil
+                route_effect_error(instance, result)
+            end
+            slot.deps = fx.deps
+            slot.ran  = true
         end
     end
     instance.pending_fx = nil
 end
 
 -- Called when an instance is being torn down; run all cleanups.
+-- Cleanup errors during unmount are routed through the same boundary
+-- mechanism as effect errors so they don't crash the render pass. If the
+-- instance has no ancestor boundary, we swallow (rather than rethrow) —
+-- unmount typically happens as part of already-in-progress error recovery
+-- or harness shutdown, and re-raising at that point is more disruptive
+-- than useful. First error wins: subsequent cleanups still run so every
+-- slot gets a chance to release its resources.
 function M._unmount(instance)
     for _, slot in ipairs(instance.hooks or {}) do
         if slot and slot.cleanup then
-            slot.cleanup()
+            local fn = slot.cleanup
             slot.cleanup = nil
+            local ok, err = pcall(fn)
+            if not ok then
+                if not reconciler_mod then reconciler_mod = require "tui.reconciler" end
+                if reconciler_mod.is_fatal(err) then error(err, 0) end
+                local boundary = instance.nearest_boundary
+                if boundary and boundary.caught_error == nil then
+                    boundary.caught_error = err
+                    boundary.dirty = true
+                    if not scheduler_mod then scheduler_mod = require "tui.scheduler" end
+                    scheduler_mod.requestRedraw()
+                end
+                -- else: swallow. See function header for rationale.
+            end
         end
     end
 end
@@ -178,10 +262,12 @@ local input_mod -- lazy-loaded to avoid a static require cycle
 function M.useInput(fn)
     if not input_mod then input_mod = require "tui.input" end
     local ref = useLatestRef(fn)
+    assert(current, "useInput called outside of a component render")
+    local inst = current
     M.useEffect(function()
-        return input_mod.subscribe(function(input, key)
+        return input_mod.subscribe(wrap_handler_for_boundary(inst, function(input, key)
             ref.current(input, key)
-        end)
+        end))
     end, {})
 end
 
@@ -237,6 +323,11 @@ function M.useFocus(opts)
     local id       = opts.id
     local isActive = opts.isActive
 
+    -- Capture the owning instance once so the focus on_input wrapper can
+    -- route handler errors through the same nearest_boundary path useInput
+    -- uses. The instance's .nearest_boundary is refreshed each render.
+    local inst_outer = inst
+
     -- Effect 1: (re-)subscribe when id changes. deps={id} — a nil id stays
     -- stable across rerenders (shallow-equal), so auto-id entries never
     -- remount; a string id change triggers cleanup + new subscribe.
@@ -246,9 +337,9 @@ function M.useFocus(opts)
             autoFocus = auto,
             isActive  = isActive,
             on_change = function(b) setFocused(b) end,
-            on_input  = function(input, key)
+            on_input  = wrap_handler_for_boundary(inst_outer, function(input, key)
                 if onInputRef.current then onInputRef.current(input, key) end
-            end,
+            end),
         }
         slot.entry = entry
         return function()
@@ -270,6 +361,47 @@ function M.useFocus(opts)
         focus     = function()
             if slot.entry then focus_mod.focus(slot.entry.id) end
         end,
+    }
+end
+
+-- ---------------------------------------------------------------------------
+-- useErrorBoundary() -> { caught_error, reset }
+-- Read the nearest ancestor ErrorBoundary's current state from inside a
+-- descendant component. Useful for rendering custom recovery UI without
+-- declaring a fallback function: e.g. a toast next to normal content that
+-- offers a retry button.
+--
+-- Semantics:
+--   * caught_error : the error value the boundary currently holds, or nil
+--                    if it hasn't tripped. This is a snapshot at render
+--                    time; the component won't automatically re-render
+--                    when caught_error changes unless another mechanism
+--                    (the boundary itself flipping, a parent rerender)
+--                    forces a pass. In practice that's fine because the
+--                    boundary's fallback branch replaces this subtree
+--                    when tripped, so callers read `caught_error` mainly
+--                    inside that fallback's own children.
+--   * reset        : stable closure clearing the boundary's caught_error
+--                    and requesting a redraw. No-op if no ancestor
+--                    boundary exists (we still return a function so
+--                    callers don't need to nil-check).
+--
+-- Returns nil `caught_error` and a no-op `reset` when there is no ancestor
+-- ErrorBoundary. Consumers that need to detect that case can check
+-- `result.boundary ~= nil`.
+local NOOP = function() end
+
+function M.useErrorBoundary()
+    assert(current, "useErrorBoundary called outside of a component render")
+    local boundary = current.nearest_boundary
+    if not boundary then
+        return { caught_error = nil, reset = NOOP, boundary = nil }
+    end
+    if not reconciler_mod then reconciler_mod = require "tui.reconciler" end
+    return {
+        caught_error = boundary.caught_error,
+        reset        = reconciler_mod._get_boundary_reset(boundary),
+        boundary     = boundary,
     }
 end
 

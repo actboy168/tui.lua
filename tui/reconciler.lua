@@ -18,14 +18,36 @@ local hooks = require "tui.hooks"
 
 local M = {}
 
+-- -- fatal error protocol ------------------------------------------------------
+--
+-- Some errors (duplicate focus id, duplicate reconciler key, internal
+-- invariant violations) are programming bugs that an ErrorBoundary should
+-- NOT paper over — swallowing them would mask the bug and produce misleading
+-- fallback UI for the rest of the session. We tag such errors with a
+-- "[tui:fatal] " prefix so the Boundary pcall can recognize and rethrow them.
+--
+-- Regular user errors (throw inside a component's render, etc.) have no
+-- prefix and are caught normally.
+
+local FATAL_PREFIX = "[tui:fatal] "
+
+function M.fatal(msg)
+    error(FATAL_PREFIX .. tostring(msg), 0)
+end
+
+function M.is_fatal(err)
+    return type(err) == "string" and err:sub(1, #FATAL_PREFIX) == FATAL_PREFIX
+end
+
 -- ---------------------------------------------------------------------------
 -- Instance registry: path-string -> instance
 
 local function make_state()
     return {
-        instances   = {},   -- path -> instance
-        seen        = {},   -- path -> true (for this render pass)
-        app         = nil,  -- app handle injected by tui.render
+        instances      = {},   -- path -> instance
+        seen           = {},   -- path -> true (for this render pass)
+        app            = nil,  -- app handle injected by tui.render
+        boundary_stack = {},   -- ancestor ErrorBoundary instances, innermost last
     }
 end
 
@@ -60,8 +82,8 @@ local function child_path_for(parent_path, i, child, seen_keys)
     if ck ~= nil then
         local ks = tostring(ck)
         if seen_keys[ks] then
-            error("reconciler: duplicate key '" .. ks ..
-                  "' in children of '" .. parent_path .. "'", 0)
+            M.fatal("reconciler: duplicate key '" .. ks ..
+                    "' in children of '" .. parent_path .. "'")
         end
         seen_keys[ks] = true
         return parent_path .. "/#" .. ks
@@ -74,6 +96,10 @@ end
 -- by whatever they rendered).
 --
 -- `path` uniquely identifies a node slot; we use a string built from indices.
+
+-- Forward declaration so Boundary's expand branch can invoke the fallback
+-- renderer both on caught errors and on sticky replays.
+local render_boundary_fallback
 
 local function expand(state, element, path)
     if element == nil or element == false then return nil end
@@ -99,6 +125,11 @@ local function expand(state, element, path)
         else
             inst.app = state.app
         end
+        -- Track nearest ancestor ErrorBoundary for post-commit error routing
+        -- (useEffect body/cleanup throws, useInput handler throws). Refreshed
+        -- every render pass so the mapping stays correct when components
+        -- move across the tree.
+        inst.nearest_boundary = state.boundary_stack[#state.boundary_stack]
 
         hooks._begin_render(inst)
         -- Clear dirty BEFORE calling fn. If fn (or a mount effect queued
@@ -124,14 +155,31 @@ local function expand(state, element, path)
         -- ErrorBoundary: wrap the children expand loop in pcall. Any error
         -- raised by a descendant (component fn throwing, or malformed host
         -- element) is caught here; we swap in `fallback` for the rest of
-        -- this render pass. The boundary stays mounted across frames — it
-        -- does not auto-reset when the error clears (Ink/React semantics).
+        -- this render pass. Once tripped, `inst.caught_error` is sticky —
+        -- the boundary keeps showing fallback across frames until the
+        -- caller resets it (Ink/React semantics). Post-commit errors
+        -- (useEffect body/cleanup, useInput handler) route through
+        -- `hooks._flush_effects` which sets caught_error directly on the
+        -- nearest_boundary inst and requests a redraw.
         state.seen[path] = true
         local inst = state.instances[path]
         if not inst then
             inst = { kind = "error_boundary", caught_error = nil }
             state.instances[path] = inst
         end
+        -- Clear any dirty flag set by a descendant effect-error routing so
+        -- the harness stabilization loop doesn't spin. We'll consume it on
+        -- this pass by rendering fallback (or revisit if children throw).
+        inst.dirty = false
+
+        -- Already tripped? Skip children entirely and render fallback.
+        if inst.caught_error ~= nil then
+            return render_boundary_fallback(state, element, path, inst.caught_error)
+        end
+
+        -- Push onto the ancestor stack so descendants' component instances
+        -- can record `inst.nearest_boundary = this`.
+        state.boundary_stack[#state.boundary_stack + 1] = inst
 
         local out = { kind = "box", props = {}, children = {} }
         local ok, err = pcall(function()
@@ -144,25 +192,21 @@ local function expand(state, element, path)
                 end
             end
         end)
+
+        -- Always pop, even on error, to keep the stack balanced.
+        state.boundary_stack[#state.boundary_stack] = nil
+
         if ok then
-            inst.caught_error = nil
             return out
         end
 
+        -- Fatal errors (duplicate key/id, internal asserts) must not be
+        -- papered over by a fallback — rethrow so the framework's top-level
+        -- pcall in produce_tree turns them into a visible error screen.
+        if M.is_fatal(err) then error(err, 0) end
+
         inst.caught_error = err
-        -- Render fallback as its own sub-tree (may itself contain components).
-        -- If fallback is nil, return an empty box so the layout still has a node.
-        if element.fallback == nil then
-            return { kind = "box", props = {}, children = {} }
-        end
-        local fb_ok, fb_tree = pcall(expand, state, element.fallback, path .. "/fallback")
-        if not fb_ok or fb_tree == nil then
-            -- Fallback itself failed or returned nothing; degrade to empty box
-            -- rather than propagating (the whole point of a boundary is to
-            -- stop the bleed).
-            return { kind = "box", props = {}, children = {} }
-        end
-        return fb_tree
+        return render_boundary_fallback(state, element, path, err)
     end
 
     if is_host_element(element) then
@@ -189,6 +233,85 @@ local function expand(state, element, path)
 
     -- Unknown: drop it.
     return nil
+end
+
+-- Return (creating if needed) a stable `reset` closure for a Boundary inst.
+-- The closure must be reference-stable across frames because React-style
+-- consumers ($.reset === prev.reset) often use it as a dep or memoization
+-- key. We cache on the inst the first time anyone asks.
+local scheduler_mod
+local function get_boundary_reset(inst)
+    if inst._reset then return inst._reset end
+    inst._reset = function()
+        if inst.caught_error == nil then return end
+        inst.caught_error = nil
+        inst.dirty = true
+        if not scheduler_mod then scheduler_mod = require "tui.scheduler" end
+        scheduler_mod.requestRedraw()
+    end
+    return inst._reset
+end
+
+-- Expose the reset getter so hooks.useErrorBoundary can lazy-create the
+-- same closure that fallback(err, reset) would see, even before the
+-- boundary has tripped.
+M._get_boundary_reset = get_boundary_reset
+
+-- Render a boundary's fallback subtree. Always protected by its own pcall
+-- so fallback crashes don't escape the boundary (the whole point). Fatal
+-- errors inside fallback still propagate.
+--
+-- Fallback shapes handled here:
+--   * nil      -> empty box
+--   * function -> called as fallback(err, reset); return value treated as
+--                 an element (expanded recursively). Throwing is caught;
+--                 fatal prefix rethrows.
+--   * element  -> expanded directly
+function render_boundary_fallback(state, element, path, err)
+    local fb = element.fallback
+    if fb == nil then
+        return { kind = "box", props = {}, children = {} }
+    end
+
+    local inst = state.instances[path]
+    local resolved
+    if type(fb) == "function" then
+        local reset = get_boundary_reset(inst)
+        local call_ok, call_ret = pcall(fb, err, reset)
+        if not call_ok then
+            if M.is_fatal(call_ret) then error(call_ret, 0) end
+            return { kind = "box", props = {}, children = {} }
+        end
+        resolved = call_ret
+    else
+        resolved = fb
+    end
+
+    if resolved == nil then
+        return { kind = "box", props = {}, children = {} }
+    end
+
+    -- Make the boundary visible to useErrorBoundary() calls inside the
+    -- fallback subtree. We push the *same* inst on boundary_stack so its
+    -- descendants capture it as nearest_boundary. Render-time errors in
+    -- the fallback subtree are still caught by the local pcall below;
+    -- post-commit errors (effects / input) from fallback descendants will
+    -- route back to this boundary's caught_error — harmless because it's
+    -- already tripped and sticky, so they just refresh the err value.
+    state.boundary_stack[#state.boundary_stack + 1] = inst
+
+    local fb_ok, fb_tree = pcall(expand, state, resolved, path .. "/fallback")
+
+    state.boundary_stack[#state.boundary_stack] = nil
+
+    if not fb_ok then
+        if M.is_fatal(fb_tree) then error(fb_tree, 0) end
+        return { kind = "box", props = {}, children = {} }
+    end
+    if fb_tree == nil then
+        return { kind = "box", props = {}, children = {} }
+    end
+    return fb_tree
 end
 
 -- ---------------------------------------------------------------------------

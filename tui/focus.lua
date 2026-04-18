@@ -68,8 +68,9 @@ function M.subscribe(opts)
         id = "f" .. auto_id_counter
     end
     if by_id[id] then
-        error(("tui.focus: duplicate focus id %q — each useFocus must " ..
-               "have a unique id (or omit id for auto-generated one)"):format(id), 0)
+        require("tui.reconciler").fatal(
+            ("tui.focus: duplicate focus id %q — each useFocus must " ..
+             "have a unique id (or omit id for auto-generated one)"):format(id))
     end
 
     local entry = {

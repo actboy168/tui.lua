@@ -71,20 +71,33 @@ function M.Text(t)
     }
 end
 
---- ErrorBoundary { fallback = element_or_nil, child1, child2, ... }
--- Catches errors raised while expanding any descendant during reconciliation.
--- On a caught error, the boundary's children are replaced by `fallback` for
--- the rest of this (and subsequent) render passes, until the element
--- remounts. `fallback` must be a static element (host or component); it is
--- not passed any error info in this version.
+--- ErrorBoundary { fallback = element_or_fn_or_nil, child1, child2, ... }
+-- Catches errors raised while expanding any descendant during reconciliation,
+-- and errors bubbled from post-commit channels (useEffect body/cleanup,
+-- useInput / useFocus on_input). On a caught error, children are replaced
+-- by `fallback` until the boundary is reset.
+--
+-- `fallback` shapes:
+--   * element  — static tree rendered verbatim
+--   * function — invoked as `fallback(err, reset)` each time the boundary
+--                renders its fallback branch; must return an element (or
+--                nil to render an empty box). `reset` is a stable closure
+--                that clears `caught_error` and schedules a redraw, letting
+--                children re-attempt. Throwing inside `fallback` falls back
+--                to an empty box (fatal prefix still propagates).
+--   * nil      — render an empty box (legal, rarely useful)
 function M.ErrorBoundary(t)
     t = t or {}
     local props, children = split_props_children(t)
     local key = pluck_key(props)
+    local fb = props.fallback
+    if fb ~= nil and type(fb) ~= "function" and type(fb) ~= "table" then
+        error("ErrorBoundary: fallback must be an element, function, or nil; got " .. type(fb), 2)
+    end
     return {
         kind = "error_boundary",
         key = key,
-        fallback = props.fallback,
+        fallback = fb,
         children = children,
     }
 end

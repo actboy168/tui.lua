@@ -71,6 +71,7 @@ M.useWindowSize  = hooks.useWindowSize
 M.useApp         = hooks.useApp
 M.useFocus        = hooks.useFocus
 M.useFocusManager = hooks.useFocusManager
+M.useErrorBoundary = hooks.useErrorBoundary
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
 M.setInterval = scheduler.setInterval
