@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "wcwidth.h"
+
 /*
  * wcwidth — terminal display width for Unicode code points.
  *
@@ -236,7 +238,7 @@ in_range(uint32_t cp, const range_t *ranges, int n) {
 }
 
 /* Returns -1, 0, 1, or 2 — see file header comment. */
-static int
+int
 wcwidth_cp(uint32_t cp) {
     if (cp == 0) return 0;
     if (cp < 0x20) return -1;                     /* C0 control */
@@ -252,7 +254,7 @@ wcwidth_cp(uint32_t cp) {
 
 /* Decode one UTF-8 code point starting at s[i]. Advances *out_i past the
  * sequence. On invalid bytes, emits U+FFFD and advances one byte. */
-static uint32_t
+uint32_t
 utf8_next(const unsigned char *s, size_t n, size_t *out_i) {
     size_t i = *out_i;
     if (i >= n) { *out_i = i + 1; return 0xFFFD; }

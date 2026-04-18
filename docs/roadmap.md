@@ -78,6 +78,18 @@
 - 行为：同层重排 / 前插 / 删中间元素不再 remount 带 key 的兄弟，state/effect 保留；无 key 时维持原有位置语义（零回归）；key 换了按路径换算自然 unmount + mount
 - `test/test_reconciler_keys.lua`：8 个用例（重排保身 / 前插 / 删中间 / 无 key 位置回归 / 混用 keyed+unkeyed / 重复 key 报错 / key 换位置强制 remount / host Box 带 key 稳定后代）
 
+### Stage 9 — 渲染后端下沉到 C（技术路线 #4 兑现）
+- 新增 `src/tui_core/screen.c`：cell 缓冲（12 字节 cell_t，8 字节内联 + slab 溢出 union）、双缓冲、帧级 slab（next/prev append-only + 指针交换稳态零分配）、ring pool (4 代) 的 row 字符串池
+- Lua API `tui_core.screen.{new, size, resize, invalidate, clear, put, put_border, draw_line, diff, rows}`，state 作参数的函数式风格；`__gc` 负责 free 所有 C-owned 缓冲
+- `diff` 实现：首帧 / invalidate / resize 后走 `\x1b[H\x1b[2J` 全画；后续走 cell 级比较 + 段合并（`MERGE_GAP=3` 以内连续改动合段，bridging 不变字节比再发一次 CUP 便宜）；WIDE_TAIL 语义在 C 端维护
+- `draw_line` 在 C 侧直接调用 `wcwidth_cp + utf8_next`（`src/tui_core/wcwidth.h` 暴露，去掉 static）；组合标记 / 控制字符跳过；grapheme cluster 合并留给未来 stage
+- `put_border` 三套样式（single / double / round）硬编码在 C，6 个 UTF-8 glyph 字节序列直出，一次画完边框
+- `rows()` 用 Lua 5.5 `lua_pushexternalstring` + `ROW_POOL_GEN=4` 环形池：每次 `rows()` 调用轮转一代 buffer、`realloc` 按需、填完推出零拷贝字符串；调用方在 4 代内稳定，超出由下一轮 `rows()` 自然复用同代 buffer（测试 harness / 快照读法均在一帧内，安全）
+- `tui/renderer.lua` 从 ~186 行收缩到 ~40 行：只走树调用 `screen.put_border / draw_line`；`render_rows / render / buffer_to_*` 全退役
+- `tui/screen.lua` 退化为 ~55 行 wrapper；`tui/init.lua paint()` 改走 `size / resize / clear / paint / diff` 链路；`tui/testing.lua` 的 `:rows() / :row() / :frame()` 改读 `screen.rows(self._screen)`，移除 `self._rows` 字段
+- `test/test_screen_diff.lua` 11 用例：首帧全画 / 幂等 / 单点局部更新 / MERGE_GAP 内合并 / MERGE_GAP 外拆段 / 宽字符 + WIDE_TAIL / 长 cluster 走 slab / slab 增长 / ring pool 4 代稳定 / resize 全画 / invalidate 全画
+- 修掉 snprintf 用 `\27`（C 里是八进制 023，非 ESC）的 bug，改为 `\x1b`；全量 128 测试通过（117 老测 + 11 新测）
+
 ---
 
 ## 正在进行
@@ -87,6 +99,14 @@ _暂无_
 ---
 
 ## 未完成 · 按类别
+
+### 技术路线未对齐（需回补到 C 层）
+
+技术路线规定 C 层拥有 5 项职责（Terminal I/O / wcwidth + grapheme / Yoga 布局 / Render 后端 / Key parser），**第 4 项"渲染后端"** 已由 Stage 9 兑现；**第 2 项"wcwidth + grapheme"** 只做了字符宽度一半：
+
+**grapheme cluster 处理**
+- `src/tui_core/wcwidth.c` 当前只覆盖码点级 East Asian Width + emoji 宽度，grapheme cluster 边界（ZWJ emoji sequence / combining mark / regional indicator 国旗）尚未实现
+- 影响：emoji 序列如 👨‍👩‍👧 被按 3 个独立 emoji 算宽、光标在组合字符中间停留、CJK 前后方向键按字符跳而非按 grapheme
 
 ### 功能增强
 
@@ -113,8 +133,10 @@ _暂无_
 
 ### 渲染性能与稳定性
 
-- cell 级 diff 取代行级 diff：长行只改一个字不再整行重写，ANSI 色彩序列不被拆碎
 - alternate screen buffer（类 vim 进出全屏）
+- Text 节点颜色 / SGR 属性：cell 结构扩属性位，C diff 端 emit SGR 前缀
+- grapheme cluster 合并（combining mark 应粘附前 cell 而非独占）
+- `put` 的 cluster 长度校验（防止恶意长字符串爆 slab）
 
 ### 开发者体验
 
@@ -153,3 +175,4 @@ _暂无_
 - 进入实施：移到"正在进行"，同时 TaskCreate 拆会话级子任务
 - 完成：移到"已完成"，只写做了什么
 - 不做的想法记到"非目标"，避免反复纠结
+- 开新 stage 前先对照技术路线的 C 层 scope（Terminal I/O / wcwidth / Yoga / Render 后端 / Key parser）—— 落在这 5 项里的工作默认走 C，要改成 Lua 实现需要显式在 roadmap 里说明原因

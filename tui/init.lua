@@ -153,7 +153,8 @@ function M.render(root)
     terminal.write(HIDE_CUR .. CLEAR)
 
     local rec_state    = reconciler.new()
-    local screen_state = screen_mod.new()
+    local init_w, init_h = terminal.get_size()
+    local screen_state = screen_mod.new(init_w, init_h)
     input_mod._reset()
     resize_mod._reset()
     focus_mod._reset()
@@ -164,14 +165,17 @@ function M.render(root)
 
     local function paint()
         local w, h = terminal.get_size()
-        -- Notify subscribers (useWindowSize) before rendering so the first
-        -- frame sees the correct size. observe() is cheap when unchanged.
+        local cw, ch = screen_mod.size(screen_state)
+        if cw ~= w or ch ~= h then
+            screen_mod.resize(screen_state, w, h)
+        end
         if resize_mod.observe(w, h) then
             screen_mod.invalidate(screen_state)
         end
         local tree = produce_tree(rec_state, root, app_handle, w, h)
-        local rows = renderer.render_rows(tree, w, h)
-        local ansi = screen_mod.diff(screen_state, rows, w, h)
+        screen_mod.clear(screen_state)
+        renderer.paint(tree, screen_state)
+        local ansi = screen_mod.diff(screen_state)
         if #ansi > 0 then terminal.write(ansi) end
 
         -- Post-commit: cursor + IME positioning. A focused TextInput tags its

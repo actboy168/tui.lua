@@ -15,5 +15,6 @@ require "test.test_dirty"
 require "test.test_focus"
 require "test.test_error_boundary"
 require "test.test_reconciler_keys"
+require "test.test_screen_diff"
 
 os.exit(lt.run(), true)

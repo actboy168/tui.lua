@@ -40,6 +40,7 @@ lm:lua_dll "tui_core" {
         "src/tui_core/terminal.c",
         "src/tui_core/keys.c",
         "src/tui_core/wcwidth.c",
+        "src/tui_core/screen.c",
     },
     windows = {
         links = { "imm32" },

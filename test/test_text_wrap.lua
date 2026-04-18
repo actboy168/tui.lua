@@ -6,6 +6,7 @@ local text_mod = require "tui.text"
 local tui      = require "tui"
 local layout   = require "tui.layout"
 local renderer = require "tui.renderer"
+local screen   = require "tui.screen"
 
 local suite = lt.test "text_wrap"
 
@@ -73,20 +74,28 @@ function suite:test_renderer_draws_wrapped_lines()
         tui.Text { width = 10, "hello world how" },
     }
     layout.compute(root)
-    local rows = renderer.render_rows(root, 20, 5)
+    local s = screen.new(20, 5)
+    screen.clear(s)
+    renderer.paint(root, s)
+    screen.diff(s)
+    local rows = screen.rows(s)
     lt.assertEquals(rows[1]:sub(1, 5), "hello")
     lt.assertEquals(rows[2]:sub(1, 9), "world how")
     layout.free(root)
 end
 
 function suite:test_renderer_handles_wide_char_cells()
-    -- "中a" = 3 cols; cell 1 = "中", cell 2 = sentinel, cell 3 = "a".
+    -- "中a" = 3 cols; cell 1 = "中", cell 2 = WIDE_TAIL, cell 3 = "a".
     local root = tui.Box {
         width = 5, height = 1,
         tui.Text { wrap = "nowrap", "中a" },
     }
     layout.compute(root)
-    local rows = renderer.render_rows(root, 5, 1)
+    local s = screen.new(5, 1)
+    screen.clear(s)
+    renderer.paint(root, s)
+    screen.diff(s)
+    local rows = screen.rows(s)
     -- Row string should render as "中a  " (2-col + 1-col + 2 padding spaces).
     lt.assertEquals(rows[1], "中a  ")
     layout.free(root)

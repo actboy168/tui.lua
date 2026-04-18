@@ -1,61 +1,53 @@
--- tui/screen.lua — double-buffered screen with row-level diffing.
+-- tui/screen.lua — thin Lua wrapper over tui_core.screen.
 --
--- Stage 2: track previous frame's rows; on new frame, emit ANSI only for
--- changed rows. If dimensions change, do a full redraw.
---
--- NOTE: Cell-level diff is Stage 6 (plan S2.5). Row-level is good enough to
--- keep the counter demo flicker-free because only the line holding the number
--- changes each tick.
+-- Stage 9: all state (cell buffer / slab / ring pool) and the diff/ANSI
+-- generation live in C. This wrapper exists only so existing call sites
+-- (tui/init.lua, tui/testing.lua) can keep their `screen_mod.new / diff /
+-- rows / ...` style instead of reaching into tui_core directly.
+
+local screen_c = require "tui_core".screen
 
 local M = {}
 
--- Build a fresh screen state.
--- Caller is expected to hold one per tui.render() invocation.
-function M.new()
-    return {
-        prev_rows = nil,   -- array of strings, or nil before first frame
-        prev_w    = 0,
-        prev_h    = 0,
-    }
+--- Create a fresh screen userdata with the given dimensions.
+function M.new(w, h)
+    return screen_c.new(w, h)
 end
 
--- Compose ANSI diff between prev_rows and new_rows of the same dimensions.
--- If prev is nil or size mismatched, return a full redraw.
-function M.diff(state, new_rows, w, h)
-    local parts = {}
-
-    if state.prev_rows == nil or state.prev_w ~= w or state.prev_h ~= h then
-        -- Full redraw: home, clear, then every row.
-        parts[#parts + 1] = "\27[H\27[2J"
-        for y = 1, h do
-            parts[#parts + 1] = "\27[" .. y .. ";1H"
-            parts[#parts + 1] = new_rows[y] or ""
-        end
-    else
-        for y = 1, h do
-            if new_rows[y] ~= state.prev_rows[y] then
-                -- Move to row y, column 1; clear the line; write new content.
-                parts[#parts + 1] = "\27[" .. y .. ";1H\27[2K"
-                parts[#parts + 1] = new_rows[y] or ""
-            end
-        end
-    end
-
-    -- Copy new_rows into state for next diff.
-    local snapshot = {}
-    for y = 1, h do snapshot[y] = new_rows[y] end
-    state.prev_rows = snapshot
-    state.prev_w    = w
-    state.prev_h    = h
-
-    return table.concat(parts)
+--- Return (w, h).
+function M.size(ud)
+    return screen_c.size(ud)
 end
 
--- Clear diff state (e.g. after terminal resize or manual refresh).
-function M.invalidate(state)
-    state.prev_rows = nil
-    state.prev_w    = 0
-    state.prev_h    = 0
+--- Resize in place. All row buffers are invalidated and next diff will
+--  issue a full redraw.
+function M.resize(ud, w, h)
+    screen_c.resize(ud, w, h)
+end
+
+--- Force the next diff to be a full redraw.
+function M.invalidate(ud)
+    screen_c.invalidate(ud)
+end
+
+--- Clear the next-frame cell buffer (call at the start of each paint pass).
+function M.clear(ud)
+    screen_c.clear(ud)
+end
+
+--- Commit the next-frame buffer and return the ANSI bytes needed to update
+--  the terminal from the previous committed frame. After this call, rows()
+--  reads the just-committed frame.
+function M.diff(ud)
+    return screen_c.diff(ud)
+end
+
+--- Return an array of H row strings. Strings are backed by a ring pool;
+--  they remain valid for 3 subsequent rows() calls before being recycled.
+--  Test harness / snapshot callers finish reading within one frame and are
+--  safe.
+function M.rows(ud)
+    return screen_c.rows(ud)
 end
 
 return M

@@ -1,10 +1,11 @@
 ﻿/*
  * tui_core.c — Aggregator entry for the tui_core Lua DLL.
  *
- * Stage 4 exposes:
+ * Exposes:
  *   terminal — raw I/O, size, VT enable, IME position
  *   keys     — stateless ANSI/UTF-8 parser (keys.parse)
  *   wcwidth  — display-width table (wcwidth/string_width/char_width)
+ *   screen   — cell buffer + ANSI diff renderer (Stage 9)
  *
  * Layout after `require "tui_core"`:
  *   tui_core = {
@@ -12,6 +13,7 @@
  *                    write, set_ime_pos },
  *       keys     = { parse },
  *       wcwidth  = { wcwidth, string_width, char_width },
+ *       screen   = { new, size, resize, invalidate, clear, put, diff, rows, ... },
  *   }
  */
 
@@ -26,11 +28,12 @@
 int luaopen_terminal(lua_State *L);
 int luaopen_keys(lua_State *L);
 int luaopen_wcwidth(lua_State *L);
+int luaopen_screen(lua_State *L);
 
 LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
     luaL_checkversion(L);
-    lua_createtable(L, 0, 3);
+    lua_createtable(L, 0, 4);
 
     /* terminal sub-table */
     luaopen_terminal(L);
@@ -43,6 +46,10 @@ luaopen_tui_core(lua_State *L) {
     /* wcwidth sub-table */
     luaopen_wcwidth(L);
     lua_setfield(L, -2, "wcwidth");
+
+    /* screen sub-table */
+    luaopen_screen(L);
+    lua_setfield(L, -2, "screen");
 
     return 1;
 }

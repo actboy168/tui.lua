@@ -167,15 +167,15 @@ function Harness:_paint()
     end
 
     layout.compute(tree)
-    local rows = renderer.render_rows(tree, self._w, self._h)
-    local ansi = screen_mod.diff(self._screen, rows, self._w, self._h)
+    screen_mod.clear(self._screen)
+    renderer.paint(tree, self._screen)
+    local ansi = screen_mod.diff(self._screen)
     if #ansi > 0 then self._ansi_buf[#self._ansi_buf + 1] = ansi end
 
     -- Keep `tree` live for the caller (h:tree()) — don't layout.free it here,
     -- free on next paint or unmount.
     if self._tree then layout.free(self._tree) end
     self._tree = tree
-    self._rows = rows
 end
 
 function Harness:rerender()
@@ -187,12 +187,15 @@ end
 function Harness:width()  return self._w end
 function Harness:height() return self._h end
 function Harness:rows()
-    local out = {}
-    for i, r in ipairs(self._rows or {}) do out[i] = r end
-    return out
+    return screen_mod.rows(self._screen)
 end
-function Harness:row(n)   return (self._rows or {})[n] end
-function Harness:frame()  return table.concat(self._rows or {}, "\n") end
+function Harness:row(n)
+    local rows = screen_mod.rows(self._screen)
+    return rows[n]
+end
+function Harness:frame()
+    return table.concat(screen_mod.rows(self._screen), "\n")
+end
 function Harness:tree()   return self._tree end
 
 function Harness:ansi()
@@ -273,9 +276,10 @@ function Harness:resize(cols, rows)
     assert(type(cols) == "number" and cols > 0, "resize: cols must be positive number")
     assert(type(rows) == "number" and rows > 0, "resize: rows must be positive number")
     self._w, self._h = cols, rows
-    -- Invalidate screen so next diff produces full redraw; real tui/init does
-    -- the same when resize fires.
-    screen_mod.invalidate(self._screen)
+    -- resize() on the C-side screen invalidates the row ring pool and sets
+    -- prev_valid=0 so the next diff is a full redraw. This mirrors what
+    -- real tui/init does when the terminal size changes.
+    screen_mod.resize(self._screen, cols, rows)
     self:_paint()
     return self
 end
@@ -464,9 +468,8 @@ function M.render(App, opts)
         _fake_now    = now0,
         _ansi_buf    = {},
         _state       = reconciler.new(),
-        _screen      = screen_mod.new(),
+        _screen      = screen_mod.new(W, H),
         _tree        = nil,
-        _rows        = nil,
         _dead        = false,
         _ime         = nil,
     }, Harness)
