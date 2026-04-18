@@ -157,6 +157,7 @@ local function SelectImpl(props)
 
             if next_idx ~= cur then
                 st.setH(next_idx)
+                st.highlight = next_idx  -- eager update for intra-dispatch
                 if st.onChange then
                     st.onChange(st.items[next_idx], next_idx)
                 end

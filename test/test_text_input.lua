@@ -8,6 +8,22 @@ local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
 
+local wcwidth = require "tui_core".wcwidth
+
+-- Local mirror of text_input.lua's to_chars for asserting grapheme counts.
+local function to_chars(s)
+    local chars = {}
+    if not s or s == "" then return chars end
+    local n, i = #s, 1
+    while i <= n do
+        local ch, _, ni = wcwidth.grapheme_next(s, i)
+        if ch == "" then break end
+        chars[#chars + 1] = ch
+        i = ni
+    end
+    return chars
+end
+
 local suite = lt.test "text_input"
 
 function suite:test_initial_empty_with_placeholder()
@@ -369,5 +385,674 @@ function suite:test_delete_removes_cluster_forward()
     h:press("home")         -- caret to 0
     h:press("delete")       -- remove the "é" cluster
     lt.assertEquals(value, "x")
+    h:unmount()
+end
+
+-- Right arrow moves the caret one cluster right.
+function suite:test_right_arrow_moves_caret()
+    local value = "abc"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0)
+    h:press("right")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 1)
+    h:press("right")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2)
+    h:unmount()
+end
+
+-- Right arrow across a wide-char cluster jumps by the cluster's display width.
+function suite:test_right_arrow_over_wide_char()
+    local value = "a\228\184\173b"  -- "a中b"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0)
+    h:press("right")  -- past "a" → col 1
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 1)
+    h:press("right")  -- past "中" (wide) → col 3
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 3)
+    h:unmount()
+end
+
+-- Right arrow at end of input is a no-op (caret stays, onChange not fired).
+function suite:test_right_arrow_at_end_noop()
+    local value = "ab"
+    local fired = 0
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v; fired = fired + 1 end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("right")
+    h:press("right")
+    lt.assertEquals(fired, 0, "right at end must not fire onChange")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2)
+    h:unmount()
+end
+
+-- Home moves caret to beginning, End moves it to the end.
+function suite:test_home_and_end()
+    local value = "abc"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0)
+    h:press("end")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 3)
+    h:unmount()
+end
+
+-- Delete on empty value is a no-op.
+function suite:test_delete_on_empty_noop()
+    local value = ""
+    local fired = 0
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v; fired = fired + 1 end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("delete")
+    h:press("delete")
+    lt.assertEquals(value, "")
+    lt.assertEquals(fired, 0, "delete on empty must not fire onChange")
+    h:unmount()
+end
+
+-- Delete at end of value is a no-op.
+function suite:test_delete_at_end_noop()
+    local value = "abc"
+    local fired = 0
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v; fired = fired + 1 end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("delete")
+    lt.assertEquals(fired, 0, "delete at end must not fire onChange")
+    lt.assertEquals(value, "abc")
+    h:unmount()
+end
+
+-- When the controlled value shrinks externally, the caret is clamped.
+function suite:test_caret_clamped_on_value_shrink()
+    local v = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- caret starts at end (col 5)
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 5)
+    -- Shrink value externally; caret was at 5 but only 2 chars now.
+    v = "ab"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2, "caret clamped to #chars after shrink")
+    h:unmount()
+end
+
+-- Placeholder is shown when empty and unfocused, hidden when focused.
+function suite:test_placeholder_hidden_when_focused()
+    local function App()
+        local v, setV = tui.useState("")
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = setV,
+                placeholder = "type here",
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- autoFocus=true by default, so placeholder should NOT be shown
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te ~= nil, true, "focused input should have cursor")
+    lt.assertEquals(te.text, "", "placeholder should be hidden when focused")
+    h:unmount()
+end
+
+-- Placeholder shown when value is empty and focus=false.
+function suite:test_placeholder_shown_when_unfocused()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                placeholder = "type here",
+                focus = false,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te, nil, "unfocused input should have no cursor")
+    -- The row should show the placeholder text
+    lt.assertEquals(h:row(1):match("type here") ~= nil, true)
+    h:unmount()
+end
+
+-- Horizontal scroll: when text exceeds the explicit width prop, the window
+-- scrolls to keep the caret visible.
+function suite:test_horizontal_scroll_keeps_caret_visible()
+    local value = "abcdefghij"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                width = 5,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local te = testing.find_text_with_cursor(h:tree())
+    -- Caret sits at end; with width=5 the window scrolls so the caret
+    -- column is within the visible window.
+    lt.assertEquals(te._cursor_offset <= 5, true,
+        "caret col within visible window")
+    h:unmount()
+end
+
+-- Typing past the width prop scrolls the window so the caret stays in view.
+function suite:test_typing_past_width_scrolls()
+    local function App()
+        local v, setV = tui.useState("")
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput { value = v, onChange = setV, autoFocus = true, width = 5 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:type("abcdef")  -- 6 chars in a 5-col window
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset <= 5, true,
+        "caret stays within window after overflow typing")
+    h:unmount()
+end
+
+-- Mask replaces each character including CJK with the mask char.
+function suite:test_mask_with_cjk_chars()
+    local value = "\228\184\173\230\150\135"  -- "中文"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                mask = "*",
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local te = testing.find_text_with_cursor(h:tree())
+    -- Each grapheme cluster is replaced by one mask char
+    lt.assertEquals(te.text, "**")
+    h:unmount()
+end
+
+-- Enter on empty value fires onSubmit with empty string.
+function suite:test_enter_on_empty_fires_onsubmit()
+    local submitted = nil
+    local function App()
+        local v, setV = tui.useState("")
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = setV,
+                onSubmit = function(val) submitted = val end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("enter")
+    lt.assertEquals(submitted, "")
+    h:unmount()
+end
+
+-- width prop constrains the visible rendering width.
+function suite:test_width_prop_constrains_render()
+    local value = "abcdefghij"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                width = 5,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local te = testing.find_text_with_cursor(h:tree())
+    -- With width=5, only 5 cells of text should be visible
+    lt.assertEquals(#te.text <= 5, true,
+        "rendered text should be at most width columns")
+    h:unmount()
+end
+
+-- Left arrow at position 0 is a no-op.
+function suite:test_left_at_start_noop()
+    local value = "abc"
+    local fired = 0
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v; fired = fired + 1 end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")  -- caret to 0
+    h:press("left")  -- no-op at start
+    lt.assertEquals(fired, 0, "left at start must not fire onChange")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0)
+    h:unmount()
+end
+
+-- Insert after navigating with home → right → right → type.
+function suite:test_insert_after_home_right_right()
+    local value = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    h:press("right")   -- caret at 1 (after "a")
+    h:press("right")   -- caret at 2 (after "b")
+    h:type("X")        -- insert "X" at position 2 → "abXcde"
+    lt.assertEquals(value, "abXcde")
+    h:unmount()
+end
+
+-- Delete in the middle removes the character to the right of the caret.
+function suite:test_delete_in_middle()
+    local value = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    h:press("right")   -- caret at 1 (after "a")
+    h:press("delete")  -- remove "b" → "acde"
+    lt.assertEquals(value, "acde")
+    h:unmount()
+end
+
+-- Backspace in the middle removes the character to the left of the caret.
+function suite:test_backspace_in_middle()
+    local value = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    h:press("right")      -- caret at 1
+    h:press("right")      -- caret at 2 (after "b")
+    h:press("backspace")  -- remove "b" → "acde"
+    lt.assertEquals(value, "acde")
+    h:unmount()
+end
+
+-- Multiple key operations in sequence produce the correct final value.
+function suite:test_key_sequence_home_delete_end_backspace()
+    local value = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")     -- caret at 0
+    h:press("delete")   -- remove "a" → "bcde"
+    lt.assertEquals(value, "bcde")
+    h:press("end")      -- caret at 4 (end of "bcde")
+    h:press("backspace") -- remove "e" → "bcd"
+    lt.assertEquals(value, "bcd")
+    h:unmount()
+end
+
+-- =========================================================================
+-- IME input tests
+-- =========================================================================
+--
+-- IME-confirmed text arrives as UTF-8 bytes through the terminal.  The C
+-- parser (keys.parse) splits them into one `name="char"` event per codepoint.
+-- Two dispatch modes matter:
+--
+--   h:type(str)  – one codepoint per dispatch + re-render (matches real
+--                   keystroke-by-keystroke input)
+--   h:dispatch(bytes) – all codepoints in one batch, one re-render at end
+--                   (matches a single terminal read() that returns a buffer
+--                   full of characters — e.g. IME commit of multiple chars)
+--
+-- Bulk dispatch now works correctly: on_input eagerly updates ctxRef.chars
+-- and ctxRef.caret after each mutation, so intra-dispatch events see the
+-- accumulated state.
+
+-- Single CJK character via dispatch (one IME commit of one character).
+function suite:test_ime_single_cjk_via_dispatch()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("\228\184\173")  -- "中" as a single 3-byte event
+    lt.assertEquals(value, "\228\184\173")
+    h:unmount()
+end
+
+-- Multiple CJK characters via dispatch: all characters survive because
+-- on_input eagerly updates ctxRef.chars/caret after each mutation.
+function suite:test_ime_multi_cjk_via_dispatch()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("\228\184\173\230\150\135")  -- "中文" as two codepoints in one batch
+    lt.assertEquals(value, "\228\184\173\230\150\135")
+    h:unmount()
+end
+
+-- Same two CJK characters via h:type (one codepoint per dispatch + render):
+-- works correctly because each character gets its own render pass.
+function suite:test_ime_multi_cjk_via_type_works()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:type("\228\184\173\230\150\135")  -- "中文" — one char at a time
+    lt.assertEquals(value, "\228\184\173\230\150\135")
+    h:unmount()
+end
+
+-- Combining character sequence via h:type: each codepoint arrives as its
+-- own dispatch, but to_chars() re-clusters them into a single grapheme.
+-- After 'e' is inserted, the next dispatch inserts the combining mark;
+-- the combined character occupies one grapheme slot and one display column.
+function suite:test_ime_combining_mark_via_type()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- "e" + COMBINING ACUTE (U+0301) = "é"
+    h:type("e\204\129")
+    -- The combined "é" is one grapheme cluster; value should be the full
+    -- 3-byte sequence (1 byte 'e' + 2 bytes combining mark).
+    lt.assertEquals(value, "e\204\129")
+    lt.assertEquals(#to_chars(value), 1, "combining mark fuses with base into one cluster")
+    h:unmount()
+end
+
+-- Flag emoji (two Regional Indicator codepoints) via h:type: each RI
+-- codepoint arrives separately, but to_chars() pairs them into one
+-- grapheme cluster.
+function suite:test_ime_flag_emoji_via_type()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- 🇯🇵 = RI_J + RI_P, each 4 bytes
+    h:type("\240\159\135\175\240\159\135\181")
+    lt.assertEquals(value, "\240\159\135\175\240\159\135\181")
+    lt.assertEquals(#to_chars(value), 1, "two RI codepoints form one flag cluster")
+    h:unmount()
+end
+
+-- IME commit in the middle of existing text: move caret, then type a CJK
+-- character (simulating an IME commit at that position).
+function suite:test_ime_insert_cjk_in_middle()
+    local value = "ab"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    h:press("right")  -- caret at 1 (between "a" and "b")
+    h:type("\228\184\173")  -- insert "中" at caret → "a中b"
+    lt.assertEquals(value, "a\228\184\173b")
+    h:unmount()
+end
+
+-- IME commit at the beginning (home then type CJK).
+function suite:test_ime_insert_cjk_at_start()
+    local value = "ab"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")  -- caret at 0
+    h:type("\228\184\173")  -- insert "中" → "中ab"
+    lt.assertEquals(value, "\228\184\173ab")
+    h:unmount()
+end
+
+-- Single CJK character via dispatch correctly updates cursor position.
+function suite:test_ime_single_cjk_dispatch_cursor()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("\228\184\173")  -- "中"
+    local te = testing.find_text_with_cursor(h:tree())
+    -- "中" is width 2; caret at end → offset 2
+    lt.assertEquals(te._cursor_offset, 2)
+    h:unmount()
+end
+
+-- IME commit with mixing ASCII and CJK in sequence via h:type.
+function suite:test_ime_mixed_ascii_cjk_via_type()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:type("a\228\184\173b")  -- "a" + "中" + "b"
+    lt.assertEquals(value, "a\228\184\173b")
+    local te = testing.find_text_with_cursor(h:tree())
+    -- a(1) + 中(2) + b(1) = 4 display cols; caret at end = offset 4
+    lt.assertEquals(te._cursor_offset, 4)
+    h:unmount()
+end
+
+-- Multiple ASCII characters via dispatch (one batch, no re-render between).
+function suite:test_ime_multi_ascii_via_dispatch()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("abc")  -- 3 ASCII chars in one batch
+    lt.assertEquals(value, "abc")
+    h:unmount()
+end
+
+-- Bulk dispatch followed by a key press operates on the accumulated value.
+function suite:test_ime_bulk_dispatch_then_backspace()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("abc")   -- bulk: 3 chars
+    h:press("backspace") -- delete "c" → "ab"
+    lt.assertEquals(value, "ab")
+    h:unmount()
+end
+
+-- Mixed ASCII + CJK via dispatch (one batch).
+function suite:test_ime_mixed_ascii_cjk_via_dispatch()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- "a" + "中" + "b" in one dispatch batch
+    h:dispatch("a\228\184\173b")
+    lt.assertEquals(value, "a\228\184\173b")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 4)
     h:unmount()
 end

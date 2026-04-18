@@ -271,3 +271,49 @@ function suite:test_unknown_key_is_noop()
     lt.assertEquals(changes, 0)
     h:unmount()
 end
+
+-- Bulk dispatch: two "down" events in one dispatch must both take effect
+-- (highlight moves from 1→2→3, not 1→2→2).
+function suite:test_bulk_dispatch_two_downs()
+    local changes = {}
+    local function App()
+        return tui.Box {
+            width = 30, height = 3, flexDirection = "column",
+            tui.Select {
+                items    = { "a", "b", "c" },
+                onChange = function(item, idx) changes[#changes + 1] = idx end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 3 })
+    -- Two down-arrow CSI sequences in one dispatch.
+    h:dispatch("\27[B\27[B")
+    lt.assertEquals(#changes, 2, "both downs must fire onChange")
+    lt.assertEquals(changes[1], 2, "first down → index 2")
+    lt.assertEquals(changes[2], 3, "second down → index 3")
+    row_starts_with(h, 3, "❯ c")
+    h:unmount()
+end
+
+-- Bulk dispatch: home then down in one batch.
+function suite:test_bulk_dispatch_home_then_down()
+    local changes = {}
+    local function App()
+        return tui.Box {
+            width = 30, height = 3, flexDirection = "column",
+            tui.Select {
+                items        = { "a", "b", "c" },
+                initialIndex = 3,
+                onChange     = function(item, idx) changes[#changes + 1] = idx end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 3 })
+    -- Home (CSI 1~) then down in one dispatch.
+    h:dispatch("\27[1~\27[B")
+    lt.assertEquals(#changes, 2, "home and down both fire onChange")
+    lt.assertEquals(changes[1], 1, "home → index 1")
+    lt.assertEquals(changes[2], 2, "down from home → index 2")
+    row_starts_with(h, 2, "❯ b")
+    h:unmount()
+end
