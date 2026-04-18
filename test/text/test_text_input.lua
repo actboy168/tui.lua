@@ -1056,3 +1056,577 @@ function suite:test_ime_mixed_ascii_cjk_via_dispatch()
     lt.assertEquals(te._cursor_offset, 4)
     h:unmount()
 end
+
+-- =========================================================================
+-- IME composition state transition tests
+-- =========================================================================
+--
+-- The C layer (terminal.c) filters VK_PROCESSKEY during IME composition and
+-- only delivers the final committed text as ordinary char events. Therefore
+-- "state transitions" in this framework manifest as: how committed text
+-- interacts with existing content and cursor position.
+--
+-- Test dimensions:
+--   1. Consecutive IME commits (simulate CJK user typing char by char)
+--   2. Cursor operations immediately after IME commit (backspace/left/right)
+--   3. Scroll behavior when IME commit overflows a narrow window
+--   4. Second commit after a previous one (state persistence)
+--   5. Correct cursor offset after IME commit of wide characters
+
+-- Two consecutive IME commits: simulate CJK user typing "你好".
+function suite:test_ime_consecutive_commits()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("\228\189\160")  -- "你"
+    lt.assertEquals(value, "\228\189\160")
+    h:dispatch("\229\165\189")  -- "好"
+    lt.assertEquals(value, "\228\189\160\229\165\189")
+    local te = testing.find_text_with_cursor(h:tree())
+    -- "你好" width = 2 + 2 = 4; caret at end → offset 4
+    lt.assertEquals(te._cursor_offset, 4)
+    h:unmount()
+end
+
+-- Backspace immediately after IME commit deletes the just-committed character.
+function suite:test_ime_commit_then_backspace()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("\228\184\173")  -- "中"
+    lt.assertEquals(value, "\228\184\173")
+    h:press("backspace")
+    lt.assertEquals(value, "", "backspace after IME commit should clear value")
+    h:unmount()
+end
+
+-- After IME commit, press left to move caret, then type to insert.
+function suite:test_ime_commit_then_left_then_insert()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("\228\184\173\230\150\135")  -- "中文"
+    h:press("left")  -- caret moves past "文" to col 2 (after "中")
+    h:type("x")      -- insert "x" between "中" and "文" → "中x文"
+    lt.assertEquals(value, "\228\184\173x\230\150\135")
+    h:unmount()
+end
+
+-- IME commit of wide characters scrolls in a narrow window.
+function suite:test_ime_commit_in_narrow_window_scrolls()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                width = 5,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Type 3 CJK chars (6 display cols) into width=5 window
+    h:dispatch("\228\184\173\230\150\135\228\186\186")  -- "中文人"
+    lt.assertEquals(value, "\228\184\173\230\150\135\228\186\186")
+    local te = testing.find_text_with_cursor(h:tree())
+    -- Caret should be within the visible window (≤ width=5)
+    lt.assertEquals(te._cursor_offset <= 5, true,
+        "caret must stay within narrow window after IME commit overflow")
+    h:unmount()
+end
+
+-- Second IME commit after a previous one: cursor and value accumulate correctly.
+function suite:test_ime_two_phase_commit()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Phase 1: commit "你"
+    h:dispatch("\228\189\160")
+    lt.assertEquals(value, "\228\189\160")
+    local te1 = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te1._cursor_offset, 2, "after first commit caret at col 2")
+    -- Phase 2: commit "好" at end
+    h:dispatch("\229\165\189")
+    lt.assertEquals(value, "\228\189\160\229\165\189")
+    local te2 = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te2._cursor_offset, 4, "after second commit caret at col 4")
+    h:unmount()
+end
+
+-- IME commit in middle of existing text at non-trivial caret position.
+function suite:test_ime_commit_in_middle_with_wide_chars()
+    local value = "a\228\184\173b"  -- "a中b"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Move caret to position after "a" (caret index 1)
+    h:press("home")
+    h:press("right")  -- past "a"
+    -- Commit "好" at caret position 1 → "a好中b"
+    h:dispatch("\229\165\189")
+    lt.assertEquals(value, "a\229\165\189\228\184\173b")
+    -- Cursor offset: a(1) + 好(2) = 3; but caret index is now 2 (after "a","好")
+    -- Display: a(1) + 好(2) = offset 3
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 3)
+    h:unmount()
+end
+
+-- IME commit of a flag emoji (4-byte pair) in middle of text.
+-- Via dispatch the two RI codepoints arrive as separate char events,
+-- so TextInput stores them as two independent graphemes. Each RI has
+-- display width 1, so the caret offset after insertion is:
+--   x(1) + RI_1(1) + RI_2(1) + remaining = ...
+-- The exact offset depends on wcwidth; we verify cursor validity.
+function suite:test_ime_commit_flag_in_middle()
+    local value = "xy"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    h:press("right")  -- caret between "x" and "y"
+    h:dispatch("\240\159\135\175\240\159\135\181")  -- 🇯🇵 (two RI codepoints)
+    lt.assertEquals(value, "x\240\159\135\175\240\159\135\181y")
+    local te = testing.find_text_with_cursor(h:tree())
+    -- Caret must be valid (non-nil, non-negative) and within the
+    -- visible window. The exact offset depends on per-RI display width.
+    lt.assertEquals(te ~= nil, true, "cursor must exist after IME flag commit")
+    lt.assertEquals(te._cursor_offset >= 0, true,
+        "cursor offset must be non-negative after IME flag commit")
+    h:unmount()
+end
+
+-- IME commit followed by Enter should trigger onSubmit with correct value.
+function suite:test_ime_commit_then_submit()
+    local submitted = nil
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch("\228\184\173")  -- "中"
+    h:press("enter")
+    lt.assertEquals(submitted, "\228\184\173")
+    h:unmount()
+end
+
+-- IME commit replacing text after backspace: backspace removes last char,
+-- then IME commit inserts new char at same position.
+function suite:test_ime_after_backspace_replace()
+    local value = "abc"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("backspace")  -- "abc" → "ab"
+    lt.assertEquals(value, "ab")
+    h:dispatch("\228\184\173")  -- commit "中" → "ab中"
+    lt.assertEquals(value, "ab\228\184\173")
+    local te = testing.find_text_with_cursor(h:tree())
+    -- a(1) + b(1) + 中(2) = 4
+    lt.assertEquals(te._cursor_offset, 4)
+    h:unmount()
+end
+
+-- =========================================================================
+-- Cursor out-of-bounds boundary tests
+-- =========================================================================
+--
+-- When the external value shrinks, the caret may exceed the new chars length.
+-- TextInput uses useEffect to clamp the caret to #chars, but we must verify
+-- correctness in various edge cases.
+
+-- Value externally shrunk to empty string: caret clamped from end to 0.
+function suite:test_caret_clamped_to_zero_on_empty_value()
+    local v = "hello"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Caret starts at end of "hello" = col 5
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 5)
+    -- Shrink value to empty
+    v = ""
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0, "caret clamped to 0 when value becomes empty")
+    h:unmount()
+end
+
+-- Value externally shrunk to 1 character: caret clamped from far end to 1.
+function suite:test_caret_clamped_on_shrink_to_one_char()
+    local v = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Caret at end = col 5
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 5)
+    v = "a"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 1, "caret clamped to #chars after shrink to 1 char")
+    h:unmount()
+end
+
+-- Value externally shrunk with wide chars: offset after clamping uses display width.
+function suite:test_caret_clamped_on_shrink_with_wide_chars()
+    local v = "\228\184\173\230\150\135abc"  -- "中文abc"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Caret at end: 中(2)+文(2)+a(1)+b(1)+c(1) = 7
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 7)
+    v = "\228\184\173\230\150\135"  -- "中文"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 4,
+        "caret clamped to end of wide-char string (2+2=4)")
+    h:unmount()
+end
+
+-- Progressive shrink of value: caret clamped to new end each time.
+function suite:test_caret_clamped_on_progressive_shrink()
+    local v = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 5)
+    v = "abcd"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 4)
+    v = "ab"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2)
+    v = ""
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0, "caret reaches 0 after shrink to empty")
+    h:unmount()
+end
+
+-- Caret in middle position when value shrinks below caret: should clamp to #chars.
+function suite:test_caret_in_middle_clamped_when_value_shrinks_below()
+    local v = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Move caret to position 3 (between "c" and "d")
+    h:press("home")
+    h:press("right")
+    h:press("right")
+    h:press("right")  -- caret at index 3
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 3)
+    -- Shrink value to "ab" (2 chars); caret 3 > #chars 2 → clamp to 2
+    v = "ab"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2,
+        "caret in middle clamped when value shrinks below caret position")
+    h:unmount()
+end
+
+-- Select-all delete: set value to empty string to simulate select-all delete scenario.
+function suite:test_caret_after_select_all_delete()
+    local v = "hello world"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Caret at end
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 11)
+    -- Simulate select-all delete by externally setting value to ""
+    v = ""
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0, "caret at 0 after select-all delete")
+    -- Can type again after select-all delete
+    h:type("x")
+    lt.assertEquals(v, "x")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 1)
+    h:unmount()
+end
+
+-- After caret clamped from value shrink, typing a new char should insert correctly.
+function suite:test_type_after_caret_clamp_from_shrink()
+    local v = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Shrink value to "a"; caret clamps to 1
+    v = "a"
+    h:rerender()
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 1)
+    -- Type "x" at clamped position → "ax"
+    h:type("x")
+    lt.assertEquals(v, "ax")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2)
+    h:unmount()
+end
+
+-- Backspace on wide char: caret display offset retreats correctly.
+function suite:test_backspace_wide_char_caret_offset()
+    local value = "a\228\184\173b"  -- "a中b"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Initial caret at end: a(1)+中(2)+b(1) = offset 4
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 4)
+    -- Backspace removes "b": value = "a中", offset = a(1)+中(2) = 3
+    h:press("backspace")
+    lt.assertEquals(value, "a\228\184\173")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 3)
+    -- Backspace removes "中" (wide): value = "a", offset = 1
+    h:press("backspace")
+    lt.assertEquals(value, "a")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 1)
+    h:unmount()
+end
+
+-- Delete on wide char: caret display offset stays unchanged (caret does not move).
+function suite:test_delete_wide_char_caret_offset_unchanged()
+    local value = "\228\184\173\230\150\135b"  -- "中文b"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Move caret to after "中" (index 1), offset = 2
+    h:press("home")
+    h:press("right")  -- past "中"
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2)
+    -- Delete removes "文" (wide char ahead): value = "中b"
+    h:press("delete")
+    lt.assertEquals(value, "\228\184\173b")
+    te = testing.find_text_with_cursor(h:tree())
+    -- Caret still at index 1 (after "中"), display offset still 2
+    lt.assertEquals(te._cursor_offset, 2,
+        "delete of wide char ahead does not move caret offset")
+    h:unmount()
+end
+
+-- Value externally changed to a longer string: caret stays at previous position without going out of bounds.
+function suite:test_caret_stays_when_value_grows_externally()
+    local v = "ab"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Caret at end = offset 2
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2)
+    -- Value grows externally; caret stays at 2 (valid index within new value)
+    v = "abcdefgh"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2,
+        "caret stays at previous position when value grows externally")
+    h:unmount()
+end
+
+-- Value externally replaced with wide-char string: caret stays within valid range.
+function suite:test_caret_valid_after_external_wide_char_replacement()
+    local v = "abc"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    -- Caret at end of "abc" = offset 3, index 3
+    -- Replace with "中" (1 grapheme); caret 3 > #chars 1 → clamp to 1
+    v = "\228\184\173"
+    h:rerender()
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 2,
+        "caret clamped to end of single wide char")
+    h:unmount()
+end
+
+-- Caret at home position (0): value shrink should not affect caret.
+function suite:test_caret_at_home_unaffected_by_shrink()
+    local v = "abcde"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0)
+    v = "ab"
+    h:rerender()
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0,
+        "caret at home unaffected by value shrink")
+    h:unmount()
+end
+
+-- After caret clamping, absolute cursor position remains a valid integer coordinate.
+function suite:test_cursor_integer_after_caret_clamp()
+    local v = "abc"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = v,
+                onChange = function(new_v) v = new_v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    v = ""
+    h:rerender()
+    local col, row = h:cursor()
+    lt.assertEquals(col, 1, "cursor col is integer after clamp to empty")
+    lt.assertEquals(row, 1, "cursor row is integer after clamp to empty")
+    h:unmount()
+end

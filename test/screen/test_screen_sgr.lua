@@ -352,3 +352,10 @@ function suite:test_skin_tone_zwj_single_cluster_styled()
     lt.assertEquals(#ansi, 0,
         "skin-tone emoji cluster must be idempotent: " .. hex(ansi))
 end
+
+function suite:test_screen_size()
+    local s = screen.new(30, 10)
+    local w, h = screen.size(s)
+    lt.assertEquals(w, 30)
+    lt.assertEquals(h, 10)
+end

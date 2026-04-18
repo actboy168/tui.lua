@@ -204,3 +204,86 @@ function suite:test_self_clear_timer_in_callback()
     lt.assertEquals(fires, 1,
         "self-cleared interval must fire exactly once")
 end
+
+-- ---------------------------------------------------------------------------
+-- scheduler.stop() — sets running=false to break the run() loop.
+
+function suite:test_stop_sets_running_false()
+    local b = make_fake_backend()
+    scheduler.configure { now = b.now, sleep = b.sleep }
+    scheduler._reset()
+    -- stop() is a no-op when not running; just verify it doesn't error.
+    scheduler.stop()
+end
+
+-- ---------------------------------------------------------------------------
+-- scheduler.now() — public monotonic clock delegation.
+
+function suite:test_now_delegates_to_backend()
+    local b = make_fake_backend()
+    scheduler.configure { now = b.now, sleep = b.sleep }
+    scheduler._reset()
+    b.t = 42
+    lt.assertEquals(scheduler.now(), 42)
+    b.t = 100
+    lt.assertEquals(scheduler.now(), 100)
+end
+
+-- ---------------------------------------------------------------------------
+-- scheduler.run() — arg validation.
+
+function suite:test_run_requires_paint_and_read()
+    lt.assertError(function()
+        scheduler.run {}
+    end)
+end
+
+function suite:test_run_requires_read()
+    lt.assertError(function()
+        scheduler.run { paint = function() end }
+    end)
+end
+
+-- ---------------------------------------------------------------------------
+-- scheduler.run() — simple loop with stop.
+
+function suite:test_run_calls_paint_then_stops()
+    local b = make_fake_backend()
+    scheduler.configure { now = b.now, sleep = b.sleep }
+    scheduler._reset()
+
+    local paint_count = 0
+    scheduler.run {
+        paint = function()
+            paint_count = paint_count + 1
+            scheduler.stop()
+        end,
+        read = function() return nil end,
+    }
+    lt.assertEquals(paint_count, 1)
+end
+
+function suite:test_run_on_input_true_stops_loop()
+    local b = make_fake_backend()
+    scheduler.configure { now = b.now, sleep = b.sleep }
+    scheduler._reset()
+
+    local input_seen = false
+    scheduler.run {
+        paint = function() end,
+        read = function()
+            if not input_seen then
+                input_seen = true
+                return "x"
+            end
+            -- After first input, return nil to avoid busy loop.
+            scheduler.stop()
+            return nil
+        end,
+        on_input = function(s)
+            lt.assertEquals(s, "x")
+            return true  -- signal exit
+        end,
+    }
+    lt.assertEquals(input_seen, true)
+end

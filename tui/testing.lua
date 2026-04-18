@@ -556,7 +556,10 @@ end
 
 --- Strip trailing spaces from each line so snapshots are immune to
 --- git/editor whitespace trimming while still catching real content diffs.
+--- Also normalizes CRLF to LF so snapshots work across platforms regardless
+--- of git's core.autocrlf setting.
 local function trim_trailing(s)
+    s = s:gsub("\r\n", "\n")
     return (s:gsub("[ \t]+\n", "\n"):gsub("[ \t]+$", ""))
 end
 

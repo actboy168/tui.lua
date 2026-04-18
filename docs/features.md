@@ -47,6 +47,7 @@
 - `testing.find_by_kind(tree, kind)` — 查找首个指定类型节点
 - `testing.find_all_by_kind(tree, kind)` — 收集所有指定类型节点
 - `testing.text_content(tree)` — 收集所有 Text 节点文本
+- `luamake lua test.lua --coverage` — 测试覆盖率报告（ltest 内置，自动注册 tui.* 模块）
 
 ## Dev-mode
 
