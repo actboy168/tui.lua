@@ -37,15 +37,11 @@ _暂无_
 - Text 样式补齐：`italic` / `strikethrough` / `dimColor` / `wrap` 模式（`wrap` / `hard` / `truncate` / `truncate-start` / `truncate-middle` / `truncate-end`）
 - Text per-run inline style：`Text { "plain ", {text="red", color="red"} }`，wrap 沿 run 边界切片
 - Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text
-- Box 属性 passthrough 补齐：`minWidth` / `maxWidth` / `aspectRatio` / `gap` / `columnGap` / `rowGap` / `position` / `top/right/bottom/left` / `overflow` / `display`
-- Box 支持 `flexGrow` / `flexShrink` 独立 prop（当前 luayoga 只绑了 `flex` shorthand，`flexGrow=1` 静默失效；需要扩 `luayoga.c` 的 setter 表 + `tui/layout.lua` passthrough list）
 - `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索）
 - Yoga 属性预处理：apply_box_style 每节点遍历 38 个 passthrough key + Yoga 绑定再遍历一次，改为扁平数字数组按固定索引传入
-- 启用 Yoga `PointScaleFactor=1` 强制所有 layout 坐标 snap 到整数（TUI 天然是整格，浮点 rect 会导致 `\27[73.0;3.0H` 这种 CUP 被终端拒绝；当前 `find_cursor` 在 init.lua 里 `math.floor` 补救，根治应落在 layout 层）
 
 ### 开发者体验
 
-- **UI 最小尺寸查询**：用户目前无法知道当前 UI 在当前终端下是否"会被挤烂"，只能等渲染异形。考虑通过 Yoga 的 min-content size 暴露 `tui.intrinsicMinSize(root) -> {cols, rows}` 或 hook 形式 `tui.useMinSize()`，让 app 在 `size < min` 时降级为"terminal too small"提示。
 - **组件自动包装** —— 当前规则："调 hook 的函数必须显式包装为 `{ kind="component", fn=..., props=... }`"，写 example 时极易翻车（plain function 调用把 hook 挂到父 instance，条件渲染时触发 hook count mismatch）。两种方向取一：
   - A) reconciler 在 children 归一化时发现 function，自动包成 component element（对齐 React 直觉，但 helper function 误塞进 children 会被误认为组件）
   - B) 提供 `tui.component(fn)` 工厂助手到框架层（显式、可 grep、1 行 boilerplate）

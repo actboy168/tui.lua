@@ -189,3 +189,13 @@ function suite:test_large_terminal_renders_without_error()
     lt.assertEquals(txt:find("Enter: send", 1, true) ~= nil, true)
     h:unmount()
 end
+
+-- Small terminal: the app should show a "too small" fallback instead of
+-- rendering a garbled layout.
+function suite:test_small_terminal_shows_fallback()
+    local h = testing.render(App, { cols = 20, rows = 5 })
+    local txt = frame_text(h)
+    lt.assertEquals(txt:find("terminal too small", 1, true) ~= nil, true,
+                    "should show fallback when terminal is below minimum size")
+    h:unmount()
+end

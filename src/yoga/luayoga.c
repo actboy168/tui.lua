@@ -12,6 +12,8 @@
 #define Wrap 8
 #define Display 16
 #define PositionType 32
+#define Overflow 64
+#define BoxSizing 128
 
 #define ENUM(x, what) { YG##x##ToString(YG##x##what), (x) << 16 | (YG##x##what) },
 
@@ -72,7 +74,7 @@ lnodeGet(lua_State *L) {
 	};
 	int i;
 	for (i=0;i<4;i++) {
-		lua_pushnumber(L, r[i]);
+		lua_pushinteger(L, (int)r[i]);
 	}
 	return 4;
 }
@@ -264,17 +266,18 @@ setFourNumber(lua_State *L, YGNodeRef node, const struct set_edge_number *setter
 	}
 }
 
-static const char *
-getNumber(lua_State *L, const char *v, float *num) {
-	char* endptr = NULL;
-	*num = strtof(v, &endptr);
-	if (!is_whitespace(*endptr))
-		luaL_error(L, "Invalid number %s", v);
-	return endptr;
+static void
+lsetFlexGrow(lua_State *L, YGNodeRef node) {
+	YGNodeStyleSetFlexGrow(node, luaL_checknumber(L, -1));
 }
 
 static void
-setFlexBasis(lua_State *L, YGNodeRef node, const char *v) {
+lsetFlexShrink(lua_State *L, YGNodeRef node) {
+	YGNodeStyleSetFlexShrink(node, luaL_checknumber(L, -1));
+}
+
+static void
+lsetFlexBasis(lua_State *L, YGNodeRef node) {
 	static const struct set_number setter = {
 		YGNodeStyleSetFlexBasis,
 		YGNodeStyleSetFlexBasisPercent,
@@ -282,54 +285,7 @@ setFlexBasis(lua_State *L, YGNodeRef node, const char *v) {
 		YGNodeStyleSetFlexBasisMaxContent,
 		YGNodeStyleSetFlexBasisFitContent,
 	};
-	v = skip_whitespace(v);
-	setNumberString(L, node, v, &setter);
-}
-
-static void
-lsetFlex(lua_State *L, YGNodeRef node) {
-	if (lua_type(L, -1) == LUA_TNUMBER) {
-		float v = lua_tonumber(L, -1);
-		YGNodeStyleSetFlex(node, v);
-	} else {
-		const char * v = luaL_checkstring(L, -1);
-		char* endptr = NULL;
-		float number;
-		
-		switch (count_words(v)) {
-		case 1:
-			number = strtof(v, &endptr);
-			if (is_whitespace(*endptr)) {
-				YGNodeStyleSetFlex(node, number);
-			} else {
-				YGNodeStyleSetFlexGrow(node, 1);
-				YGNodeStyleSetFlexShrink(node, 1);
-				setFlexBasis(L, node, v);
-			}
-			break;
-		case 2:
-			v = getNumber(L, v, &number);
-			YGNodeStyleSetFlexGrow(node, number);
-			number = strtof(v, &endptr);
-			if (is_whitespace(*endptr)) {
-				YGNodeStyleSetFlexShrink(node, number);
-				YGNodeStyleSetFlexBasisPercent(node, 0);
-			} else {
-				YGNodeStyleSetFlexShrink(node, 1);
-				setFlexBasis(L, node, v);
-			}
-			break;
-		case 3:
-			v = getNumber(L, v, &number);
-			YGNodeStyleSetFlexGrow(node, number);
-			v = getNumber(L, v, &number);
-			YGNodeStyleSetFlexShrink(node, number);
-			setFlexBasis(L, node, v);
-			break;
-		default:
-			luaL_error(L, "Invalid flex %s", v);
-		}
-	}
+	setNumber(L, node, &setter);
 }
 
 static void
@@ -402,6 +358,35 @@ lsetBorder(lua_State *L, YGNodeRef node) {
 		NULL,
 	};
 	setFourNumber(L, node, &setter);
+}
+
+static void
+setBorderEdge(lua_State *L, YGNodeRef node, YGEdge edge) {
+	if (lua_type(L, -1) == LUA_TNUMBER) {
+		YGNodeStyleSetBorder(node, edge, lua_tonumber(L, -1));
+	} else {
+		luaL_error(L, "border edge expects a number");
+	}
+}
+
+static void lsetBorderTop(lua_State *L, YGNodeRef node)    { setBorderEdge(L, node, YGEdgeTop); }
+static void lsetBorderBottom(lua_State *L, YGNodeRef node) { setBorderEdge(L, node, YGEdgeBottom); }
+static void lsetBorderLeft(lua_State *L, YGNodeRef node)   { setBorderEdge(L, node, YGEdgeLeft); }
+static void lsetBorderRight(lua_State *L, YGNodeRef node)  { setBorderEdge(L, node, YGEdgeRight); }
+
+static void
+lsetAspectRatio(lua_State *L, YGNodeRef node) {
+	YGNodeStyleSetAspectRatio(node, luaL_checknumber(L, -1));
+}
+
+static void
+lsetOverflow(lua_State *L, YGNodeRef node) {
+	YGNodeStyleSetOverflow(node, getEnum(L, Overflow, "overflow"));
+}
+
+static void
+lsetBoxSizing(lua_State *L, YGNodeRef node) {
+	YGNodeStyleSetBoxSizing(node, getEnum(L, BoxSizing, "boxSizing"));
 }
 
 static void
@@ -545,6 +530,9 @@ lnodeSet(lua_State *L) {
 			setfunc func = (setfunc)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 			func(L, node);
+		} else {
+			lua_pop(L, 1);
+			luaL_error(L, "Unknown yoga prop %s", luaL_tolstring(L, -1, NULL));
 		}
 		lua_settop(L, top);
 	}
@@ -594,12 +582,21 @@ luaopen_yoga(lua_State *L) {
 		{ "paddingX", lsetPaddingX },
 		{ "paddingY", lsetPaddingY },
 		{ "border", lsetBorder },
+		{ "borderTop", lsetBorderTop },
+		{ "borderBottom", lsetBorderBottom },
+		{ "borderLeft", lsetBorderLeft },
+		{ "borderRight", lsetBorderRight },
 		{ "gap", lsetGap },
 		{ "rowGap", lsetRowGap },
 		{ "columnGap", lsetColumnGap },
 		{ "flexWrap", lsetFlexWrap },
+		{ "flexGrow", lsetFlexGrow },
+		{ "flexShrink", lsetFlexShrink },
+		{ "flexBasis", lsetFlexBasis },
+		{ "aspectRatio", lsetAspectRatio },
+		{ "overflow", lsetOverflow },
+		{ "boxSizing", lsetBoxSizing },
 		{ "display", lsetDisplay },
-		{ "flex", lsetFlex },
 		{ "position", lsetPosition },
 		{ "top", lsetTop },
 		{ "bottom", lsetBottom },
@@ -633,6 +630,7 @@ luaopen_yoga(lua_State *L) {
 		ENUM(Align, SpaceBetween)
 		ENUM(Align, SpaceAround)
 		ENUM(Align, SpaceEvenly)
+		ENUM(Align, Stretch)
 		ENUM(Wrap, NoWrap)
 		ENUM(Wrap, Wrap)
 		ENUM(Wrap, WrapReverse)
@@ -642,6 +640,11 @@ luaopen_yoga(lua_State *L) {
 		ENUM(PositionType, Static)
 		ENUM(PositionType, Relative)
 		ENUM(PositionType, Absolute)
+		ENUM(Overflow, Visible)
+		ENUM(Overflow, Hidden)
+		ENUM(Overflow, Scroll)
+		ENUM(BoxSizing, BorderBox)
+		ENUM(BoxSizing, ContentBox)
 	};
 	n = sizeof(estr) / sizeof(estr[0]);
 	lua_createtable(L, n, 0);
@@ -658,5 +661,11 @@ luaopen_yoga(lua_State *L) {
 	}
 	lua_pushcclosure(L, lnodeSet, 2);
 	lua_setfield(L, -2, "node_set");
+
+	// Set PointScaleFactor=1 on default config so all Yoga nodes produce
+	// integer coordinates (TUI is cell-based; fractional positions like
+	// \27[73.0;3.0H are rejected by terminals).
+	YGConfigSetPointScaleFactor(YGConfigGetDefault(), 1.0f);
+
 	return 1;
 }

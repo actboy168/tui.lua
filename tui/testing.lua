@@ -253,16 +253,16 @@ function Harness:_paint()
     -- Emit the cursor-placement sequence through the fake terminal so the
     -- CSI integrity check (see `fake.write` in M.render) sees the exact
     -- bytes a real tui.render loop would send. This mirrors the post-paint
-    -- block in tui/init.lua (including `math.floor` — Yoga sometimes
-    -- returns float rect origins; flooring matches real-terminal paint).
+    -- block in tui/init.lua (Yoga uses PointScaleFactor=1 and the binding
+    -- layer casts to int, so rect values are always whole numbers).
     local ccol, crow
     do
         local function walk(e)
             if not e then return nil end
             if e.kind == "text" and e._cursor_offset ~= nil then
                 local r = e.rect or { x = 0, y = 0 }
-                return math.floor(r.x + e._cursor_offset + 1),
-                       math.floor(r.y + 1)
+                return r.x + e._cursor_offset + 1,
+                       r.y + 1
             end
             for _, c in ipairs(e.children or {}) do
                 local col, row = walk(c)

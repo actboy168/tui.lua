@@ -94,7 +94,7 @@ local Header = component(function(props)
         tui.Text { key = "mlabel", color = theme.muted, "model:" },
         tui.Box  { key = "gap2",  width = 1 },
         tui.Text { key = "mval",  color = theme.fg, props.model },
-        tui.Box  { key = "grow",  flex = 1 },
+        tui.Box  { key = "grow",  flexGrow = 1 },
         tui.Text { key = "up",    color = theme.muted, ("uptime %ds"):format(secs) },
         tui.Box  { key = "gap3",  width = 2 },
         tui.Text { key = "hint",  color = theme.muted, "?:help  q:quit" },
@@ -201,6 +201,19 @@ local function App()
     local streaming, setStreaming = tui.useState(nil)   -- { target, shown } or nil
     local armed,     setArmed     = tui.useState(false)
 
+    -- Minimum size the full UI needs (header + input + footer).
+    local minCols <const>, minRows <const> = 40, 8
+    if size.cols < minCols or size.rows < minRows then
+        return tui.Box {
+            flexDirection = "column",
+            alignItems = "center",
+            justifyContent = "center",
+            width = size.cols, height = size.rows,
+            tui.Text { color = "red", bold = true, "terminal too small" },
+            tui.Text { color = "gray", ("need %dx%d, got %dx%d"):format(minCols, minRows, size.cols, size.rows) },
+        }
+    end
+
     -- Stable ref so hotkeys outside the boundary can call its reset().
     local boundaryRef = tui.useRef { reset = function() end }
 
@@ -305,7 +318,7 @@ local function App()
             tui.Box {
                 key = "msgs",
                 flexDirection = "column",
-                flex = 1,
+                flexGrow = 1,
                 paddingX = 1,
                 tui.ErrorBoundary {
                     fallback = function(err, reset)

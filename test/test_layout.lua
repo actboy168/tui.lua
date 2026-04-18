@@ -11,10 +11,9 @@ local testing = require "tui.testing"
 local suite = lt.test "layout"
 
 -- ---------------------------------------------------------------------------
--- 1. flex-grow distribution: two siblings with `flex = 1` and `flex = 2`
+-- 1. flexGrow distribution: two siblings with `flexGrow = 1` and `flexGrow = 2`
 --    on a 30-col row both grow to fill free space, with the second getting
---    roughly twice as much as the first. Only `flex` is supported by the
---    underlying luayoga binding (see tui/layout.lua passthrough list).
+--    roughly twice as much as the first.
 
 function suite:test_flex_grow_ratio_1_to_2()
     local function App()
@@ -22,11 +21,11 @@ function suite:test_flex_grow_ratio_1_to_2()
             width = 30, height = 1,
             flexDirection = "row",
             tui.Box {
-                flex = 1,
+                flexGrow = 1,
                 tui.Text { "A" },
             },
             tui.Box {
-                flex = 2,
+                flexGrow = 2,
                 tui.Text { "B" },
             },
         }
@@ -36,7 +35,7 @@ function suite:test_flex_grow_ratio_1_to_2()
     lt.assertEquals(row:sub(1, 1), "A", "first child starts at col 1")
     local b_col = row:find("B", 1, true)
     lt.assertEquals(b_col ~= nil, true, "expected 'B' somewhere in the row")
-    -- With 30 cols and 1:2 flex ratio, B should appear roughly 1/3 across.
+    -- With 30 cols and 1:2 flexGrow ratio, B should appear roughly 1/3 across.
     lt.assertEquals(b_col > 5 and b_col < 15, true,
         "B should land roughly 1/3 across the row, got col " .. tostring(b_col))
     h:unmount()

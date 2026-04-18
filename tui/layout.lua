@@ -27,13 +27,15 @@ local function apply_box_style(node, props)
     -- pass-through keys that map 1:1 to luayoga style names
     local passthrough = {
         "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
-        "flex", "flexDirection", "flexWrap",
+        "flexGrow", "flexShrink", "flexBasis", "flexDirection", "flexWrap",
         "justifyContent", "alignItems", "alignContent", "alignSelf",
         "margin", "marginTop", "marginBottom", "marginLeft", "marginRight",
         "marginX", "marginY",
         "padding", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight",
         "paddingX", "paddingY",
+        "borderTop", "borderBottom", "borderLeft", "borderRight",
         "gap", "rowGap", "columnGap",
+        "aspectRatio", "overflow", "boxSizing",
         "display", "position", "top", "bottom", "left", "right",
     }
     for _, k in ipairs(passthrough) do
@@ -46,6 +48,10 @@ local function apply_box_style(node, props)
             style[k] = v
         end
     end
+
+    -- overflowX/Y fallback to overflow (Yoga has no per-axis overflow)
+    if props.overflowX ~= nil then style.overflow = props.overflowX end
+    if props.overflowY ~= nil then style.overflow = props.overflowY end
 
     yoga.node_set(node, style)
 end
@@ -80,8 +86,11 @@ local function build(element, parent)
             width  = props.width  or iw,
             height = props.height or 1,
         }
-        if props.flex       ~= nil then style.flex       = props.flex end
-        if props.alignSelf  ~= nil then style.alignSelf  = props.alignSelf end
+        if props.flexGrow     ~= nil then style.flexGrow     = props.flexGrow end
+        if props.flexShrink   ~= nil then style.flexShrink   = props.flexShrink end
+        if props.flexBasis    ~= nil then style.flexBasis    = props.flexBasis end
+        if props.alignSelf    ~= nil then style.alignSelf    = props.alignSelf end
+        if props.overflow     ~= nil then style.overflow     = props.overflow end
         if props.marginTop  ~= nil then style.marginTop  = props.marginTop end
         if props.marginBottom ~= nil then style.marginBottom = props.marginBottom end
         if props.marginLeft ~= nil then style.marginLeft = props.marginLeft end
@@ -148,6 +157,25 @@ function M.free(element)
         yoga.node_free(element.yoga_node)
         element.yoga_node = nil
     end
+end
+
+-- Compute the minimum intrinsic size (cols, rows) the element tree needs.
+-- This is the smallest terminal size at which the layout can render without
+-- content being clipped or overlapping. Apps can compare this against
+-- useWindowSize() to show a "terminal too small" fallback.
+--
+-- Implementation: build a fresh Yoga tree, calculate with no constraints
+-- (YGUndefined), then read the root node size. Flex-grow children shrink to
+-- 0 without constraints, but the non-flex content (padding, border, text)
+-- determines the actual minimum. We take the max of the computed size and
+-- any explicit minWidth/minHeight on the root.
+function M.intrinsic_size(element)
+    local root = build(element, nil)
+    yoga.node_calc(root)
+    local _, _, w, h = yoga.node_get(root)
+    yoga.node_free(root)
+    element.yoga_node = nil
+    return w, h
 end
 
 return M

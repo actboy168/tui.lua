@@ -104,6 +104,9 @@ M.setInterval = scheduler.setInterval
 M.setTimeout  = scheduler.setTimeout
 M.clearTimer  = scheduler.clearTimer
 
+-- Layout utilities
+M.intrinsicSize = layout.intrinsic_size
+
 -- ANSI helpers
 local <const> CLEAR    = "\27[2J\27[H"
 local <const> HIDE_CUR = "\27[?25l"
@@ -111,17 +114,15 @@ local <const> SHOW_CUR = "\27[?25h"
 
 -- Walk the laid-out tree and record the first Text node that requested a
 -- cursor. 1-based (col, row) returned for direct use in `\27[<row>;<col>H`.
--- Returned coords are ALWAYS integers: Yoga layout can produce float rect
--- origins, and `\27[73.0;3.0H` is rejected by most terminals as a parse
--- error (bug observed 2026-04-18 — cursor stuck wherever the previous SGR
--- diff left it). Round defensively here rather than trusting layout.
+-- Returned coords are integers: Yoga uses PointScaleFactor=1 and the binding
+-- layer casts to int, so rect values are always whole numbers.
 local function find_cursor(tree)
     local function walk(e)
         if not e then return nil end
         if e.kind == "text" and e._cursor_offset ~= nil then
             local r = e.rect or { x = 0, y = 0 }
-            local col = math.floor(r.x + e._cursor_offset + 1)
-            local row = math.floor(r.y + 1)
+            local col = r.x + e._cursor_offset + 1
+            local row = r.y + 1
             return col, row
         end
         if e.children then
