@@ -217,11 +217,78 @@ function M.useEffect(fn, deps)
 end
 
 -- ---------------------------------------------------------------------------
--- Internal: useLatestRef(value)
+-- useMemo(fn, deps) -> value
+-- Caches the result of `fn()` across renders; recomputes when `deps` shallow-
+-- changes. Passing `deps == nil` recomputes every render (React-aligned).
+function M.useMemo(fn, deps)
+    local inst, i = require_instance()
+    local slot = inst.hooks[i]
+    if not slot then
+        slot = { kind = "memo", value = nil, deps = nil }
+        inst.hooks[i] = slot
+        slot.value = fn()
+        slot.deps  = deps
+        return slot.value
+    end
+    if deps == nil or not deps_equal(slot.deps, deps) then
+        slot.value = fn()
+        slot.deps  = deps
+    end
+    return slot.value
+end
+
+-- ---------------------------------------------------------------------------
+-- useCallback(fn, deps) -> stable_fn
+-- Returns a wrapper whose reference identity stays stable across renders
+-- (so it can be passed as a dep or used in keyed child lists without
+-- re-registering subscriptions). The wrapper forwards every call to the
+-- current `fn`, which is updated when `deps` shallow-changes; with
+-- `deps == nil` the wrapper always forwards to the freshest fn and deps
+-- count as "changed" every render — matching React.
+--
+-- Note: this is NOT equivalent to useMemo(function() return fn end, deps),
+-- because that would return a fresh `fn` each time deps change. Here the
+-- outer wrapper object is created once and never replaced.
+function M.useCallback(fn, deps)
+    local inst, i = require_instance()
+    local slot = inst.hooks[i]
+    if not slot then
+        slot = { kind = "callback", fn = fn, wrapper = nil, deps = deps }
+        slot.wrapper = function(...) return slot.fn(...) end
+        inst.hooks[i] = slot
+        return slot.wrapper
+    end
+    if deps == nil or not deps_equal(slot.deps, deps) then
+        slot.fn   = fn
+        slot.deps = deps
+    end
+    return slot.wrapper
+end
+
+-- ---------------------------------------------------------------------------
+-- useRef(initial) -> ref (table with `.current` = initial)
+-- Creates a mutable container whose identity is stable across renders.
+-- Mutating `.current` does NOT trigger a rerender (use useState for that).
+-- `initial` is evaluated eagerly on first mount only; subsequent renders
+-- ignore the argument and return the existing ref untouched (distinct from
+-- useLatestRef, which refreshes .current every render).
+function M.useRef(initial)
+    local inst, i = require_instance()
+    local slot = inst.hooks[i]
+    if not slot then
+        slot = { kind = "ref_user", ref = { current = initial } }
+        inst.hooks[i] = slot
+    end
+    return slot.ref
+end
+
+-- ---------------------------------------------------------------------------
+-- useLatestRef(value) -> ref
 -- Stores `value` in a hook slot and returns a stable ref table whose .current
--- is updated every render. Used by useInterval/useTimeout/useInput to avoid
--- stale closures without forcing the user to specify deps.
-local function useLatestRef(value)
+-- is updated every render. Used by useInterval/useTimeout/useInput/useFocus
+-- internally, and exposed publicly for user code that needs stale-closure
+-- avoidance without the deps ergonomics of useCallback.
+function M.useLatestRef(value)
     local inst, i = require_instance()
     local slot = inst.hooks[i]
     if not slot then
@@ -231,6 +298,86 @@ local function useLatestRef(value)
         slot.ref.current = value
     end
     return slot.ref
+end
+local useLatestRef = M.useLatestRef
+
+-- ---------------------------------------------------------------------------
+-- useReducer(reducer, initial[, init]) -> (state, dispatch)
+-- Redux-style state management.
+--   reducer(state, action) -> next_state
+--   initial                : the initial state (or seed for `init`, if given)
+--   init(initial)          : optional lazy initializer, called once on mount
+--
+-- `dispatch` identity is stable across renders. When `reducer` returns the
+-- same state value (rawequal) the hook performs no work — no rerender is
+-- scheduled, matching React's bail-out semantics.
+function M.useReducer(reducer, initial, init)
+    local inst, i = require_instance()
+    local slot = inst.hooks[i]
+    if not slot then
+        local state0
+        if init ~= nil then state0 = init(initial) else state0 = initial end
+        slot = { kind = "reducer", state = state0 }
+        inst.hooks[i] = slot
+        slot.dispatch = function(action)
+            local next_state = reducer(slot.state, action)
+            if rawequal(next_state, slot.state) then return end
+            slot.state = next_state
+            inst.dirty = true
+            scheduler.requestRedraw()
+        end
+    end
+    return slot.state, slot.dispatch
+end
+
+-- ---------------------------------------------------------------------------
+-- useContext(ctx) -> value
+-- Consumes the nearest ancestor <ctx.Provider value=...> in the element
+-- tree. Returns `ctx._default` if no Provider is in scope. The hook slot
+-- exists only to keep the cursor position stable across renders — the
+-- actual lookup goes through the reconciler's context_stack so Provider
+-- changes reflect immediately.
+function M.useContext(ctx)
+    local inst, i = require_instance()
+    local slot = inst.hooks[i]
+    if not slot then
+        slot = { kind = "context" }
+        inst.hooks[i] = slot
+    end
+    if type(ctx) ~= "table" or ctx._kind ~= "tui_context" then
+        error("useContext: expected a context created by tui.createContext", 2)
+    end
+    return ensure_reconciler()._lookup_context(ctx)
+end
+
+-- ---------------------------------------------------------------------------
+-- createContext(default_value) -> context object
+-- The returned table carries a `Provider` factory: `MyCtx.Provider { value=X, ... }`
+-- produces an element of kind "provider" that the reconciler splices into
+-- the render tree without creating a component instance.
+local element_mod   -- lazy require to avoid init cycle with element.lua
+function M.createContext(default_value)
+    element_mod = element_mod or require "tui.element"
+    local ctx = {
+        _kind    = "tui_context",
+        _default = default_value,
+    }
+    ctx.Provider = function(t)
+        t = t or {}
+        local props, children = element_mod._split_props_children(t)
+        local key = props.key; props.key = nil
+        if props.value == nil then
+            error("Context.Provider: missing required `value` prop", 2)
+        end
+        return {
+            kind     = "provider",
+            context  = ctx,
+            value    = props.value,
+            key      = key,
+            children = children,
+        }
+    end
+    return ctx
 end
 
 -- ---------------------------------------------------------------------------

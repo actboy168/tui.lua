@@ -32,6 +32,10 @@ local function split_props_children(t)
     return props, children
 end
 
+-- Exposed for hooks.createContext: Provider factory needs the same split
+-- logic so `MyCtx.Provider { value=X, child1, child2 }` works like Box.
+M._split_props_children = split_props_children
+
 -- Pull the reserved `key` prop off to the element's top level. `key` is used
 -- by the reconciler for identity-preserving diff among sibling children; it
 -- is NOT a Yoga layout prop, so we strip it from `props` to avoid leaking

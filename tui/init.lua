@@ -64,6 +64,13 @@ M.TextInput      = text_input.TextInput
 -- Hooks
 M.useState       = hooks.useState
 M.useEffect      = hooks.useEffect
+M.useMemo        = hooks.useMemo
+M.useCallback    = hooks.useCallback
+M.useRef         = hooks.useRef
+M.useLatestRef   = hooks.useLatestRef
+M.useReducer     = hooks.useReducer
+M.useContext     = hooks.useContext
+M.createContext  = hooks.createContext
 M.useInterval    = hooks.useInterval
 M.useTimeout     = hooks.useTimeout
 M.useInput       = hooks.useInput

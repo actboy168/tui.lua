@@ -5,6 +5,11 @@
 
 ---
 
+## Stage 16 — Hook 家族补齐
+- `useMemo(fn, deps)` / `useCallback(fn, deps)` / `useRef(initial)` / `useReducer(reducer, initial[, init])`
+- `createContext(default)` + `ctx.Provider { value=..., children }` + `useContext(ctx)`（支持嵌套就近优先、兄弟 context 独立）
+- `useLatestRef` 公开化（原为 `hooks.lua` 内部工具）
+
 ## Stage 15 — 技术债清理
 - `test/test_*.lua` glob 自动注册（新测试不再改两处）
 - `screen.c` 业务解析下沉到 Lua：C 侧 `put` / `put_border` / `draw_line` 接收预打包的 `fg_bg` / `attrs`
@@ -13,7 +18,6 @@
 - `screen.put` cluster 长度 256B 校验；slab 路径完善（支持 >8 字节字符）
 - `TextInput` 数组操作提 `array_remove` / `array_insert` util
 - hooks / reconciler 统一 `_ensure_deps()`，去掉散落 lazy require
-- 测试 191 → 224：Static 清空/大列表、TextInput 边界、resize 极端尺寸、mount-unmount 泄漏基线、组件身份重挂载、flex 分配、深嵌套布局、scheduler 边界、SGR 宽→窄、skin-tone ZWJ 等
 
 ## Stage 14 — ErrorBoundary 完善
 - `[tui:fatal]` 前缀协议（`reconciler.fatal` / `is_fatal`），编程 bug 不再被 boundary 吞掉

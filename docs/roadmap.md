@@ -18,8 +18,6 @@ _暂无_
 
 ### Hook 家族补齐（Ink 对齐 P1）
 
-- `useMemo(fn, deps)` / `useCallback(fn, deps)` / `useRef(initial)` / `useReducer(reducer, initial)` / `useContext` + `createContext`
-- `useLatestRef` 提升为公开 API（目前是 hooks.lua 内部工具）
 - `useAnimation({ interval, isActive }) -> { frame, time, delta, reset }`
 - `useStdout()` / `useStderr()`
 
@@ -57,7 +55,6 @@ _暂无_
 
 ### 测试覆盖
 
-- `useMemo` / `useCallback` / `useRef` / `useReducer` / `useContext` / `useLatestRef` 的单元测试（随 hook 实现一起加）
 - TextInput IME composition 状态转换、cursor 越界（当前只覆盖 commit 后的正常输入路径）
 
 ### 架构改进（非阻塞，穿插推进）

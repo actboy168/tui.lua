@@ -48,6 +48,7 @@ local function make_state()
         seen           = {},   -- path -> true (for this render pass)
         app            = nil,  -- app handle injected by tui.render
         boundary_stack = {},   -- ancestor ErrorBoundary instances, innermost last
+        context_stack  = {},   -- ancestor Provider entries { context=ctx, value=v }
     }
 end
 
@@ -68,6 +69,10 @@ end
 
 local function is_error_boundary(e)
     return type(e) == "table" and e.kind == "error_boundary"
+end
+
+local function is_provider(e)
+    return type(e) == "table" and e.kind == "provider"
 end
 
 -- Compute the path for the i-th child under `parent_path`. If the child has
@@ -209,6 +214,30 @@ local function expand(state, element, path)
         return render_boundary_fallback(state, element, path, err)
     end
 
+    if is_provider(element) then
+        -- Provider is a structural wrapper: no instance, no hooks, no effects.
+        -- Push its (context, value) onto state.context_stack for the duration
+        -- of the children expand. Wrap in pcall to guarantee stack balance on
+        -- any exception; rethrow afterwards so an ancestor ErrorBoundary still
+        -- sees the error and can render its fallback.
+        local ctx_stack = state.context_stack
+        ctx_stack[#ctx_stack + 1] = { context = element.context, value = element.value }
+        local out = { kind = "box", props = {}, children = {} }
+        local ok, err = pcall(function()
+            local seen_keys = {}
+            for i, c in ipairs(element.children or {}) do
+                local cp = child_path_for(path, i, c, seen_keys)
+                local expanded = expand(state, c, cp)
+                if expanded ~= nil then
+                    out.children[#out.children + 1] = expanded
+                end
+            end
+        end)
+        ctx_stack[#ctx_stack] = nil
+        if not ok then error(err, 0) end
+        return out
+    end
+
     if is_host_element(element) then
         -- Recurse into children.
         local out = { kind = element.kind, props = element.props, children = {} }
@@ -256,6 +285,23 @@ end
 -- same closure that fallback(err, reset) would see, even before the
 -- boundary has tripped.
 M._get_boundary_reset = get_boundary_reset
+
+-- The state actively being walked by expand() right now, or nil outside a
+-- render pass. hooks.useContext reads this via M._lookup_context to resolve
+-- the nearest ancestor Provider.
+M._current_state = nil
+
+function M._lookup_context(ctx)
+    local state = M._current_state
+    if not state then
+        error("useContext: called outside of a render pass", 3)
+    end
+    local stack = state.context_stack
+    for i = #stack, 1, -1 do
+        if stack[i].context == ctx then return stack[i].value end
+    end
+    return ctx._default
+end
 
 -- Render a boundary's fallback subtree. Always protected by its own pcall
 -- so fallback crashes don't escape the boundary (the whole point). Fatal
@@ -329,8 +375,15 @@ function M.render(state, root, app_handle)
     state.seen = {}
     state.app  = app_handle
     state._effects_to_flush = {}
+    state.context_stack = state.context_stack or {}
 
-    local tree = expand(state, root, "")
+    -- Publish the state so hooks.useContext can look up Providers. Wrap in
+    -- pcall so _current_state is always cleared even if expand() throws.
+    M._current_state = state
+    local ok, tree_or_err = pcall(expand, state, root, "")
+    M._current_state = nil
+    if not ok then error(tree_or_err, 0) end
+    local tree = tree_or_err
 
     -- Unmount stale instances.
     for path, inst in pairs(state.instances) do
