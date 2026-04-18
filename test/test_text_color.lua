@@ -1,6 +1,7 @@
--- test/test_text_color.lua — integration tests for Stage 10 color / style
--- support at the Text element API level. Exercises tui.sgr + renderer +
+-- test/test_text_color.lua — integration tests for color / style support
+-- at the Text element API level. Exercises tui.sgr + renderer +
 -- tui_core.screen working together through the standard harness.
+-- Assertions track Stage 11 incremental SGR diff output (no leading "0;").
 
 local lt      = require "ltest"
 local testing = require "tui.testing"
@@ -23,7 +24,7 @@ function suite:test_red_text_sgr_in_ansi_only()
     end
     local h = testing.render(App)
     local ansi = h:ansi()
-    lt.assertEquals(ansi:find(ESC .. "[0;31m", 1, true) ~= nil, true,
+    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
         "expected red SGR in ANSI: " .. (ansi:gsub(ESC, "<ESC>")))
     -- rows() must be plain "hi" + padding.
     local rows = h:rows()
@@ -45,7 +46,7 @@ function suite:test_box_color_does_not_inherit()
     local h = testing.render(App)
     local ansi = h:ansi()
     -- Text has no color, so no green SGR should appear for the text run.
-    lt.assertEquals(ansi:find(ESC .. "[0;32m", 1, true), nil,
+    lt.assertEquals(ansi:find(ESC .. "[32m", 1, true), nil,
         "Text should not inherit Box color: " .. (ansi:gsub(ESC, "<ESC>")))
     h:unmount()
 end
@@ -77,8 +78,8 @@ function suite:test_border_color()
     end
     local h = testing.render(App)
     local ansi = h:ansi()
-    -- Cyan (6) normal fg → ESC[0;36m.
-    lt.assertEquals(ansi:find(ESC .. "[0;36m", 1, true) ~= nil, true,
+    -- Cyan (6) normal fg → ESC[36m (incremental form, no leading 0;).
+    lt.assertEquals(ansi:find(ESC .. "[36m", 1, true) ~= nil, true,
         "expected cyan SGR on border: " .. (ansi:gsub(ESC, "<ESC>")))
     h:unmount()
 end
@@ -94,8 +95,8 @@ function suite:test_bold_with_background()
     end
     local h = testing.render(App)
     local ansi = h:ansi()
-    -- bold + bg=4 → ESC[0;1;44m
-    lt.assertEquals(ansi:find(ESC .. "[0;1;44m", 1, true) ~= nil, true,
+    -- bold + bg=4 → ESC[1;44m (incremental form).
+    lt.assertEquals(ansi:find(ESC .. "[1;44m", 1, true) ~= nil, true,
         "expected bold + blue bg SGR: " .. (ansi:gsub(ESC, "<ESC>")))
     h:unmount()
 end

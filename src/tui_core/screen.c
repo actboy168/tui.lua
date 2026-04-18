@@ -582,47 +582,117 @@ sgr_color_param(uint8_t nibble, int base) {
     return base + 60 + (int)(nibble - 8);
 }
 
-/* Emit a SGR sequence so the terminal state transitions to (next_fg_bg,
- * next_attrs). We always emit a full spec starting from reset: that keeps
- * the writer stateless at the cost of ~8 bytes per transition, which is
- * cheap next to a CUP. If the target is the default (nothing set), we
- * emit just "\x1b[0m".
+/* Emit a SGR sequence to transition terminal state from (cur_fg_bg,cur_attrs)
+ * to (next_fg_bg, next_attrs). Stage 11: pure incremental diff — only the
+ * attributes that actually changed produce parameters, using the standard
+ * "off" codes (22/24/27/39/49) for turning properties off.
  *
  * `cur_fg_bg / cur_attrs` are updated in place. If the state already
- * matches, nothing is emitted. */
+ * matches, nothing is emitted (zero-byte early return).
+ *
+ * Bold/dim share the 22m off-code: per ECMA-48, "22" clears BOTH bold and
+ * dim intensity. If we need to turn one off while keeping the other on,
+ * we emit ";22" first (clearing both) and then re-emit the survivor. */
 static void
 emit_sgr(bytes_t *b,
          uint8_t *cur_fg_bg, uint8_t *cur_attrs,
          uint8_t next_fg_bg, uint8_t next_attrs) {
     if (*cur_fg_bg == next_fg_bg && *cur_attrs == next_attrs) return;
 
-    int is_default = (next_attrs == ATTR_DEFAULT);
-    if (is_default) {
-        bytes_append_cstr(b, "\x1b[0m");
-        *cur_fg_bg = 0;
-        *cur_attrs = ATTR_DEFAULT;
-        return;
+    char tmp[96];
+    int n = 0;
+    int first = 1;
+    n += snprintf(tmp + n, sizeof(tmp) - n, "\x1b[");
+
+    /* Helper macro: emit ";p" or "p" depending on whether we've already
+     * written a parameter. Assumes `first`, `tmp`, `n`, `sizeof(tmp)` in scope. */
+    #define EMIT_PARAM(lit) do {                                           \
+        if (first) {                                                        \
+            n += snprintf(tmp + n, sizeof(tmp) - n, "%s", lit);             \
+            first = 0;                                                      \
+        } else {                                                            \
+            n += snprintf(tmp + n, sizeof(tmp) - n, ";%s", lit);             \
+        }                                                                   \
+    } while (0)
+    #define EMIT_PARAM_NUM(num) do {                                       \
+        if (first) {                                                        \
+            n += snprintf(tmp + n, sizeof(tmp) - n, "%d", (num));           \
+            first = 0;                                                      \
+        } else {                                                            \
+            n += snprintf(tmp + n, sizeof(tmp) - n, ";%d", (num));           \
+        }                                                                   \
+    } while (0)
+
+    /* --- bold / dim (share 22m for turn-off) --- */
+    uint8_t cur_bd = *cur_attrs & (ATTR_BOLD | ATTR_DIM);
+    uint8_t nxt_bd = next_attrs & (ATTR_BOLD | ATTR_DIM);
+    if (cur_bd != nxt_bd) {
+        uint8_t turned_off = cur_bd & ~nxt_bd;
+        if (turned_off) {
+            /* 22m clears both bold and dim, then re-add survivors. */
+            EMIT_PARAM("22");
+            if (nxt_bd & ATTR_BOLD) EMIT_PARAM("1");
+            if (nxt_bd & ATTR_DIM)  EMIT_PARAM("2");
+        } else {
+            /* Only additions — turn on the new ones. */
+            uint8_t turned_on = nxt_bd & ~cur_bd;
+            if (turned_on & ATTR_BOLD) EMIT_PARAM("1");
+            if (turned_on & ATTR_DIM)  EMIT_PARAM("2");
+        }
     }
 
-    /* Build "\x1b[0;<p1>;<p2>;...m" — always lead with 0 to reset any
-     * previous attributes, then add all currently-set parameters. */
-    char tmp[64];
-    int n = 0;
-    n += snprintf(tmp + n, sizeof(tmp) - n, "\x1b[0");
-    if (next_attrs & ATTR_BOLD)      n += snprintf(tmp + n, sizeof(tmp) - n, ";1");
-    if (next_attrs & ATTR_DIM)       n += snprintf(tmp + n, sizeof(tmp) - n, ";2");
-    if (next_attrs & ATTR_UNDERLINE) n += snprintf(tmp + n, sizeof(tmp) - n, ";4");
-    if (next_attrs & ATTR_INVERSE)   n += snprintf(tmp + n, sizeof(tmp) - n, ";7");
-    if (!(next_attrs & ATTR_FG_DEFAULT)) {
-        uint8_t fg = (uint8_t)((next_fg_bg >> 4) & 0x0F);
-        n += snprintf(tmp + n, sizeof(tmp) - n, ";%d", sgr_color_param(fg, 30));
+    /* --- underline --- */
+    if ((*cur_attrs ^ next_attrs) & ATTR_UNDERLINE) {
+        if (next_attrs & ATTR_UNDERLINE) EMIT_PARAM("4");
+        else                             EMIT_PARAM("24");
     }
-    if (!(next_attrs & ATTR_BG_DEFAULT)) {
-        uint8_t bg = (uint8_t)(next_fg_bg & 0x0F);
-        n += snprintf(tmp + n, sizeof(tmp) - n, ";%d", sgr_color_param(bg, 40));
+
+    /* --- inverse --- */
+    if ((*cur_attrs ^ next_attrs) & ATTR_INVERSE) {
+        if (next_attrs & ATTR_INVERSE) EMIT_PARAM("7");
+        else                           EMIT_PARAM("27");
     }
-    n += snprintf(tmp + n, sizeof(tmp) - n, "m");
-    bytes_append(b, tmp, (size_t)n);
+
+    /* --- fg --- */
+    {
+        uint8_t cur_def = *cur_attrs & ATTR_FG_DEFAULT;
+        uint8_t nxt_def = next_attrs & ATTR_FG_DEFAULT;
+        uint8_t cur_fg  = (uint8_t)((*cur_fg_bg >> 4) & 0x0F);
+        uint8_t nxt_fg  = (uint8_t)((next_fg_bg >> 4) & 0x0F);
+        if (cur_def != nxt_def) {
+            if (nxt_def) EMIT_PARAM("39");
+            else         EMIT_PARAM_NUM(sgr_color_param(nxt_fg, 30));
+        } else if (!nxt_def && cur_fg != nxt_fg) {
+            EMIT_PARAM_NUM(sgr_color_param(nxt_fg, 30));
+        }
+    }
+
+    /* --- bg --- */
+    {
+        uint8_t cur_def = *cur_attrs & ATTR_BG_DEFAULT;
+        uint8_t nxt_def = next_attrs & ATTR_BG_DEFAULT;
+        uint8_t cur_bg  = (uint8_t)(*cur_fg_bg & 0x0F);
+        uint8_t nxt_bg  = (uint8_t)(next_fg_bg & 0x0F);
+        if (cur_def != nxt_def) {
+            if (nxt_def) EMIT_PARAM("49");
+            else         EMIT_PARAM_NUM(sgr_color_param(nxt_bg, 40));
+        } else if (!nxt_def && cur_bg != nxt_bg) {
+            EMIT_PARAM_NUM(sgr_color_param(nxt_bg, 40));
+        }
+    }
+
+    #undef EMIT_PARAM
+    #undef EMIT_PARAM_NUM
+
+    /* If nothing actually differed (shouldn't happen given guard above, but
+     * defensively): drop the bare "\x1b[" without emitting a final 'm'. */
+    if (first) {
+        /* No params written — don't emit a bare "ESC[m" (which means ESC[0m
+         * in most terminals, a surprise reset). */
+    } else {
+        n += snprintf(tmp + n, sizeof(tmp) - n, "m");
+        bytes_append(b, tmp, (size_t)n);
+    }
 
     *cur_fg_bg = next_fg_bg;
     *cur_attrs = next_attrs;
@@ -651,7 +721,9 @@ ldiff(lua_State *L) {
     uint8_t cur_attrs = ATTR_DEFAULT;
 
     if (!s->prev_valid) {
-        /* first-frame / invalidated: clear-screen + full redraw */
+        /* first-frame / invalidated: clear-screen + full redraw.
+         * The trailing ESC[0m is a hard SGR baseline so (cur_fg_bg,
+         * cur_attrs) = (0, ATTR_DEFAULT) is trustworthy going forward. */
         bytes_append_cstr(&out, "\x1b[H\x1b[2J\x1b[0m");
         for (int y = 0; y < s->h; y++) {
             bytes_append_cup(&out, y, 0);
@@ -663,8 +735,10 @@ ldiff(lua_State *L) {
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(&out, p, n);
             }
-            /* row end: reset so next row starts from default. */
-            reset_sgr(&out, &cur_fg_bg, &cur_attrs);
+            /* No row-end reset: SGR state carries across CUP per ECMA-48,
+             * and the next row's first changed cell will emit the exact
+             * delta. Trailing spaces on a full-redraw row inherit whatever
+             * style the last cell set — which is what the user intended. */
         }
     } else {
         /* Per-row segment-merge. Scan each row left-to-right tracking a
@@ -676,7 +750,6 @@ ldiff(lua_State *L) {
         for (int y = 0; y < s->h; y++) {
             int run_start = -1;      /* x of first changed cell in current run */
             int last_change = -1;    /* x of last changed cell emitted so far */
-            int row_dirty = 0;       /* any emit on this row? */
 
             /* helper lambda substitute: flush current run if pending. */
             for (int x = 0; x < s->w; x++) {
@@ -699,7 +772,6 @@ ldiff(lua_State *L) {
                     bytes_append(&out, p, n);
                     run_start = x;
                     last_change = x;
-                    row_dirty = 1;
                     /* skip over wide-char tail so we don't double-emit */
                     if (cn->width == 2) x++;  /* outer loop will ++ again; */
                 } else {
@@ -741,9 +813,9 @@ ldiff(lua_State *L) {
                 }
             }
 
-            /* row end: reset SGR so the next row's CUP + unchanged cells
-             * never inherit color from this one. */
-            if (row_dirty) reset_sgr(&out, &cur_fg_bg, &cur_attrs);
+            /* No row-end reset: SGR state carries across rows, and the
+             * next row's changed cells will emit deltas against the
+             * current state via emit_sgr. */
         }
     }
 

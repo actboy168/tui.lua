@@ -1,6 +1,8 @@
--- test/test_screen_sgr.lua — unit tests for Stage 10 SGR / color support.
+-- test/test_screen_sgr.lua — unit tests for Stage 11 incremental SGR diff.
 -- These talk to the C module directly (via tui.screen + tui_core.screen)
--- to verify the byte-level ANSI output.
+-- to verify the byte-level ANSI output. After Stage 11 the writer emits
+-- only the deltas between the current and next styles (no leading "0;"
+-- reset on every transition).
 
 local lt       = require "ltest"
 local screen   = require "tui.screen"
@@ -22,17 +24,16 @@ function suite:test_single_cell_colored_first_frame()
     screen.clear(s)
     tui_core.screen.put(s, 0, 0, "X", 1, { fg = 1 })  -- red
     local ansi = screen.diff(s)
-    -- Must contain the SGR "ESC[0;31m" somewhere (leading reset + red fg).
-    lt.assertEquals(ansi:find(ESC .. "[0;31m", 1, true) ~= nil, true,
+    -- Incremental diff: ESC[31m (delta from default), not ESC[0;31m.
+    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
         "expected red SGR in: " .. hex(ansi))
-    -- X must appear after the SGR, line must end with ESC[0m reset.
-    lt.assertEquals(ansi:find("X" .. ESC .. "[0m", 1, true) ~= nil
-                    or ansi:find("X ", 1, true) ~= nil
-                    or ansi:find("X", 1, true) ~= nil, true,
+    -- Trailing spaces on first frame now inherit red style, so the row
+    -- ends with ESC[39m (fg reset delta) before the diff's safety ESC[0m.
+    lt.assertEquals(ansi:find("X", 1, true) ~= nil, true,
         "expected X in output: " .. hex(ansi))
-    -- Must contain at least one trailing reset so later rows stay uncolored.
+    -- Diff-end safety net: trailing ESC[0m must still appear.
     lt.assertEquals(ansi:find(ESC .. "[0m", 1, true) ~= nil, true,
-        "expected final ESC[0m reset: " .. hex(ansi))
+        "expected final ESC[0m safety reset: " .. hex(ansi))
 end
 
 -- ---------------------------------------------------------------------------
@@ -47,8 +48,8 @@ function suite:test_draw_line_colored_bold()
     screen.clear(s)
     tui_core.screen.draw_line(s, 0, 0, "hi", 10, { fg = 2, bold = true })
     local ansi = screen.diff(s)
-    -- Expect SGR "ESC[0;1;32m" (bold + green fg) before "hi".
-    lt.assertEquals(ansi:find(ESC .. "[0;1;32m", 1, true) ~= nil, true,
+    -- Incremental delta from (default, no attrs): ESC[1;32m.
+    lt.assertEquals(ansi:find(ESC .. "[1;32m", 1, true) ~= nil, true,
         "expected bold+green SGR in: " .. hex(ansi))
     lt.assertEquals(ansi:find("hi", 1, true) ~= nil, true,
         "expected 'hi' in: " .. hex(ansi))
@@ -71,11 +72,11 @@ function suite:test_same_style_merge()
         tui_core.screen.put(s, x, 0, "h", 1, red)
     end
     local ansi = screen.diff(s)
-    -- Count occurrences of ESC[0;31m — should be exactly 1.
+    -- Count occurrences of ESC[31m (incremental form) — should be exactly 1.
     local count = 0
     local i = 1
     while true do
-        local p = ansi:find(ESC .. "[0;31m", i, true)
+        local p = ansi:find(ESC .. "[31m", i, true)
         if not p then break end
         count = count + 1
         i = p + 1
@@ -96,13 +97,13 @@ function suite:test_style_change_mid_run()
     tui_core.screen.put(s, 0, 0, "H", 1, { fg = 1 })  -- red
     tui_core.screen.put(s, 1, 0, "i", 1, { fg = 2 })  -- green
     local ansi = screen.diff(s)
-    lt.assertEquals(ansi:find(ESC .. "[0;31m", 1, true) ~= nil, true,
+    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
         "expected red SGR: " .. hex(ansi))
-    lt.assertEquals(ansi:find(ESC .. "[0;32m", 1, true) ~= nil, true,
+    lt.assertEquals(ansi:find(ESC .. "[32m", 1, true) ~= nil, true,
         "expected green SGR: " .. hex(ansi))
     -- red must appear before green
-    local rp = ansi:find(ESC .. "[0;31m", 1, true)
-    local gp = ansi:find(ESC .. "[0;32m", 1, true)
+    local rp = ansi:find(ESC .. "[31m", 1, true)
+    local gp = ansi:find(ESC .. "[32m", 1, true)
     lt.assertEquals(rp < gp, true, "red must precede green: " .. hex(ansi))
 end
 
@@ -117,7 +118,7 @@ function suite:test_background_color()
     screen.clear(s)
     tui_core.screen.put(s, 0, 0, "X", 1, { bg = 4 })  -- blue bg
     local ansi = screen.diff(s)
-    lt.assertEquals(ansi:find(ESC .. "[0;44m", 1, true) ~= nil, true,
+    lt.assertEquals(ansi:find(ESC .. "[44m", 1, true) ~= nil, true,
         "expected blue-bg SGR: " .. hex(ansi))
 end
 
@@ -132,7 +133,7 @@ function suite:test_bright_color()
     screen.clear(s)
     tui_core.screen.put(s, 0, 0, "X", 1, { fg = 9 })  -- brightRed = 91
     local ansi = screen.diff(s)
-    lt.assertEquals(ansi:find(ESC .. "[0;91m", 1, true) ~= nil, true,
+    lt.assertEquals(ansi:find(ESC .. "[91m", 1, true) ~= nil, true,
         "expected brightRed SGR 91m: " .. hex(ansi))
 end
 
@@ -145,25 +146,30 @@ function suite:test_default_reset_between_frames()
     tui_core.screen.put(s, 0, 0, "X", 1, { fg = 1 })  -- red
     screen.diff(s)
 
-    -- Frame 2: overwrite with neutral char. diff must reset before "Y".
+    -- Frame 2: overwrite with neutral char. The diff-end safety reset at
+    -- the tail of frame 1 put the tracker back to default, so frame 2's
+    -- default-style "Y" needs zero SGR prefix — yet crucially must NOT
+    -- carry any red code over.
     screen.clear(s)
     tui_core.screen.put(s, 0, 0, "Y", 1)  -- default
     local ansi = screen.diff(s)
-    -- The cell went from red+"X" to default+"Y"; cell_eq differs → emit.
-    -- cur_fg_bg tracker starts at default so first emit_sgr call for
-    -- cell with default style is a no-op. That means "Y" appears immediately
-    -- after the CUP with no SGR. We still care: there must NOT be any
-    -- leftover red code in the output.
-    lt.assertEquals(ansi:find(ESC .. "[0;31m", 1, true), nil,
-        "unexpected red SGR carried over: " .. hex(ansi))
     lt.assertEquals(ansi:find("Y", 1, true) ~= nil, true,
         "expected 'Y' in output: " .. hex(ansi))
+    -- No stray red SGR re-emitted.
+    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true), nil,
+        "unexpected red SGR re-emitted: " .. hex(ansi))
+    -- And no "0;31m" leftover either (Stage 10 regression guard).
+    lt.assertEquals(ansi:find(ESC .. "[0;31m", 1, true), nil,
+        "unexpected full-form red SGR: " .. hex(ansi))
 end
 
 -- ---------------------------------------------------------------------------
 -- Case 8: line boundary reset — two rows different colors.
 
-function suite:test_line_boundary_reset()
+function suite:test_line_boundary_sgr_inheritance()
+    -- Stage 11: SGR state is explicitly NOT reset at row boundaries.
+    -- The second row's first colored cell must emit the delta (ESC[32m)
+    -- since the tracker still remembers red from row 1.
     local s = screen.new(4, 2)
     screen.clear(s)
     screen.diff(s)
@@ -172,23 +178,17 @@ function suite:test_line_boundary_reset()
     tui_core.screen.put(s, 0, 0, "R", 1, { fg = 1 })  -- row 0: red
     tui_core.screen.put(s, 0, 1, "G", 1, { fg = 2 })  -- row 1: green
     local ansi = screen.diff(s)
-    -- A reset must occur between the two rows so green doesn't inherit red.
-    -- Find CUP to row 2: ESC[2;1H
     local cup2 = ansi:find(ESC .. "[2;1H", 1, true)
     lt.assertEquals(cup2 ~= nil, true,
         "expected CUP to row 2: " .. hex(ansi))
-    -- Slice up to cup2 and ensure the last ESC[0m sits before it.
+    -- Prefix (through the row-2 CUP) must NOT contain an ESC[0m. Stage 11
+    -- carries SGR state across row boundaries instead of resetting.
     local prefix = ansi:sub(1, cup2)
-    local last_reset = nil
-    local i = 1
-    while true do
-        local p = prefix:find(ESC .. "[0m", i, true)
-        if not p then break end
-        last_reset = p
-        i = p + 1
-    end
-    lt.assertEquals(last_reset ~= nil, true,
-        "expected ESC[0m before row 2 CUP: " .. hex(ansi))
+    lt.assertEquals(prefix:find(ESC .. "[0m", 1, true), nil,
+        "row boundary must not emit ESC[0m (Stage 11): " .. hex(ansi))
+    -- And the switch red→green must land as an ESC[32m delta.
+    lt.assertEquals(ansi:find(ESC .. "[32m", cup2, true) ~= nil, true,
+        "expected green delta after row-2 CUP: " .. hex(ansi))
 end
 
 -- ---------------------------------------------------------------------------
@@ -213,9 +213,9 @@ function suite:test_bridge_gap_preserves_style()
     local ansi = screen.diff(s)
     -- Expect the bridge cell to reassert red before emitting "b", and
     -- green to reassert before "C".
-    lt.assertEquals(ansi:find(ESC .. "[0;32m", 1, true) ~= nil, true,
+    lt.assertEquals(ansi:find(ESC .. "[32m", 1, true) ~= nil, true,
         "expected green SGR somewhere: " .. hex(ansi))
-    lt.assertEquals(ansi:find(ESC .. "[0;31m", 1, true) ~= nil, true,
+    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
         "expected red SGR for bridge cell: " .. hex(ansi))
 end
 
@@ -255,15 +255,28 @@ end
 -- Case 12: attr-only change (bold off → on with same fg).
 
 function suite:test_bold_attr_change()
-    local s = screen.new(4, 1)
+    -- To observe incremental delta (bold-only toggle on unchanged fg) we
+    -- need a single frame that transitions from (red) to (red+bold) to
+    -- (red) \u2014 same frame so the tracker isn't reset between cells.
+    local s = screen.new(3, 1)
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "H", 1, { fg = 1 })
     screen.diff(s)
 
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "H", 1, { fg = 1, bold = true })
+    tui_core.screen.put(s, 0, 0, "A", 1, { fg = 1 })              -- red
+    tui_core.screen.put(s, 1, 0, "B", 1, { fg = 1, bold = true }) -- red+bold
+    tui_core.screen.put(s, 2, 0, "C", 1, { fg = 1 })              -- red again
     local ansi = screen.diff(s)
-    -- New SGR must include the bold parameter.
-    lt.assertEquals(ansi:find(ESC .. "[0;1;31m", 1, true) ~= nil, true,
-        "expected bold+red SGR: " .. hex(ansi))
+
+    -- First SGR: entering red from default \u2192 "ESC[31m".
+    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
+        "expected initial red delta ESC[31m: " .. hex(ansi))
+    -- Second SGR: only bold flips on (fg unchanged) \u2192 "ESC[1m", NOT "ESC[1;31m".
+    lt.assertEquals(ansi:find(ESC .. "[1m", 1, true) ~= nil, true,
+        "expected bold-only delta ESC[1m: " .. hex(ansi))
+    lt.assertEquals(ansi:find(ESC .. "[1;31m", 1, true), nil,
+        "should not re-emit fg when only bold toggled on: " .. hex(ansi))
+    -- Third SGR: bold flips off (22m) \u2192 must appear.
+    lt.assertEquals(ansi:find(ESC .. "[22m", 1, true) ~= nil, true,
+        "expected ESC[22m to clear bold: " .. hex(ansi))
 end

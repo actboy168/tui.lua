@@ -103,6 +103,15 @@
 - `test/test_text_color.lua` 5 用例（harness 层）：Text 红 ansi 有 SGR 但 rows 纯文本 / Box color 不向 Text 继承 / 未知 color 抛错 / border 染色 / bold+bg 组合
 - 全测 145/145 通过（128 老 + 17 新）
 
+### Stage 11 — SGR 增量 diff
+- 把 Stage 10 的 stateless full-form（`ESC[0;p1;p2;...m` 每次 leading 0 重置）升级为纯增量：仅 emit 变化的属性位
+- `emit_sgr` 重写：按位 XOR 找变化；bold/dim 共享 SGR `22m` 的陷阱按"先 22m 清、再补存活位"处理；underline/inverse 用 4/24 与 7/27 独立开关；fg 变 default 用 `39m`，bg 变 default 用 `49m`，换色用 30-37/40-47/90-97/100-107；状态相同零字节 early return；若所有位都等于当前（仅 cur!=next 但差量为空）不 emit 裸 `ESC[m`
+- 行末 reset 移除：`ldiff` 两分支删掉 `row_dirty` 跟踪和尾 `reset_sgr`，SGR 状态按 ECMA-48 自然跨 CUP 继承；下一行/下一帧首个改动 cell 走 emit_sgr 算 delta
+- 首帧 `ESC[H\x1b[2J\x1b[0m` 保留（硬 SGR 基线让 cur_fg_bg=0 / cur_attrs=ATTR_DEFAULT 可信）；diff 末尾 `reset_sgr` 安全网保留（每帧结束 tracker 回 default，防 post-diff 用户 stdout 串色）
+- `test/test_screen_sgr.lua`：断言从 `ESC[0;p...m` 改成增量形式 `ESC[p...m`；case 8 从"行末 reset"改写为"SGR 跨行继承"（断言 row-2 CUP 前不含 `ESC[0m`）；case 12 bold-only 切换重构为同帧内三 cell 验证真·增量（`ESC[31m` → `ESC[1m`（仅补 bold） → `ESC[22m`（仅清 bold））
+- `test/test_text_color.lua` 4 处断言同步改增量形式
+- 全测 145/145 通过；chat_mock 离屏 smoke 肉眼确认字节数下降（如 `[bot] I'm thi_` 区段从 `ESC[0;2;36m...ESC[0m` 变成 `ESC[2;36m...ESC[22;39m`）
+
 ---
 
 ## 正在进行
@@ -113,13 +122,10 @@ _暂无_
 
 ## 未完成 · 按类别
 
-### 技术路线未对齐（需回补到 C 层）
+### Grapheme cluster（C 层 wcwidth 的第二半）
 
-技术路线规定 C 层拥有 5 项职责（Terminal I/O / wcwidth + grapheme / Yoga 布局 / Render 后端 / Key parser），**第 4 项"渲染后端"** 已由 Stage 9 兑现；**第 2 项"wcwidth + grapheme"** 只做了字符宽度一半：
-
-**grapheme cluster 处理**
-- `src/tui_core/wcwidth.c` 当前只覆盖码点级 East Asian Width + emoji 宽度，grapheme cluster 边界（ZWJ emoji sequence / combining mark / regional indicator 国旗）尚未实现
-- 影响：emoji 序列如 👨‍👩‍👧 被按 3 个独立 emoji 算宽、光标在组合字符中间停留、CJK 前后方向键按字符跳而非按 grapheme
+- `src/tui_core/wcwidth.c` 当前只覆盖码点级 East Asian Width + emoji 宽度；grapheme cluster 边界（ZWJ emoji sequence / combining mark / regional indicator 国旗）未实现
+- 影响：emoji 序列如 👨‍👩‍👧 按 3 个宽度计、光标停留在组合字符中间、方向键按码点而非 grapheme 跳
 
 ### 功能增强
 
@@ -152,7 +158,6 @@ _暂无_
 - truecolor / 256 色扩展：cell_t 扩到 16 字节 or 引入独立 style pool，给 `fg / bg` 加 16/24 bit 值
 - Text per-run inline style：`Text { "plain ", {text="red", color="red"} }` 形式，wrap 需沿 run 边界切片
 - Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text（当前每个 Text 独立）
-- SGR diff 增量模式：用 `ESC[22m / 24m / 27m / 39m / 49m` 按需切换某一维属性，减少每次 `ESC[0;...` 重发的带宽
 
 ### 开发者体验
 
