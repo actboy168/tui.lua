@@ -217,3 +217,97 @@ function suite:test_flag_is_single_cluster()
     lt.assertEquals(value, "")
     h:unmount()
 end
+
+-- Stage 15: 1000 sequential character insertions grow the value correctly.
+-- Uses h:type (re-renders between keystrokes) which matches real keyboard
+-- input. A single bundled dispatch is a different case (stale caret state
+-- across intra-dispatch events) and is not what TextInput is designed for.
+function suite:test_large_sequential_typing()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 1000, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 1000, rows = 1 })
+    local payload = string.rep("a", 1000)
+    h:type(payload)
+    lt.assertEquals(#value, 1000)
+    lt.assertEquals(value:sub(1, 5), "aaaaa")
+    lt.assertEquals(value:sub(-5), "aaaaa")
+    h:unmount()
+end
+
+-- Stage 15: backspace on empty value is a no-op (no error, onChange not fired).
+function suite:test_backspace_on_empty_noop()
+    local value = ""
+    local fired = 0
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v; fired = fired + 1 end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("backspace")
+    h:press("backspace")
+    lt.assertEquals(value, "")
+    lt.assertEquals(fired, 0, "onChange must not fire on empty backspace")
+    h:unmount()
+end
+
+-- Stage 15: left-arrow across a wide-char grapheme boundary moves one cluster,
+-- not one code point — caret column decreases by the full cluster width.
+function suite:test_left_arrow_over_wide_char_moves_one_cluster()
+    local value = "a\228\184\173b"  -- "a中b": cols 1, 2(wide), 1
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local te = testing.find_text_with_cursor(h:tree())
+    -- Initial caret at end: col = 1 + 2 + 1 = 4.
+    lt.assertEquals(te._cursor_offset, 4)
+    h:press("left")  -- past "b" → col 3
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 3)
+    h:press("left")  -- past "中" (wide) → col 1
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 1)
+    h:press("left")  -- past "a" → col 0
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0)
+    h:unmount()
+end
+
+-- Stage 15: delete key at caret removes the cluster to the right (not just
+-- a single code point).
+function suite:test_delete_removes_cluster_forward()
+    local value = "e\204\129x"  -- "é" + "x"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")         -- caret to 0
+    h:press("delete")       -- remove the "é" cluster
+    lt.assertEquals(value, "x")
+    h:unmount()
+end

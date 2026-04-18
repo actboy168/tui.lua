@@ -102,3 +102,99 @@ function suite:test_timer_apis_require_backend()
     local id = scheduler.setTimeout(function() end, 0)
     lt.assertEquals(type(id), "number")
 end
+
+-- Helper: fire all due timers at or before t. Intervals reschedule themselves.
+local function drain(b, timers)
+    local fired
+    repeat
+        fired = false
+        for tid, tm in pairs(timers) do
+            if tm.fire_at <= b.t then
+                if tm.interval then
+                    tm.fire_at = b.t + tm.interval
+                else
+                    timers[tid] = nil
+                end
+                tm.fn()
+                fired = true
+            end
+        end
+    until not fired
+end
+
+-- Stage 15: setTimeout(0) alongside setInterval(10) — the 0-delay fires
+-- immediately (at t=0), the interval fires at 10, 20, 30, ...
+function suite:test_timeout_zero_and_interval_10_order()
+    local b = make_fake_backend()
+    scheduler.configure { now = b.now, sleep = b.sleep }
+    scheduler._reset()
+
+    local log = {}
+    scheduler.setTimeout(function() log[#log + 1] = "t0" end, 0)
+    scheduler.setInterval(function() log[#log + 1] = "int" end, 10)
+
+    local timers = scheduler._timers()
+    -- At t=0: the timeout fires. Interval is due at 10, not yet.
+    b.t = 0
+    drain(b, timers)
+    lt.assertEquals(log, { "t0" })
+    -- Drive the loop forward incrementally so each interval tick fires once.
+    b.t = 10
+    drain(b, timers)
+    lt.assertEquals(log, { "t0", "int" })
+    b.t = 20
+    drain(b, timers)
+    lt.assertEquals(log, { "t0", "int", "int" })
+end
+
+-- Stage 15: a timer callback that schedules another setTimeout — the inner
+-- timer's fire_at is computed against the callback's observed current time,
+-- and a subsequent drain picks it up.
+function suite:test_chained_set_timeout_in_callback()
+    local b = make_fake_backend()
+    scheduler.configure { now = b.now, sleep = b.sleep }
+    scheduler._reset()
+
+    local log = {}
+    scheduler.setTimeout(function()
+        log[#log + 1] = "outer"
+        scheduler.setTimeout(function()
+            log[#log + 1] = "inner"
+        end, 5)
+    end, 10)
+
+    local timers = scheduler._timers()
+    b.t = 10
+    drain(b, timers)
+    -- Outer fired; inner scheduled at t=10+5=15, not yet due.
+    lt.assertEquals(log, { "outer" })
+    b.t = 14
+    drain(b, timers)
+    lt.assertEquals(log, { "outer" })  -- still not due
+    b.t = 15
+    drain(b, timers)
+    lt.assertEquals(log, { "outer", "inner" })
+end
+
+-- Stage 15: a timer that clears itself from within its own callback does not
+-- crash (and does not re-fire on the next drain).
+function suite:test_self_clear_timer_in_callback()
+    local b = make_fake_backend()
+    scheduler.configure { now = b.now, sleep = b.sleep }
+    scheduler._reset()
+
+    local fires = 0
+    local my_id
+    my_id = scheduler.setInterval(function()
+        fires = fires + 1
+        scheduler.clearTimer(my_id)
+    end, 10)
+
+    local timers = scheduler._timers()
+    b.t = 10
+    drain(b, timers)
+    b.t = 100
+    drain(b, timers)
+    lt.assertEquals(fires, 1,
+        "self-cleared interval must fire exactly once")
+end

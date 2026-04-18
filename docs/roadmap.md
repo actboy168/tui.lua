@@ -1,80 +1,10 @@
 # tui.lua 路线图
 
 本文件是 tui.lua 的主路线图，由用户与助手共同维护。**新增/调整规划时先改这里**，
-实施完毕再回来打勾。当前待办的细项由会话内任务列表（TaskCreate）辅助跟踪，不在
-此处重复罗列。
+实施完毕再把条目挪到 [changelog.md](changelog.md)。当前会话的细项由 TaskCreate 辅助
+跟踪，不在此处重复罗列。
 
----
-
-## 已完成
-
-### Stage 1 — 骨架：静态渲染
-- luamake 构建接入 `yoga` 和 `tui_core` C 模块
-- `tui.Box` / `tui.Text` / `tui.render` 可跑 hello 示例
-
-### Stage 2 — 状态与重绘
-- `scheduler` / `reconciler` / `screen` 三件套
-- `useState` / `useEffect` / `useInterval` / `useTimeout` / `useApp`
-
-### Stage 3 — 键盘输入
-- C 层按键解析（CSI / SS3 / UTF-8 / 修饰符）
-- `tui/input.lua` 订阅总线 + `useInput` hook
-- `useEffect` 任意依赖数组 + 浅比较
-
-### Stage 4 — 文本与内置组件
-- C 层 wcwidth（Unicode 15.1 EastAsianWidth + emoji）
-- 软包装 + 两遍 Yoga 布局
-- 内置 `Static` / `TextInput`（含 IME 跟随）
-- `useWindowSize` + chat_mock 示例
-
-### Stage 5A — 离屏测试 harness
-- `tui/testing.lua`：render / type / press / frame / advance / resize / unmount / tree / ansi 等
-- 现有测试迁移到 harness + `test_chat_flow` 端到端用例
-
-### Stage 5B — 快照测试
-- `Harness:match_snapshot(name)` + `__snapshots__/` 目录
-- 带 context 的逐行 diff，`TUI_UPDATE_SNAPSHOTS=1` 覆写
-
-### Stage 6 — 焦点管理（Ink 兼容）
-- `useFocus` / `useFocusManager`，Tab / Shift-Tab 切换
-- `TextInput` 走 useFocus，新增 `focusId` / `autoFocus` prop
-
-### Stage 7 — ErrorBoundary 错误隔离
-- `tui.ErrorBoundary { fallback, ... }`；fallback 再崩降级为空
-- 顶层兜底错误屏，不会崩事件循环
-
-### Stage 8 — 基于 key 的 reconciler diff
-- Box / Text / ErrorBoundary 支持 `key` prop，同层重排不 remount
-- 同父同 key 硬报错
-
-### Stage 9 — 渲染后端下沉到 C
-- `tui_core.screen`：cell 缓冲、双缓冲、行 ring pool
-- cell 级 diff + 段合并，`rows()` 零拷贝返回
-
-### Stage 10 — Text SGR / 颜色
-- Text/Box 接受 `color` / `backgroundColor` / `bold` / `dim` / `underline` / `inverse`
-- ANSI-16 前/背景色
-
-### Stage 11 — SGR 增量 diff
-- 按属性位增量 emit，状态跨 CUP 继承
-- 末尾保留一次 reset 做安全网
-
-### Stage 12 — Grapheme cluster
-- C 层 `grapheme_next`（Hangul / ZWJ / regional-indicator / VS15/16）
-- `text.iter` / `TextInput` 方向键与 backspace 按 cluster 跳
-
-### Stage 13 — 焦点系统完善
-- `useFocus` 重复 id 硬报错（去掉静默 `#seq` 后缀）
-- 严格 Ink 语义：只有显式 `autoFocus=true` 才获焦
-- 新增 `isActive` prop，支持 `id` / `isActive` 热更新
-- `TextInput` `focus=false` 合并到 useFocus 单一路径
-
-### Stage 14 — ErrorBoundary 完善
-- `[tui:fatal]` 前缀协议（`reconciler.fatal` / `is_fatal`），编程 bug 不再被 boundary 吞掉
-- `useEffect` body / cleanup / `_unmount` 错误冒泡到最近 boundary
-- `useInput` / `useFocus` 回调错误冒泡
-- `fallback` 支持 `function(err, reset)` 形式，reset 清错 + 触发重绘
-- `useErrorBoundary()` 读最近祖先 Boundary 状态
+已完成的 stage 见 [changelog.md](changelog.md)。
 
 ---
 
@@ -86,29 +16,49 @@ _暂无_
 
 ## 未完成 · 按类别
 
-### 功能增强
+### Hook 家族补齐（Ink 对齐 P1）
 
-**高阶组件**
-- `useStdout` / `useStderr`
+- `useMemo(fn, deps)` / `useCallback(fn, deps)` / `useRef(initial)` / `useReducer(reducer, initial)` / `useContext` + `createContext`
+- `useLatestRef` 提升为公开 API（目前是 hooks.lua 内部工具）
+- `useAnimation({ interval, isActive }) -> { frame, time, delta, reset }`
+- `useStdout()` / `useStderr()`
+
+### 内置组件扩充
+
+- `Newline { count }` / `Spacer` / `Transform { transform=fn }`
 - `form.lua`：多输入框 + 导航
-
-**reconciler 增强**
-- 组件身份清洁性的测试覆盖（行为已实现：同一位置 `inst.fn ~= fn` 时 unmount 旧实例 + new，但目前没专门的单元测试）
+- Select / Spinner / ProgressBar（AI chat 场景最需要的三件套）
+- Markdown / syntax-highlight（AI chat 核心诉求，Stage 靠后）
 
 ### 渲染性能与稳定性
 
 - alternate screen buffer（类 vim 进出全屏）
-- `put` 的 cluster 长度校验（防止恶意长字符串爆 slab）
-- truecolor / 256 色扩展：cell_t 扩到 16 字节 or 引入独立 style pool，给 `fg / bg` 加 16/24 bit 值
-- Text per-run inline style：`Text { "plain ", {text="red", color="red"} }` 形式，wrap 需沿 run 边界切片
-- Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text（当前每个 Text 独立）
+- truecolor / 256 色扩展：`cell_t` 扩到 16 字节 or 独立 style pool，给 `fg / bg` 加 16/24 bit 值
+- Text 样式补齐：`italic` / `strikethrough` / `dimColor` / `wrap` 模式（`wrap` / `hard` / `truncate` / `truncate-start` / `truncate-middle` / `truncate-end`）
+- Text per-run inline style：`Text { "plain ", {text="red", color="red"} }`，wrap 沿 run 边界切片
+- Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text
+- Box 属性 passthrough 补齐：`minWidth` / `maxWidth` / `aspectRatio` / `gap` / `columnGap` / `rowGap` / `position` / `top/right/bottom/left` / `overflow` / `display`
+- Box 支持 `flexGrow` / `flexShrink` 独立 prop（当前 luayoga 只绑了 `flex` shorthand，`flexGrow=1` 静默失效；需要扩 `luayoga.c` 的 setter 表 + `tui/layout.lua` passthrough list）
+- 边框样式扩充：`bold` / `singleDouble` / `doubleSingle` / `classic` + 每边独立颜色 + `borderDimColor`
+- `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索）
+- Yoga 属性预处理：apply_box_style 每节点遍历 38 个 passthrough key + Yoga 绑定再遍历一次，改为扁平数字数组按固定索引传入
 
 ### 开发者体验
 
 - dev-mode hook 调用顺序校验：对比上次 render 的 hook 类型序列，错位告警
 - render 期间 setState 卫兵：设标志位，render 中调 setter 发 warn（避免死循环）
+- dev-mode 同级多孩子缺 key 告警（类似 React DevTools 的 "each child should have a unique key"）
 - `Harness:_paint` 稳定化循环改为基于 dirty 集合收敛的严格终止条件（当前硬编码 4 轮上限）
 - `tui/testing.lua` `resolve_key` 支持通用 `shift+<key>` 前缀（当前只硬编码 `shift+tab`）
+- ErrorBoundary 保留 `debug.traceback(err, 2)`，fallback 函数接收 `{message, trace}` 而不只是字符串
+- `tui._VERSION` 字符串常量
+- `make.lua` 加 `lm:conf_debug` / `lm:conf_release` 区分（asan / NDEBUG 开关）
+- `ltest.assertEquals` 长字符串比较输出 multiline diff 而不是整串 dump
+
+### 测试覆盖
+
+- `useMemo` / `useCallback` / `useRef` / `useReducer` / `useContext` / `useLatestRef` 的单元测试（随 hook 实现一起加）
+- TextInput IME composition 状态转换、cursor 越界（当前只覆盖 commit 后的正常输入路径）
 
 ### 架构改进（非阻塞，穿插推进）
 
@@ -116,14 +66,24 @@ _暂无_
 - **paint 链路显式 terminal 注入**：`tui_core.terminal` 是进程单例，`tui.testing` 靠整表替换+还原来做 mock，限制了同进程内多 harness 并存。改为 `paint(root, ctx)` 接受 `ctx.terminal`，让测试 harness 直接传 fake，无需全局劫持。
 - **ltest 并行 runner 兼容**：若未来 ltest 改并行，上面两项必须已完成，否则测试互相踩单例。目前在 `tui/testing.lua` 文件头注释里记录警告。
 - **`input.dispatch` 中间件链**：当前用 `handled_by_focus_nav` bool 手动串 `pre → focus → broadcast`。改为可插拔中间件链，方便将来插入 mouse / bracketed-paste / 日志中间件。
+- **订阅总线工具化**：input / resize / focus 三处重复实现 "订阅表 + dispatch"，提 `make_subscription_bus()`
+- **C 层 assert 走 `[tui:fatal]` 前缀**：当前 C 层 `luaL_error` 会被 ErrorBoundary 吞掉，不变式违反应该 bypass
+
+### 输入扩展
+
+- bracketed paste（`usePaste(handler)`）—— 同时修掉 TextInput 在单次 dispatch 下粘贴 N 字节只留最后一个字符的问题（需 keys.c 走 `paste` 事件或 TextInput 闭包里本地累积 chars）
+- 鼠标事件（SGR / X10）
+- `useInput` key 结构补齐：`pageUp` / `pageDown` / `home` / `end` / `meta` / `super`
 
 ### 文档
 
 - README、入门教程、API 文档
+- 10 个 example 覆盖：hello / counter / form / chat / log / spinner / progress / static / error / theme
 
 ### 定时器数据结构（仅当成为瓶颈再做）
 
 - 当前每帧扫全表所有 timers，O(n) 线性。数量多时升级为最小堆，按"最近到期"优先触发。
+
 
 ---
 
@@ -131,6 +91,12 @@ _暂无_
 
 - **setState 批处理升级到 React 18 transition/priority 模型**：当前 dirty flag 同优先级即可；真要 priority 控制，待接入 ltask 后重新设计。
 - **事件驱动调度器**：当前固定帧轮询（bee.time.monotonic + thread.sleep）够用。生产场景请外接 ltask 或 bee-io，本框架保留简易实现。
+- **React Concurrent / Suspense**：我们自研 reconciler，没有 React Fiber 的成本收益曲线。
+- **React DevTools 对接**：Lua 生态无对应工具链；dev-mode 校验走自己的路（hook 顺序、key 告警、setState 卫兵）。
+- **ARIA / 屏幕阅读器支持**：Lua CLI 用户基本不碰屏幕阅读器，投入产出比低。
+- **Ink `patchConsole`**：Lua 里 `print` 重定向一行 `_G.print = ...` 就够，不需要复杂机制。
+- **kitty keyboard protocol 全套**：keys.c 解析复杂度大，对 AI chat CLI 场景收益低；先做鼠标 + bracketed paste 已足够。
+- **Timer 最小堆搬进 C**：需要 C→Lua callback 回调，边界开销不划算；若要优化，继续在 Lua 侧改堆。
 
 ---
 
@@ -138,6 +104,6 @@ _暂无_
 
 - 新增计划项：直接编辑本文件，在"未完成"相应类别下加条目
 - 进入实施：移到"正在进行"，同时 TaskCreate 拆会话级子任务
-- 完成：移到"已完成"，只写做了什么
+- 完成：把 stage bullet 挪到 `changelog.md`，roadmap 这里只保留规划
 - 不做的想法记到"非目标"，避免反复纠结
 - 开新 stage 前先对照技术路线的 C 层 scope（Terminal I/O / wcwidth / Yoga / Render 后端 / Key parser）—— 落在这 5 项里的工作默认走 C，要改成 Lua 实现需要显式在 roadmap 里说明原因

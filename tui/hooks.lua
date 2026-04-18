@@ -66,18 +66,20 @@ end
 -- retried every frame in a tight loop — the boundary transition itself is
 -- the recovery signal.
 local reconciler_mod   -- lazy require to avoid init cycle
-local scheduler_mod
+local function ensure_reconciler()
+    reconciler_mod = reconciler_mod or require "tui.reconciler"
+    return reconciler_mod
+end
 
 local function route_effect_error(instance, err)
-    if not reconciler_mod then reconciler_mod = require "tui.reconciler" end
-    if reconciler_mod.is_fatal(err) then error(err, 0) end
+    local rec = ensure_reconciler()
+    if rec.is_fatal(err) then error(err, 0) end
 
     local boundary = instance.nearest_boundary
     if boundary then
         boundary.caught_error = err
         boundary.dirty = true   -- pokes harness stabilization + main loop
-        if not scheduler_mod then scheduler_mod = require "tui.scheduler" end
-        scheduler_mod.requestRedraw()
+        scheduler.requestRedraw()
         return
     end
     -- No boundary in scope: let it propagate to the framework pcall.
@@ -156,14 +158,13 @@ function M._unmount(instance)
             slot.cleanup = nil
             local ok, err = pcall(fn)
             if not ok then
-                if not reconciler_mod then reconciler_mod = require "tui.reconciler" end
-                if reconciler_mod.is_fatal(err) then error(err, 0) end
+                local rec = ensure_reconciler()
+                if rec.is_fatal(err) then error(err, 0) end
                 local boundary = instance.nearest_boundary
                 if boundary and boundary.caught_error == nil then
                     boundary.caught_error = err
                     boundary.dirty = true
-                    if not scheduler_mod then scheduler_mod = require "tui.scheduler" end
-                    scheduler_mod.requestRedraw()
+                    scheduler.requestRedraw()
                 end
                 -- else: swallow. See function header for rationale.
             end
@@ -397,10 +398,9 @@ function M.useErrorBoundary()
     if not boundary then
         return { caught_error = nil, reset = NOOP, boundary = nil }
     end
-    if not reconciler_mod then reconciler_mod = require "tui.reconciler" end
     return {
         caught_error = boundary.caught_error,
-        reset        = reconciler_mod._get_boundary_reset(boundary),
+        reset        = ensure_reconciler()._get_boundary_reset(boundary),
         boundary     = boundary,
     }
 end

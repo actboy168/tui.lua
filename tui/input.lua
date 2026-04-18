@@ -44,11 +44,21 @@ function M.subscribe(fn)
     end
 end
 
---- dispatch(bytes) — parse and route.
+--- dispatch(bytes) -> should_exit
+-- Parses `bytes` into key events and routes them. Returns `true` if any
+-- event is a Ctrl+C or Ctrl+D so the outer loop can tear down cleanly;
+-- returns `false` otherwise. Events are still broadcast to useInput
+-- subscribers either way (Ink parity — handlers can observe Ctrl+C).
 function M.dispatch(bytes)
-    if not bytes or #bytes == 0 then return end
+    if not bytes or #bytes == 0 then return false end
     local events = keys.parse(bytes)
+    local should_exit = false
     for _, ev in ipairs(events) do
+        if ev.ctrl and ev.name == "char"
+            and (ev.input == "c" or ev.input == "d") then
+            should_exit = true
+        end
+
         local handled_by_focus_nav = false
         if focus_mod.is_enabled() then
             if ev.name == "tab" and not ev.shift then
@@ -74,6 +84,7 @@ function M.dispatch(bytes)
             end
         end
     end
+    return should_exit
 end
 
 -- Introspection for tests.

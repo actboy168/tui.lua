@@ -4,8 +4,9 @@
 -- Stage 9: the cell buffer / diff / ANSI generation live in C (see
 -- src/tui_core/screen.c). This module now just walks the element tree
 -- and issues put / put_border / draw_line calls into that buffer.
--- Stage 10: style props (color / bold / …) are packed via tui.sgr and
--- passed as an optional trailing argument to the C API.
+-- Stage 15: style props are packed in Lua (tui/sgr.pack_bytes) into the
+-- two bytes the C layer stores per cell; we pass (fg_bg, attrs) directly
+-- instead of a style table so C never walks Lua tables during paint.
 
 local screen_c = require "tui_core".screen
 local sgr      = require "tui.sgr"
@@ -19,21 +20,24 @@ local function paint(element, screen)
         local props = element.props
         local border = props and props.border
         if border then
+            local fg_bg, attrs = sgr.pack_bytes(props)
             screen_c.put_border(screen, r.x, r.y, r.w, r.h, border,
-                                sgr.pack_props(props))
+                                fg_bg, attrs)
         end
         for _, child in ipairs(element.children or {}) do
             paint(child, screen)
         end
     elseif element.kind == "text" then
-        local style = sgr.pack_props(element.props)
+        local fg_bg, attrs = sgr.pack_bytes(element.props)
         if element.lines then
             for li, line in ipairs(element.lines) do
                 if li - 1 >= r.h then break end
-                screen_c.draw_line(screen, r.x, r.y + (li - 1), line, r.w, style)
+                screen_c.draw_line(screen, r.x, r.y + (li - 1), line, r.w,
+                                   fg_bg, attrs)
             end
         else
-            screen_c.draw_line(screen, r.x, r.y, element.text or "", r.w, style)
+            screen_c.draw_line(screen, r.x, r.y, element.text or "", r.w,
+                               fg_bg, attrs)
         end
     end
 end

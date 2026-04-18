@@ -280,3 +280,72 @@ function suite:test_use_input_uses_latest_handler()
 
     b:unmount()
 end
+
+-- Stage 15: swapping component fn at the same path (no key) treats it as a
+-- new instance — previous state is thrown away, effect cleanup fires.
+function suite:test_fn_identity_change_forces_remount()
+    local events = {}
+    local function A()
+        tui.useEffect(function()
+            events[#events + 1] = "A-setup"
+            return function() events[#events + 1] = "A-cleanup" end
+        end, {})
+        return tui.Text { "A" }
+    end
+    local function B()
+        tui.useEffect(function()
+            events[#events + 1] = "B-setup"
+            return function() events[#events + 1] = "B-cleanup" end
+        end, {})
+        return tui.Text { "B" }
+    end
+
+    local which = A
+    local function Root()
+        return tui.Box { { kind = "component", fn = which, props = {} } }
+    end
+
+    local b = testing.mount_bare(Root)
+    lt.assertEquals(events, { "A-setup" })
+
+    which = B
+    b:rerender()
+    -- A instance torn down (cleanup), fresh B instance mounted.
+    lt.assertEquals(events, { "A-setup", "A-cleanup", "B-setup" })
+
+    b:unmount()
+end
+
+-- Stage 15: same component fn across rerenders does NOT remount — the same
+-- instance is reused, hook state survives, no effect cleanup triggered.
+function suite:test_fn_identity_stable_preserves_state()
+    local events = {}
+    local counter_values = {}
+    local setter_ref
+    local function Comp()
+        local n, setN = tui.useState(0)
+        counter_values[#counter_values + 1] = n
+        setter_ref = setN
+        tui.useEffect(function()
+            events[#events + 1] = "setup"
+            return function() events[#events + 1] = "cleanup" end
+        end, {})
+        return tui.Text { tostring(n) }
+    end
+    local function Root()
+        return tui.Box { { kind = "component", fn = Comp, props = {} } }
+    end
+
+    local b = testing.mount_bare(Root)
+    lt.assertEquals(counter_values, { 0 })
+    lt.assertEquals(events, { "setup" })
+
+    setter_ref(7)
+    b:rerender()
+    lt.assertEquals(counter_values, { 0, 7 }, "same fn preserves hook state")
+    lt.assertEquals(events, { "setup" },
+        "same fn identity: no cleanup, no re-setup")
+
+    b:unmount()
+    lt.assertEquals(events, { "setup", "cleanup" })
+end

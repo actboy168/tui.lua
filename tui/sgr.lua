@@ -92,4 +92,53 @@ function M.pack_props(props)
     }
 end
 
+-- Attribute bits — must stay in lock-step with src/tui_core/screen.c.
+-- The C layer consumes these two bytes unchanged; any mismatch shows up as
+-- wrong SGR output and the test suite fails loudly.
+local ATTR_BOLD       = 0x01
+local ATTR_DIM        = 0x02
+local ATTR_UNDERLINE  = 0x04
+local ATTR_INVERSE    = 0x08
+local ATTR_FG_DEFAULT = 0x10
+local ATTR_BG_DEFAULT = 0x20
+local ATTR_DEFAULT    = ATTR_FG_DEFAULT | ATTR_BG_DEFAULT
+
+--- pack_bytes(props) -> fg_bg:uint8, attrs:uint8
+-- Packs element props directly into the two style bytes the C cell format
+-- uses (fg_bg: high nibble fg, low nibble bg; attrs bitmask). Returns
+-- (0, ATTR_DEFAULT) when props omit all styling so cells stay in the
+-- terminal-default state.
+function M.pack_bytes(props)
+    if not props then return 0, ATTR_DEFAULT end
+    local color     = props.color
+    local bg        = props.backgroundColor
+    local bold      = props.bold
+    local dim       = props.dim
+    local underline = props.underline
+    local inverse   = props.inverse
+
+    if color == nil and bg == nil
+        and not bold and not dim and not underline and not inverse
+    then
+        return 0, ATTR_DEFAULT
+    end
+
+    local attrs = ATTR_DEFAULT
+    local fg_nib, bg_nib = 0, 0
+    if color ~= nil then
+        fg_nib = resolve_color(color, "color")
+        attrs = attrs & ~ATTR_FG_DEFAULT
+    end
+    if bg ~= nil then
+        bg_nib = resolve_color(bg, "backgroundColor")
+        attrs = attrs & ~ATTR_BG_DEFAULT
+    end
+    if bold      then attrs = attrs | ATTR_BOLD      end
+    if dim       then attrs = attrs | ATTR_DIM       end
+    if underline then attrs = attrs | ATTR_UNDERLINE end
+    if inverse   then attrs = attrs | ATTR_INVERSE   end
+
+    return ((fg_nib << 4) | (bg_nib & 0xF)) & 0xFF, attrs & 0xFF
+end
+
 return M

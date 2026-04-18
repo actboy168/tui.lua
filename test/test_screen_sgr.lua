@@ -3,6 +3,10 @@
 -- to verify the byte-level ANSI output. After Stage 11 the writer emits
 -- only the deltas between the current and next styles (no leading "0;"
 -- reset on every transition).
+--
+-- Stage 15: style packing moved to Lua. Tests map the old {fg=N, bold=...}
+-- helper shape through a local packer so the assertion bodies stay the
+-- same — pack() returns the two uint8 bytes screen.put now expects.
 
 local lt       = require "ltest"
 local screen   = require "tui.screen"
@@ -11,6 +15,32 @@ local tui_core = require "tui_core"
 local suite = lt.test "screen_sgr"
 
 local ESC = "\27"
+
+local ATTR_BOLD, ATTR_DIM, ATTR_UNDERLINE, ATTR_INVERSE = 0x01, 0x02, 0x04, 0x08
+local ATTR_FG_DEFAULT, ATTR_BG_DEFAULT = 0x10, 0x20
+local ATTR_DEFAULT = ATTR_FG_DEFAULT | ATTR_BG_DEFAULT
+
+-- Back-compat packer matching the old inline {fg=, bg=, bold=, ...} shape
+-- used throughout this file. Does not go through tui.sgr because the public
+-- API uses "color" / "backgroundColor" rather than "fg" / "bg".
+local function pack(style)
+    if not style then return 0, ATTR_DEFAULT end
+    local attrs = ATTR_DEFAULT
+    local fg, bg = 0, 0
+    if style.fg then
+        fg = style.fg
+        attrs = attrs & ~ATTR_FG_DEFAULT
+    end
+    if style.bg then
+        bg = style.bg
+        attrs = attrs & ~ATTR_BG_DEFAULT
+    end
+    if style.bold      then attrs = attrs | ATTR_BOLD      end
+    if style.dim       then attrs = attrs | ATTR_DIM       end
+    if style.underline then attrs = attrs | ATTR_UNDERLINE end
+    if style.inverse   then attrs = attrs | ATTR_INVERSE   end
+    return ((fg << 4) | (bg & 0xF)) & 0xFF, attrs & 0xFF
+end
 
 local function hex(s)
     return (s:gsub(ESC, "<ESC>"))
@@ -22,7 +52,7 @@ end
 function suite:test_single_cell_colored_first_frame()
     local s = screen.new(4, 1)
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "X", 1, { fg = 1 })  -- red
+    tui_core.screen.put(s, 0, 0, "X", 1, pack({ fg = 1 }))  -- red
     local ansi = screen.diff(s)
     -- Incremental diff: ESC[31m (delta from default), not ESC[0;31m.
     lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
@@ -46,7 +76,7 @@ function suite:test_draw_line_colored_bold()
     screen.diff(s)
 
     screen.clear(s)
-    tui_core.screen.draw_line(s, 0, 0, "hi", 10, { fg = 2, bold = true })
+    tui_core.screen.draw_line(s, 0, 0, "hi", 10, pack({ fg = 2, bold = true }))
     local ansi = screen.diff(s)
     -- Incremental delta from (default, no attrs): ESC[1;32m.
     lt.assertEquals(ansi:find(ESC .. "[1;32m", 1, true) ~= nil, true,
@@ -67,9 +97,9 @@ function suite:test_same_style_merge()
     screen.diff(s)  -- commit neutral frame
 
     screen.clear(s)
-    local red = { fg = 1 }
+    local red_fg, red_attrs = pack({ fg = 1 })
     for x = 0, 4 do
-        tui_core.screen.put(s, x, 0, "h", 1, red)
+        tui_core.screen.put(s, x, 0, "h", 1, red_fg, red_attrs)
     end
     local ansi = screen.diff(s)
     -- Count occurrences of ESC[31m (incremental form) — should be exactly 1.
@@ -94,8 +124,8 @@ function suite:test_style_change_mid_run()
     screen.diff(s)
 
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "H", 1, { fg = 1 })  -- red
-    tui_core.screen.put(s, 1, 0, "i", 1, { fg = 2 })  -- green
+    tui_core.screen.put(s, 0, 0, "H", 1, pack({ fg = 1 }))  -- red
+    tui_core.screen.put(s, 1, 0, "i", 1, pack({ fg = 2 }))  -- green
     local ansi = screen.diff(s)
     lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
         "expected red SGR: " .. hex(ansi))
@@ -116,7 +146,7 @@ function suite:test_background_color()
     screen.diff(s)
 
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "X", 1, { bg = 4 })  -- blue bg
+    tui_core.screen.put(s, 0, 0, "X", 1, pack({ bg = 4 }))  -- blue bg
     local ansi = screen.diff(s)
     lt.assertEquals(ansi:find(ESC .. "[44m", 1, true) ~= nil, true,
         "expected blue-bg SGR: " .. hex(ansi))
@@ -131,7 +161,7 @@ function suite:test_bright_color()
     screen.diff(s)
 
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "X", 1, { fg = 9 })  -- brightRed = 91
+    tui_core.screen.put(s, 0, 0, "X", 1, pack({ fg = 9 }))  -- brightRed = 91
     local ansi = screen.diff(s)
     lt.assertEquals(ansi:find(ESC .. "[91m", 1, true) ~= nil, true,
         "expected brightRed SGR 91m: " .. hex(ansi))
@@ -143,7 +173,7 @@ end
 function suite:test_default_reset_between_frames()
     local s = screen.new(4, 1)
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "X", 1, { fg = 1 })  -- red
+    tui_core.screen.put(s, 0, 0, "X", 1, pack({ fg = 1 }))  -- red
     screen.diff(s)
 
     -- Frame 2: overwrite with neutral char. The diff-end safety reset at
@@ -175,8 +205,8 @@ function suite:test_line_boundary_sgr_inheritance()
     screen.diff(s)
 
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "R", 1, { fg = 1 })  -- row 0: red
-    tui_core.screen.put(s, 0, 1, "G", 1, { fg = 2 })  -- row 1: green
+    tui_core.screen.put(s, 0, 0, "R", 1, pack({ fg = 1 }))  -- row 0: red
+    tui_core.screen.put(s, 0, 1, "G", 1, pack({ fg = 2 }))  -- row 1: green
     local ansi = screen.diff(s)
     local cup2 = ansi:find(ESC .. "[2;1H", 1, true)
     lt.assertEquals(cup2 ~= nil, true,
@@ -198,18 +228,18 @@ function suite:test_bridge_gap_preserves_style()
     local s = screen.new(10, 1)
     screen.clear(s)
     -- Initial: red X at 1, red X at 2, red X at 3.
-    local red = { fg = 1 }
-    tui_core.screen.put(s, 1, 0, "a", 1, red)
-    tui_core.screen.put(s, 2, 0, "b", 1, red)
-    tui_core.screen.put(s, 3, 0, "c", 1, red)
+    local red_fg, red_attrs = pack({ fg = 1 })
+    tui_core.screen.put(s, 1, 0, "a", 1, red_fg, red_attrs)
+    tui_core.screen.put(s, 2, 0, "b", 1, red_fg, red_attrs)
+    tui_core.screen.put(s, 3, 0, "c", 1, red_fg, red_attrs)
     screen.diff(s)
 
     -- Frame 2: change cols 1 and 3 to green chars; col 2 stays red "b".
     -- Gap=1 so merge path triggers. Bridge cell (col 2) is red.
     screen.clear(s)
-    tui_core.screen.put(s, 1, 0, "A", 1, { fg = 2 })  -- green
-    tui_core.screen.put(s, 2, 0, "b", 1, red)         -- unchanged
-    tui_core.screen.put(s, 3, 0, "C", 1, { fg = 2 })  -- green
+    tui_core.screen.put(s, 1, 0, "A", 1, pack({ fg = 2 }))  -- green
+    tui_core.screen.put(s, 2, 0, "b", 1, red_fg, red_attrs) -- unchanged
+    tui_core.screen.put(s, 3, 0, "C", 1, pack({ fg = 2 }))  -- green
     local ansi = screen.diff(s)
     -- Expect the bridge cell to reassert red before emitting "b", and
     -- green to reassert before "C".
@@ -225,7 +255,7 @@ end
 function suite:test_rows_has_no_sgr()
     local s = screen.new(4, 1)
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "X", 1, { fg = 1, bold = true })
+    tui_core.screen.put(s, 0, 0, "X", 1, pack({ fg = 1, bold = true }))
     screen.diff(s)
     local r = screen.rows(s)
     lt.assertEquals(r[1]:find(ESC, 1, true), nil,
@@ -239,13 +269,13 @@ end
 function suite:test_wide_char_with_color()
     local s = screen.new(4, 1)
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "中", 2, { fg = 3 })  -- yellow
+    tui_core.screen.put(s, 0, 0, "中", 2, pack({ fg = 3 }))  -- yellow
     screen.diff(s)
 
     -- Second diff with identical content should be empty — style on tail
     -- must match to avoid spurious redraws.
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "中", 2, { fg = 3 })
+    tui_core.screen.put(s, 0, 0, "中", 2, pack({ fg = 3 }))
     local ansi = screen.diff(s)
     lt.assertEquals(#ansi, 0,
         "idempotent colored wide-char frame should be empty: " .. hex(ansi))
@@ -263,9 +293,9 @@ function suite:test_bold_attr_change()
     screen.diff(s)
 
     screen.clear(s)
-    tui_core.screen.put(s, 0, 0, "A", 1, { fg = 1 })              -- red
-    tui_core.screen.put(s, 1, 0, "B", 1, { fg = 1, bold = true }) -- red+bold
-    tui_core.screen.put(s, 2, 0, "C", 1, { fg = 1 })              -- red again
+    tui_core.screen.put(s, 0, 0, "A", 1, pack({ fg = 1 }))              -- red
+    tui_core.screen.put(s, 1, 0, "B", 1, pack({ fg = 1, bold = true })) -- red+bold
+    tui_core.screen.put(s, 2, 0, "C", 1, pack({ fg = 1 }))              -- red again
     local ansi = screen.diff(s)
 
     -- First SGR: entering red from default \u2192 "ESC[31m".
@@ -279,4 +309,46 @@ function suite:test_bold_attr_change()
     -- Third SGR: bold flips off (22m) \u2192 must appear.
     lt.assertEquals(ansi:find(ESC .. "[22m", 1, true) ~= nil, true,
         "expected ESC[22m to clear bold: " .. hex(ansi))
+end
+
+-- ---------------------------------------------------------------------------
+-- Case 13 (Stage 15): wide-char \u2192 narrow-char with SGR transition. The tail
+-- cell of a wide glyph inherits the head cell's style; a narrow glyph that
+-- follows with a different style must emit a fresh SGR.
+
+function suite:test_wide_to_narrow_sgr_transition()
+    local s = screen.new(4, 1)
+    screen.clear(s)
+    screen.diff(s)
+
+    screen.clear(s)
+    tui_core.screen.put(s, 0, 0, "\228\184\173", 2, pack({ fg = 2 }))  -- 中, green
+    tui_core.screen.put(s, 2, 0, "X", 1, pack({ fg = 4 }))             -- X, blue
+    local ansi = screen.diff(s)
+
+    -- Must emit green at start and blue at the narrow glyph.
+    lt.assertEquals(ansi:find(ESC .. "[32m", 1, true) ~= nil, true,
+        "expected ESC[32m (green) for wide char: " .. hex(ansi))
+    lt.assertEquals(ansi:find(ESC .. "[34m", 1, true) ~= nil, true,
+        "expected ESC[34m (blue) for narrow char after wide: " .. hex(ansi))
+end
+
+-- ---------------------------------------------------------------------------
+-- Case 14 (Stage 15): base emoji + skin-tone modifier + ZWJ sequence renders
+-- as a single wide cluster with a single style.
+
+function suite:test_skin_tone_zwj_single_cluster_styled()
+    -- 👨🏻 (man + skin tone 1-2) = 8 bytes, width 2.
+    local man_skin = "\240\159\145\168\240\159\143\187"
+    local s = screen.new(4, 1)
+    screen.clear(s)
+    tui_core.screen.put(s, 0, 0, man_skin, 2, pack({ fg = 3 }))  -- yellow
+    screen.diff(s)
+
+    -- Second identical frame: no diff.
+    screen.clear(s)
+    tui_core.screen.put(s, 0, 0, man_skin, 2, pack({ fg = 3 }))
+    local ansi = screen.diff(s)
+    lt.assertEquals(#ansi, 0,
+        "skin-tone emoji cluster must be idempotent: " .. hex(ansi))
 end

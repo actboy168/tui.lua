@@ -198,17 +198,14 @@ function M.render(root)
     end
 
     local function on_input(s)
-        -- Framework-level emergency exit: Ctrl+C (0x03) / Ctrl+D (0x04).
-        -- These are always honored even if the app didn't register useInput.
-        for i = 1, #s do
-            local b = s:byte(i)
-            if b == 3 or b == 4 then return true end
-        end
-        -- Otherwise, parse + broadcast to subscribed useInput handlers.
-        input_mod.dispatch(s)
+        -- Dispatch to useInput subscribers and focused handlers; the
+        -- dispatcher inspects parsed events semantically and returns true
+        -- if Ctrl+C / Ctrl+D was seen. This matches Ink: handlers still
+        -- observe the key, but the outer loop always tears down cleanly.
+        local should_exit = input_mod.dispatch(s)
         -- Input handlers may have flipped state; ensure a repaint happens.
         scheduler.requestRedraw()
-        return false
+        return should_exit
     end
 
     local ok, err = pcall(function()

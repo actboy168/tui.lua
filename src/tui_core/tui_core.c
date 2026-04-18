@@ -29,11 +29,12 @@ int luaopen_terminal(lua_State *L);
 int luaopen_keys(lua_State *L);
 int luaopen_wcwidth(lua_State *L);
 int luaopen_screen(lua_State *L);
+int luaopen_tui_core_text(lua_State *L);
 
 LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
     luaL_checkversion(L);
-    lua_createtable(L, 0, 4);
+    lua_createtable(L, 0, 5);
 
     /* terminal sub-table */
     luaopen_terminal(L);
@@ -50,6 +51,10 @@ luaopen_tui_core(lua_State *L) {
     /* screen sub-table */
     luaopen_screen(L);
     lua_setfield(L, -2, "screen");
+
+    /* text sub-table (wrap) */
+    luaopen_tui_core_text(L);
+    lua_setfield(L, -2, "text");
 
     return 1;
 }

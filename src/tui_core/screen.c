@@ -212,76 +212,9 @@ check_screen(lua_State *L, int idx) {
     return (screen_t *)luaL_checkudata(L, idx, SCREEN_MT);
 }
 
-/* ── style packing: Lua table → (fg_bg, attrs) ──────────────────
- *
- * Lua style table keys (all optional):
- *   fg          integer 0..15 or nil           — ANSI 16-color foreground
- *   bg          integer 0..15 or nil           — ANSI 16-color background
- *   bold        any truthy → ATTR_BOLD
- *   dim         any truthy → ATTR_DIM
- *   underline   any truthy → ATTR_UNDERLINE
- *   inverse     any truthy → ATTR_INVERSE
- *
- * `idx` may be a nil / missing argument → returns (0, ATTR_DEFAULT).
- * Non-table non-nil values raise a Lua error.
- *
- * Invalid color values (out of 0..15) raise Lua errors — fail fast so user
- * code with typos doesn't silently render as default. */
-static void
-pack_style(lua_State *L, int idx, uint8_t *out_fg_bg, uint8_t *out_attrs) {
-    *out_fg_bg = 0;
-    *out_attrs = ATTR_DEFAULT;
-
-    int t = lua_type(L, idx);
-    if (t == LUA_TNONE || t == LUA_TNIL) return;
-    if (t != LUA_TTABLE) {
-        luaL_error(L, "style: expected table or nil, got %s",
-                   lua_typename(L, t));
-    }
-
-    uint8_t fg_nib = 0, bg_nib = 0;
-    uint8_t attrs = ATTR_DEFAULT;
-
-    lua_getfield(L, idx, "fg");
-    if (!lua_isnil(L, -1)) {
-        lua_Integer fg = luaL_checkinteger(L, -1);
-        if (fg < 0 || fg > 15) {
-            lua_pop(L, 1);
-            luaL_error(L, "style.fg out of range: %d (want 0..15)", (int)fg);
-        }
-        fg_nib = (uint8_t)fg;
-        attrs &= (uint8_t)~ATTR_FG_DEFAULT;
-    }
-    lua_pop(L, 1);
-
-    lua_getfield(L, idx, "bg");
-    if (!lua_isnil(L, -1)) {
-        lua_Integer bg = luaL_checkinteger(L, -1);
-        if (bg < 0 || bg > 15) {
-            lua_pop(L, 1);
-            luaL_error(L, "style.bg out of range: %d (want 0..15)", (int)bg);
-        }
-        bg_nib = (uint8_t)bg;
-        attrs &= (uint8_t)~ATTR_BG_DEFAULT;
-    }
-    lua_pop(L, 1);
-
-    lua_getfield(L, idx, "bold");
-    if (lua_toboolean(L, -1)) attrs |= ATTR_BOLD;
-    lua_pop(L, 1);
-    lua_getfield(L, idx, "dim");
-    if (lua_toboolean(L, -1)) attrs |= ATTR_DIM;
-    lua_pop(L, 1);
-    lua_getfield(L, idx, "underline");
-    if (lua_toboolean(L, -1)) attrs |= ATTR_UNDERLINE;
-    lua_pop(L, 1);
-    lua_getfield(L, idx, "inverse");
-    if (lua_toboolean(L, -1)) attrs |= ATTR_INVERSE;
-    lua_pop(L, 1);
-
-    *out_fg_bg = (uint8_t)((fg_nib << 4) | (bg_nib & 0x0F));
-    *out_attrs = attrs;
-}
+/* Style packing lives in Lua (tui/sgr.lua:pack_bytes). Callers pass the
+ * two packed bytes (fg_bg, attrs) directly; this module consumes them
+ * unchanged. See ATTR_* macros above for the bit layout. */
 
 /* ── Lua API: new / size / resize / invalidate / clear / __gc ── */
 
@@ -378,7 +311,7 @@ put_cell(screen_t *s, int x, int y,
          uint8_t fg_bg, uint8_t attrs) {
     if (x < 0 || y < 0 || x >= s->w || y >= s->h) return 0;
     if (cw == 2 && x + 1 >= s->w) return 0;
-    if (slen == 0 || slen > 0xFFFFu) return 0;  /* slab_len is uint16 */
+    if (slen == 0 || slen > 256u) return 0;  /* cap grapheme cluster at 256B */
 
     cell_t *c = cell_at(s->next, s->w, x, y);
     memset(c, 0, sizeof(*c));
@@ -422,8 +355,8 @@ lput(lua_State *L) {
 
     if (cw != 1 && cw != 2) luaL_error(L, "screen.put: width must be 1 or 2");
 
-    uint8_t fg_bg, attrs;
-    pack_style(L, 6, &fg_bg, &attrs);
+    uint8_t fg_bg = (uint8_t)luaL_optinteger(L, 6, 0);
+    uint8_t attrs = (uint8_t)luaL_optinteger(L, 7, ATTR_DEFAULT);
     put_cell(s, x, y, str, slen, cw, fg_bg, attrs);
     return 0;
 }
@@ -479,8 +412,8 @@ lput_border(lua_State *L) {
     int h = (int)luaL_checkinteger(L, 5);
     const char *style = luaL_optstring(L, 6, "single");
 
-    uint8_t fg_bg, attrs;
-    pack_style(L, 7, &fg_bg, &attrs);
+    uint8_t fg_bg = (uint8_t)luaL_optinteger(L, 7, 0);
+    uint8_t attrs = (uint8_t)luaL_optinteger(L, 8, ATTR_DEFAULT);
 
     if (w < 2 || h < 2) return 0;
     const border_glyphs_t *g = border_lookup(style);
@@ -517,8 +450,8 @@ ldraw_line(lua_State *L) {
     const char *text = luaL_checklstring(L, 4, &tlen);
     int max_w = (int)luaL_optinteger(L, 5, s->w);
 
-    uint8_t fg_bg, attrs;
-    pack_style(L, 6, &fg_bg, &attrs);
+    uint8_t fg_bg = (uint8_t)luaL_optinteger(L, 6, 0);
+    uint8_t attrs = (uint8_t)luaL_optinteger(L, 7, ATTR_DEFAULT);
 
     int cx = x;
     int stop = x + max_w;
