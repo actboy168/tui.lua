@@ -1,0 +1,10 @@
+name: test
+on: push
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actboy168/setup-luamake@master
+    - run: luamake
+    - run: luamake test
