@@ -5,6 +5,8 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules : recursive
     - uses: actboy168/setup-luamake@master
     - run: luamake
     - run: luamake test
