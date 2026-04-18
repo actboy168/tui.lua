@@ -502,11 +502,12 @@ lput_border(lua_State *L) {
 
 /* ── Lua API: draw_line ───────────────────────────────────────── */
 
-/* Walks a UTF-8 string code-point at a time, calls wcwidth_cp to get display
- * width, writes each code point as one cell. Grapheme-cluster merging (e.g.
- * combining marks glued to previous cell) is deferred to a future stage —
- * see roadmap "grapheme cluster 合并". For now combining marks (width 0) are
- * simply skipped. */
+/* Walks a UTF-8 string one grapheme cluster at a time, calls grapheme_next
+ * to get the cluster's byte span and display width, writes each cluster as
+ * one cell. Combining marks, ZWJ sequences, VS16 emoji promotion, regional
+ * indicator pairs and Hangul L/V/T conjoining are all fused into a single
+ * cell — see wcwidth.h for the UAX#29 subset actually covered. Zero-width
+ * base clusters (lone combining marks, controls) are skipped. */
 static int
 ldraw_line(lua_State *L) {
     screen_t *s = check_screen(L, 1);
@@ -523,13 +524,12 @@ ldraw_line(lua_State *L) {
     int stop = x + max_w;
     size_t i = 0;
     while (i < tlen) {
-        size_t i0 = i;
-        uint32_t cp = utf8_next((const unsigned char *)text, tlen, &i);
-        int cw = wcwidth_cp(cp);
-        if (cw <= 0) continue;  /* combining marks / controls: skip */
+        size_t i0 = i, clen;
+        int cw;
+        grapheme_next((const unsigned char *)text, tlen, &i, &clen, &cw);
+        if (cw <= 0) continue;  /* controls / lone 0-width: skip */
         if (cx + cw > stop) break;
-        size_t seglen = i - i0;
-        put_cell(s, cx, y, text + i0, seglen, cw, fg_bg, attrs);
+        put_cell(s, cx, y, text + i0, clen, cw, fg_bg, attrs);
         cx += cw;
     }
     return 0;

@@ -279,6 +279,167 @@ utf8_next(const unsigned char *s, size_t n, size_t *out_i) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Grapheme cluster boundaries (UAX#29 subset)                                */
+/* -------------------------------------------------------------------------- */
+
+/* SpacingMark / Extend distinction is collapsed here: we treat every
+ * wcwidth_cp==0 non-control code point as a cluster extender. UAX#29 calls
+ * that a GB9 + GB9a merger — good enough for a TUI. Prepend (GB9b) is not
+ * implemented (extremely rare in practice). */
+
+static int
+is_extend_like(uint32_t cp) {
+    /* Controls already excluded (wcwidth < 0); NUL is width 0 but not really
+     * an extender — exclude it explicitly so "\0x" doesn't fuse. */
+    if (cp == 0) return 0;
+    return wcwidth_cp(cp) == 0;
+}
+
+static int is_zwj(uint32_t cp)  { return cp == 0x200D; }
+static int is_vs15(uint32_t cp) { return cp == 0xFE0E; }
+static int is_vs16(uint32_t cp) { return cp == 0xFE0F; }
+static int is_ri(uint32_t cp)   { return cp >= 0x1F1E6 && cp <= 0x1F1FF; }
+
+/* Hangul syllable class for GB6/GB7/GB8. Returns:
+ *   0 = L (leading consonant jamo)
+ *   1 = V (vowel jamo)
+ *   2 = T (trailing consonant jamo)
+ *   3 = LV (precomposed syllable without trailing consonant)
+ *   4 = LVT (precomposed syllable with trailing consonant)
+ *  -1 = not Hangul
+ */
+static int
+hangul_class(uint32_t cp) {
+    /* L */
+    if ((cp >= 0x1100 && cp <= 0x115F) || (cp >= 0xA960 && cp <= 0xA97C)) return 0;
+    /* V */
+    if ((cp >= 0x1160 && cp <= 0x11A7) || (cp >= 0xD7B0 && cp <= 0xD7C6)) return 1;
+    /* T */
+    if ((cp >= 0x11A8 && cp <= 0x11FF) || (cp >= 0xD7CB && cp <= 0xD7FB)) return 2;
+    /* Precomposed syllable block AC00..D7A3, 28 trailing slots per LV group. */
+    if (cp >= 0xAC00 && cp <= 0xD7A3) {
+        return ((cp - 0xAC00) % 28 == 0) ? 3 : 4;
+    }
+    return -1;
+}
+
+/* GB6: L × (L | V | LV | LVT) */
+/* GB7: (LV | V) × (V | T)     */
+/* GB8: (LVT | T) × T          */
+static int
+hangul_can_extend(int prev, int next) {
+    if (prev < 0 || next < 0) return 0;
+    switch (prev) {
+        case 0: /* L */   return next == 0 || next == 1 || next == 3 || next == 4;
+        case 1: /* V */   return next == 1 || next == 2;
+        case 3: /* LV */  return next == 1 || next == 2;
+        case 2: /* T */   return next == 2;
+        case 4: /* LVT */ return next == 2;
+    }
+    return 0;
+}
+
+void
+grapheme_next(const unsigned char *s, size_t n, size_t *out_i,
+              size_t *out_byte_len, int *out_width) {
+    size_t start = *out_i;
+    if (start >= n) {
+        *out_byte_len = 0;
+        *out_width = 0;
+        *out_i = n;
+        return;
+    }
+
+    /* Decode the base code point. */
+    size_t i = start;
+    uint32_t cp0 = utf8_next(s, n, &i);
+    int base_w = wcwidth_cp(cp0);
+
+    /* Control or lone 0-width base: single-code-point cluster, width 0.
+     * Callers use (width <= 0) → skip. */
+    if (base_w < 0 || base_w == 0) {
+        *out_byte_len = i - start;
+        *out_width = 0;
+        *out_i = i;
+        return;
+    }
+
+    int cluster_w = base_w;
+
+    /* Hangul jamo conjoining (GB6/7/8). Starts only when base is a Hangul
+     * class; loop consumes compatible jamo and sets width=2. */
+    int h_prev = hangul_class(cp0);
+    if (h_prev >= 0) {
+        cluster_w = 2;
+        for (;;) {
+            if (i >= n) break;
+            size_t j = i;
+            uint32_t cp = utf8_next(s, n, &j);
+            int hc = hangul_class(cp);
+            if (!hangul_can_extend(h_prev, hc)) break;
+            i = j;
+            h_prev = hc;
+        }
+        /* Fall through to extend/ZWJ loop so a jamo cluster can still pick
+         * up combining marks or VS16 (rare but legal). */
+    }
+
+    /* Regional indicator pair (GB12/13): if base is RI and the very next
+     * code point is also RI, swallow it as the second half of a flag. The
+     * outer caller handles subsequent RIs as a new cluster (giving the
+     * "sot (RI RI)* RI × RI" pairing behaviour). */
+    if (is_ri(cp0) && i < n) {
+        size_t j = i;
+        uint32_t cp = utf8_next(s, n, &j);
+        if (is_ri(cp)) {
+            i = j;
+            cluster_w = 2;
+        }
+    }
+
+    /* Extend / ZWJ / VS loop (GB9, GB9a, GB11). */
+    for (;;) {
+        if (i >= n) break;
+        size_t j = i;
+        uint32_t cp = utf8_next(s, n, &j);
+
+        if (is_vs16(cp)) {
+            cluster_w = 2;   /* emoji presentation */
+            i = j;
+            continue;
+        }
+        if (is_vs15(cp)) {
+            /* text presentation: keep current cluster width */
+            i = j;
+            continue;
+        }
+        if (is_zwj(cp)) {
+            /* GB11 approximated: after ZWJ we greedily swallow one more
+             * base code point (and its extenders). We do not verify that
+             * both neighbours are Extended_Pictographic — maintaining that
+             * table is out of scope for this stage and the false-positive
+             * rate on non-emoji ZWJ usage is acceptable. */
+            i = j;
+            if (i >= n) break;
+            size_t k = i;
+            uint32_t cp2 = utf8_next(s, n, &k);
+            (void)cp2;
+            i = k;
+            continue;
+        }
+        if (is_extend_like(cp)) {
+            i = j;
+            continue;
+        }
+        break;
+    }
+
+    *out_byte_len = i - start;
+    *out_width = cluster_w;
+    *out_i = i;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Lua bindings                                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -290,8 +451,9 @@ l_wcwidth(lua_State *L) {
     return 1;
 }
 
-/* string_width(s) -> total display width (controls count as 0).
- * Also accepts second return: count of code points processed. */
+/* string_width(s) -> total display width.
+ * Walks grapheme clusters (so VS16 promotes base width, RI pairs fuse, etc.)
+ * to stay consistent with screen.draw_line. Controls count as 0. */
 static int
 l_string_width(lua_State *L) {
     size_t n;
@@ -300,8 +462,9 @@ l_string_width(lua_State *L) {
     size_t i = 0;
     lua_Integer w = 0;
     while (i < n) {
-        uint32_t cp = utf8_next(us, n, &i);
-        int cw = wcwidth_cp(cp);
+        size_t clen;
+        int cw;
+        grapheme_next(us, n, &i, &clen, &cw);
         if (cw > 0) w += cw;
     }
     lua_pushinteger(L, w);
@@ -309,8 +472,9 @@ l_string_width(lua_State *L) {
 }
 
 /* char_width(s, byte_index_1based) -> (width, next_byte_index)
- * Useful for renderers that want to walk a string one visible character at a
- * time (e.g. cursor placement in TextInput). */
+ * Walks one code point at a time. Retained for callers that specifically
+ * want code-point granularity; for visible-character walking (e.g. cursor
+ * placement) prefer grapheme_next instead. */
 static int
 l_char_width(lua_State *L) {
     size_t n;
@@ -327,10 +491,39 @@ l_char_width(lua_State *L) {
     return 2;
 }
 
+/* grapheme_next(s, byte_index_1based) -> (cluster_string, width, next_byte_index)
+ *
+ * Walks one grapheme cluster at a time. At end-of-string returns ("", 0, #s+1)
+ * so callers can loop on `ch ~= ""`. For visible-character iteration this is
+ * the preferred API over char_width. */
+static int
+l_grapheme_next(lua_State *L) {
+    size_t n;
+    const char *s = luaL_checklstring(L, 1, &n);
+    lua_Integer idx = luaL_optinteger(L, 2, 1);
+    if (idx < 1) idx = 1;
+    size_t i = (size_t)(idx - 1);
+    if (i >= n) {
+        lua_pushlstring(L, "", 0);
+        lua_pushinteger(L, 0);
+        lua_pushinteger(L, (lua_Integer)(n + 1));
+        return 3;
+    }
+    size_t start = i;
+    size_t clen;
+    int cw;
+    grapheme_next((const unsigned char *)s, n, &i, &clen, &cw);
+    lua_pushlstring(L, s + start, clen);
+    lua_pushinteger(L, cw);
+    lua_pushinteger(L, (lua_Integer)(i + 1));
+    return 3;
+}
+
 static const luaL_Reg lib[] = {
-    { "wcwidth",      l_wcwidth      },
-    { "string_width", l_string_width },
-    { "char_width",   l_char_width   },
+    { "wcwidth",       l_wcwidth       },
+    { "string_width",  l_string_width  },
+    { "char_width",    l_char_width    },
+    { "grapheme_next", l_grapheme_next },
     { NULL, NULL },
 };
 

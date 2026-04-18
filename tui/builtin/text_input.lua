@@ -33,20 +33,18 @@ local wcwidth = tui_core.wcwidth
 
 local M = {}
 
--- Split a UTF-8 string into a list of chars (each entry = 1 grapheme for our
--- purposes — combining marks attach to the previous slot as a suffix).
+-- Split a UTF-8 string into a list of chars (each entry = 1 grapheme
+-- cluster). Combining marks, ZWJ sequences, VS16 promotion, RI flag pairs,
+-- and Hangul L/V/T conjoining all fuse into a single slot so arrow keys /
+-- backspace operate on visible characters rather than code points.
 local function to_chars(s)
     local chars = {}
     if not s or s == "" then return chars end
     local n, i = #s, 1
     while i <= n do
-        local cw, ni = wcwidth.char_width(s, i)
-        local ch = s:sub(i, ni - 1)
-        if cw == 0 and #chars > 0 then
-            chars[#chars] = chars[#chars] .. ch
-        else
-            chars[#chars + 1] = ch
-        end
+        local ch, _, ni = wcwidth.grapheme_next(s, i)
+        if ch == "" then break end
+        chars[#chars + 1] = ch
         i = ni
     end
     return chars

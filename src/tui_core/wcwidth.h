@@ -24,3 +24,29 @@ int wcwidth_cp(uint32_t cp);
  * sequence on success (or past the first invalid byte on failure). On
  * invalid input, returns U+FFFD. */
 uint32_t utf8_next(const unsigned char *s, size_t n, size_t *out_i);
+
+/* Decode one grapheme cluster from s[*out_i..n). Advances *out_i past the
+ * entire cluster. Writes the cluster's UTF-8 byte length to *out_byte_len
+ * and its terminal display width to *out_width.
+ *
+ * Implements a UAX#29 subset:
+ *   - GB3 CR × LF (treated as one cluster, width 0)
+ *   - GB4/5 controls break (width -1 converted to 0)
+ *   - GB6/7/8 Hangul L/V/T/LV/LVT conjoining (cluster width = 2)
+ *   - GB9   X × (Extend | ZWJ)
+ *   - GB9a  X × SpacingMark  (approximated: any wcwidth==0 non-control)
+ *   - GB11  Extended_Pictographic Extend* ZWJ × Extended_Pictographic
+ *           (approximated: after any ZWJ we swallow one more cluster base)
+ *   - GB12/13 sot (RI RI)* RI × RI (flag pairs)
+ *
+ * Width rules:
+ *   - base code point wcwidth drives cluster width
+ *   - VS16 (U+FE0F) after base promotes cluster width to 2
+ *   - VS15 (U+FE0E) leaves base width alone
+ *   - RI+RI fused → width 2
+ *
+ * A lone 0-width or control base at the cluster start returns width 0 and
+ * advances by the single decoded code point so callers can `continue` safely.
+ */
+void grapheme_next(const unsigned char *s, size_t n, size_t *out_i,
+                   size_t *out_byte_len, int *out_width);

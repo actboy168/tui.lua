@@ -51,66 +51,41 @@
 - `test/test_snapshots.lua`：chat idle / typed / streaming / resized 四个用例
 
 ### Stage 6 — 焦点管理（Ink 兼容）
-**前置修复 — `inst.dirty` 清零 + Harness 稳定化循环**
-- `tui/reconciler.lua` 在调用组件 fn 之前清 `inst.dirty = false`，mount-effect 里调 setter 能被检测到
-- `tui/testing.lua` `Harness:_paint` 加稳定化循环：render → 有 instance dirty 则重跑，上限 4 轮，超限 error
-- `test/test_dirty.lua`：mount-effect 调 setter 首帧即反映；死循环 setter 触发稳定化报错
-
-**焦点系统**
-- `tui/focus.lua`：焦点链状态机（entries 按订阅序 == Tab 次序；`focused_id` 单值）
-- `useFocus { autoFocus, id, on_input }` → `{ isFocused, focus }`；订阅走 `useEffect({}, [])` 挂载
-- `useFocusManager()` → `{ enableFocus, disableFocus, focus, focusNext, focusPrevious }`
-- `tui/input.lua` dispatch 拦截 Tab / Shift-Tab 转 `focus_next / focus_prev`；其他键先派给 focused entry，再广播给裸 `useInput`
-- `TextInput` 内置走 `useFocus`；`props.focus = false` 保留 disabled 独立分支；新增 `focusId` / `autoFocus` props
-- `Harness:focus_id / :focus_next / :focus_prev / :focus(id)`；`KEYS["shift+tab"] = "\27[Z"`
-- `testing.render` 初始 paint 失败时恢复 hijack 的 terminal，避免后续用例报 "another harness is already active"
-- `test/test_focus.lua`：8 个用例（autoFocus / Tab / FocusManager / disable / unmount 转焦点 / TextInput / 两个 TextInput Tab 切换 / rerender 不改变 Tab 顺序）
+- `tui/focus.lua` 焦点链状态机：entries 按订阅序 == Tab 次序，`focused_id` 单值
+- `useFocus { autoFocus, id, on_input }` / `useFocusManager`
+- `tui/input.lua` 拦截 Tab / Shift-Tab 切焦点；其他键先派 focused entry 再广播
+- `TextInput` 内置走 `useFocus`，新增 `focusId` / `autoFocus` props；`Harness:focus*` 辅助
+- 前置修复：`inst.dirty` 在调用组件前清零 + Harness `_paint` 稳定化循环（上限 4 轮）
 
 ### Stage 7 — ErrorBoundary 错误隔离
-- `tui/element.lua`：`ErrorBoundary { fallback = ..., children... }` 构造器，`kind = "error_boundary"`
-- `tui/reconciler.lua`：`expand` 识别 error_boundary 节点，用 pcall 包住 children 循环；失败时切换到 `fallback`（fallback 自身也走 expand，支持组件）；inst 记录 `caught_error`；fallback 再失败降级为空 box 阻止错误继续传播
-- `tui/init.lua`：`tui.ErrorBoundary` 导出；`produce_tree` 把 `reconciler.render` 包 pcall，失败时画"[tui] render error: <msg>"错误屏而非崩掉事件循环（未声明 boundary 时的框架级兜底）
-- `test/test_error_boundary.lua`：6 个用例（catches_child_throw 含 rerender 稳定 / no_throw_passthrough / isolates_sibling_subtrees / nested_inner_catches_first / error_from_deeper_descendant_caught / no_boundary_error_propagates）
+- `tui.ErrorBoundary { fallback = ..., children... }`：reconciler 用 pcall 包 children，失败时切 fallback，fallback 再崩降级为空 box
+- 未声明 boundary 时 `tui.init.produce_tree` 兜底，画 `[tui] render error: ...` 错误屏而非崩事件循环
 
 ### Stage 8 — 基于 key 的 reconciler diff
-- `tui/element.lua`：`pluck_key` 把 props.key 提升到 `element.key`，不泄漏到 Yoga；Box / Text / ErrorBoundary 构造器都挂 key
-- `tui/reconciler.lua`：`child_path_for(parent, i, child, seen_keys)` —— 有 key 走 `parent/#<key>` 命名空间、无 key 走 `parent/<i>`；同父同 key render 期 error 硬失败；Box 与 ErrorBoundary children 循环都用新辅助
-- 行为：同层重排 / 前插 / 删中间元素不再 remount 带 key 的兄弟，state/effect 保留；无 key 时维持原有位置语义（零回归）；key 换了按路径换算自然 unmount + mount
-- `test/test_reconciler_keys.lua`：8 个用例（重排保身 / 前插 / 删中间 / 无 key 位置回归 / 混用 keyed+unkeyed / 重复 key 报错 / key 换位置强制 remount / host Box 带 key 稳定后代）
+- Box / Text / ErrorBoundary 构造器支持 `key` prop；同层重排 / 前插 / 删中间元素不再 remount 兄弟，state/effect 保留
+- 同父同 key render 期硬报错；无 key 时维持位置语义（零回归）
 
 ### Stage 9 — 渲染后端下沉到 C（技术路线 #4 兑现）
-- 新增 `src/tui_core/screen.c`：cell 缓冲（12 字节 cell_t，8 字节内联 + slab 溢出 union）、双缓冲、帧级 slab（next/prev append-only + 指针交换稳态零分配）、ring pool (4 代) 的 row 字符串池
-- Lua API `tui_core.screen.{new, size, resize, invalidate, clear, put, put_border, draw_line, diff, rows}`，state 作参数的函数式风格；`__gc` 负责 free 所有 C-owned 缓冲
-- `diff` 实现：首帧 / invalidate / resize 后走 `\x1b[H\x1b[2J` 全画；后续走 cell 级比较 + 段合并（`MERGE_GAP=3` 以内连续改动合段，bridging 不变字节比再发一次 CUP 便宜）；WIDE_TAIL 语义在 C 端维护
-- `draw_line` 在 C 侧直接调用 `wcwidth_cp + utf8_next`（`src/tui_core/wcwidth.h` 暴露，去掉 static）；组合标记 / 控制字符跳过；grapheme cluster 合并留给未来 stage
-- `put_border` 三套样式（single / double / round）硬编码在 C，6 个 UTF-8 glyph 字节序列直出，一次画完边框
-- `rows()` 用 Lua 5.5 `lua_pushexternalstring` + `ROW_POOL_GEN=4` 环形池：每次 `rows()` 调用轮转一代 buffer、`realloc` 按需、填完推出零拷贝字符串；调用方在 4 代内稳定，超出由下一轮 `rows()` 自然复用同代 buffer（测试 harness / 快照读法均在一帧内，安全）
-- `tui/renderer.lua` 从 ~186 行收缩到 ~40 行：只走树调用 `screen.put_border / draw_line`；`render_rows / render / buffer_to_*` 全退役
-- `tui/screen.lua` 退化为 ~55 行 wrapper；`tui/init.lua paint()` 改走 `size / resize / clear / paint / diff` 链路；`tui/testing.lua` 的 `:rows() / :row() / :frame()` 改读 `screen.rows(self._screen)`，移除 `self._rows` 字段
-- `test/test_screen_diff.lua` 11 用例：首帧全画 / 幂等 / 单点局部更新 / MERGE_GAP 内合并 / MERGE_GAP 外拆段 / 宽字符 + WIDE_TAIL / 长 cluster 走 slab / slab 增长 / ring pool 4 代稳定 / resize 全画 / invalidate 全画
-- 修掉 snprintf 用 `\27`（C 里是八进制 023，非 ESC）的 bug，改为 `\x1b`；全量 128 测试通过（117 老测 + 11 新测）
+- C 模块 `tui_core.screen`：12 字节 cell_t 缓冲、双缓冲、帧级 slab、row 字符串 ring pool（4 代）；`new / resize / clear / put / put_border / draw_line / diff / rows` API
+- 首帧/invalidate/resize 全画，其余走 cell 级比较 + `MERGE_GAP=3` 段合并
+- C 侧 `put_border` 三套样式（single / double / round）、`draw_line` 码点级 wcwidth
+- `rows()` 用 Lua 5.5 `lua_pushexternalstring` 零拷贝
 
 ### Stage 10 — Text SGR / 颜色支持
-- `cell_t` 利用末尾 2 字节 `_pad` 扩出 `fg_bg`（高 4 bit fg + 低 4 bit bg）和 `attrs`（bold/dim/underline/inverse + fg_default/bg_default sentinel bits）；`_Static_assert(sizeof == 12)` 保持不变
-- C 侧新增 `pack_style(L, idx, *fg_bg, *attrs)`：从 Lua style table 读 `{fg, bg, bold, dim, underline, inverse}`，非法 0..15 范围外抛 Lua error；三个 binding（`put / draw_line / put_border`）都接末尾可选 style 参数
-- `put_cell` wide-tail cell 复制 head 的 style，保证 cell_eq 对 head+tail 稳定
-- `cell_eq` 扩展比较 `fg_bg + attrs`；WIDE_TAIL 特判保留
-- `diff` 引入 `cur_fg_bg / cur_attrs` 状态机：每次要 emit cell bytes 前 `emit_sgr` 发一次性 `ESC[0;p1;p2;...m`（leading reset + 全量参数，策略无态）；每行末若 row_dirty 则 `reset_sgr` 发 `ESC[0m`；首帧 `ESC[H\x1b[2J\x1b[0m` 硬复位；段合并 bridging 时 unchanged cell 的 style 也正确驱动 cur_*
-- fg/bg 0..7 → `30-37 / 40-47`，8..15 → `90-97 / 100-107`；纯 default 无输出（零 SGR 字节，老测零回归）
-- 新增 `tui/sgr.lua`：COLORS 表（black..brightWhite 16 个常量 + gray/grey 别名）+ `pack_props(props)` 把 Text/Box 的 `color / backgroundColor / bold / dim / underline / inverse` props 规范化成 style table；非法 color 名称 / 越界整数 render 期 error
-- `tui/renderer.lua` 在 text 与 box(border) 分支调用 `sgr.pack_props` 把 style 传给 `screen_c.draw_line / put_border`
-- `test/test_screen_sgr.lua` 12 用例（C 层 byte-level）：单 cell / draw_line+bold / 同色 merge 只 1 次 SGR / 跨色 / bg / bright / 上一帧红下一帧默认不串色 / 行末 reset / bridge gap 保 style / rows 无 SGR / 宽字符带色幂等 / bold-only 切换
-- `test/test_text_color.lua` 5 用例（harness 层）：Text 红 ansi 有 SGR 但 rows 纯文本 / Box color 不向 Text 继承 / 未知 color 抛错 / border 染色 / bold+bg 组合
-- 全测 145/145 通过（128 老 + 17 新）
+- `cell_t` 扩出 `fg_bg` + `attrs`（ANSI-16 前/背景 + bold/dim/underline/inverse）
+- Lua 侧 `tui.sgr`：Text/Box 接受 `color / backgroundColor / bold / dim / underline / inverse` props
+- `draw_line / put_border` 接受 style 参数；diff 在每个要 emit 的 cell 前发 `ESC[0;p1;p2;...m`，行末 reset
 
 ### Stage 11 — SGR 增量 diff
-- 把 Stage 10 的 stateless full-form（`ESC[0;p1;p2;...m` 每次 leading 0 重置）升级为纯增量：仅 emit 变化的属性位
-- `emit_sgr` 重写：按位 XOR 找变化；bold/dim 共享 SGR `22m` 的陷阱按"先 22m 清、再补存活位"处理；underline/inverse 用 4/24 与 7/27 独立开关；fg 变 default 用 `39m`，bg 变 default 用 `49m`，换色用 30-37/40-47/90-97/100-107；状态相同零字节 early return；若所有位都等于当前（仅 cur!=next 但差量为空）不 emit 裸 `ESC[m`
-- 行末 reset 移除：`ldiff` 两分支删掉 `row_dirty` 跟踪和尾 `reset_sgr`，SGR 状态按 ECMA-48 自然跨 CUP 继承；下一行/下一帧首个改动 cell 走 emit_sgr 算 delta
-- 首帧 `ESC[H\x1b[2J\x1b[0m` 保留（硬 SGR 基线让 cur_fg_bg=0 / cur_attrs=ATTR_DEFAULT 可信）；diff 末尾 `reset_sgr` 安全网保留（每帧结束 tracker 回 default，防 post-diff 用户 stdout 串色）
-- `test/test_screen_sgr.lua`：断言从 `ESC[0;p...m` 改成增量形式 `ESC[p...m`；case 8 从"行末 reset"改写为"SGR 跨行继承"（断言 row-2 CUP 前不含 `ESC[0m`）；case 12 bold-only 切换重构为同帧内三 cell 验证真·增量（`ESC[31m` → `ESC[1m`（仅补 bold） → `ESC[22m`（仅清 bold））
-- `test/test_text_color.lua` 4 处断言同步改增量形式
-- 全测 145/145 通过；chat_mock 离屏 smoke 肉眼确认字节数下降（如 `[bot] I'm thi_` 区段从 `ESC[0;2;36m...ESC[0m` 变成 `ESC[2;36m...ESC[22;39m`）
+- `emit_sgr` 改为纯增量：只 emit 变化的属性位（bold/dim 共享 22m、underline 4/24、inverse 7/27、fg 39m、bg 49m、色码 30-37/40-47/90-97/100-107）
+- 行末不再强制 reset，SGR 状态按 ECMA-48 跨 CUP 继承；diff 末尾保留一次 `ESC[0m` 安全网
+- 首帧 `ESC[H\x1b[2J\x1b[0m` 硬基线保持不变
+
+### Stage 12 — Grapheme cluster
+- C 层新增 `grapheme_next`：GB6/7/8 Hangul L/V/T/LV/LVT 合并、GB9/9a extend、GB11 近似 ZWJ、GB12/13 regional-indicator 偶数对；VS16 触发宽化、VS15 保持 base 宽
+- `screen.draw_line` 按 cluster 写 cell（combining mark / ZWJ 家庭 / 国旗 / Hangul jamo / VS16 heart 都占单元格）
+- `wcwidth.grapheme_next(s, i)` Lua 绑定；`wcwidth.string_width` 改用 grapheme 累加，与渲染列数一致
+- `tui.text.iter` 和 `TextInput.to_chars` 切到 grapheme，方向键 / backspace 按 cluster 跳
 
 ---
 
@@ -121,11 +96,6 @@ _暂无_
 ---
 
 ## 未完成 · 按类别
-
-### Grapheme cluster（C 层 wcwidth 的第二半）
-
-- `src/tui_core/wcwidth.c` 当前只覆盖码点级 East Asian Width + emoji 宽度；grapheme cluster 边界（ZWJ emoji sequence / combining mark / regional indicator 国旗）未实现
-- 影响：emoji 序列如 👨‍👩‍👧 按 3 个宽度计、光标停留在组合字符中间、方向键按码点而非 grapheme 跳
 
 ### 功能增强
 
@@ -153,7 +123,6 @@ _暂无_
 ### 渲染性能与稳定性
 
 - alternate screen buffer（类 vim 进出全屏）
-- grapheme cluster 合并（combining mark 应粘附前 cell 而非独占）
 - `put` 的 cluster 长度校验（防止恶意长字符串爆 slab）
 - truecolor / 256 色扩展：cell_t 扩到 16 字节 or 引入独立 style pool，给 `fg / bg` 加 16/24 bit 值
 - Text per-run inline style：`Text { "plain ", {text="red", color="red"} }` 形式，wrap 需沿 run 边界切片

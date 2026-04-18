@@ -174,3 +174,46 @@ function suite:test_mask_hides_chars_but_preserves_width()
     lt.assertEquals(te._cursor_offset, 4)
     h:unmount()
 end
+
+-- Stage 12: backspace removes a whole grapheme cluster, not just one code point.
+function suite:test_backspace_removes_cluster()
+    -- "e" + COMBINING ACUTE (2 bytes) forms one grapheme. A single
+    -- backspace should delete the entire cluster, leaving the field empty.
+    local value = "e\204\129"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("backspace")
+    lt.assertEquals(value, "")
+    h:unmount()
+end
+
+-- Stage 12: regional indicator pair counts as a single char column-wise.
+function suite:test_flag_is_single_cluster()
+    local value = "\240\159\135\175\240\159\135\181"  -- 🇯🇵
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te ~= nil, true)
+    -- Caret sits after the single flag cluster (width 2).
+    lt.assertEquals(te._cursor_offset, 2)
+    -- One backspace should remove the whole flag.
+    h:press("backspace")
+    lt.assertEquals(value, "")
+    h:unmount()
+end

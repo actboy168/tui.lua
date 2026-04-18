@@ -17,14 +17,20 @@ local wcwidth  = tui_core.wcwidth
 
 local M = {}
 
--- UTF-8 iterator over (char, width) pairs, excluding control characters.
--- Controls are dropped from the output so wrap widths stay honest.
+-- UTF-8 iterator over (char, width) pairs, walking grapheme clusters so a
+-- combining mark attaches to its base, ZWJ sequences fuse, VS16 promotes
+-- width, RI pairs form a flag, and Hangul jamo L/V/T conjoin.
+--
+-- Width is already clamped to >=0 by grapheme_next (controls get 0). The
+-- iterator does not drop clusters: callers that want to ignore width-0
+-- glyphs can filter themselves (wrap() relies on "\n" being delivered so
+-- it can flush the current line).
 local function iter_chars(s)
     local n, i = #s, 1
     return function()
         if i > n then return nil end
-        local cw, ni = wcwidth.char_width(s, i)
-        local ch = s:sub(i, ni - 1)
+        local ch, cw, ni = wcwidth.grapheme_next(s, i)
+        if ch == "" then i = n + 1; return nil end
         i = ni
         return ch, cw
     end

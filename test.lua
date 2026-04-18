@@ -18,5 +18,7 @@ require "test.test_reconciler_keys"
 require "test.test_screen_diff"
 require "test.test_screen_sgr"
 require "test.test_text_color"
+require "test.test_grapheme"
+require "test.test_screen_grapheme"
 
 os.exit(lt.run(), true)
