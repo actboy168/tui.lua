@@ -24,7 +24,6 @@ _暂无_
 
 - `Newline { count }` / `Spacer` / `Transform { transform=fn }`
 - `form.lua`：多输入框 + 导航
-- Select / ProgressBar（配合 Stage 18 的 Spinner 组成 AI chat 场景最需要的三件套）
 - Markdown / syntax-highlight（AI chat 核心诉求，Stage 靠后）
 
 ### 渲染性能与稳定性

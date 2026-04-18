@@ -27,6 +27,8 @@ local static_mod = require "tui.builtin.static"
 local text_input = require "tui.builtin.text_input"
 local cursor_mod = require "tui.builtin.cursor"
 local spinner_mod = require "tui.builtin.spinner"
+local select_mod = require "tui.builtin.select"
+local progress_mod = require "tui.builtin.progress_bar"
 local tui_core   = require "tui_core"
 
 local terminal = tui_core.terminal
@@ -74,6 +76,8 @@ M.ErrorBoundary  = element.ErrorBoundary
 M.Static         = static_mod.Static
 M.TextInput      = text_input.TextInput
 M.Spinner        = spinner_mod.Spinner
+M.Select         = select_mod.Select
+M.ProgressBar    = progress_mod.ProgressBar
 
 -- Hooks
 M.useState       = hooks.useState
