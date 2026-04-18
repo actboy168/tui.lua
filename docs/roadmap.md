@@ -18,14 +18,13 @@ _暂无_
 
 ### Hook 家族补齐（Ink 对齐 P1）
 
-- `useAnimation({ interval, isActive }) -> { frame, time, delta, reset }`
 - `useStdout()` / `useStderr()`
 
 ### 内置组件扩充
 
 - `Newline { count }` / `Spacer` / `Transform { transform=fn }`
 - `form.lua`：多输入框 + 导航
-- Select / Spinner / ProgressBar（AI chat 场景最需要的三件套）
+- Select / ProgressBar（配合 Stage 18 的 Spinner 组成 AI chat 场景最需要的三件套）
 - Markdown / syntax-highlight（AI chat 核心诉求，Stage 靠后）
 
 ### 渲染性能与稳定性
@@ -56,9 +55,8 @@ _暂无_
 
 ### 架构改进（非阻塞，穿插推进）
 
-- **`scheduler.step()` 正式 API**：当前 `tui.testing:advance(ms)` 借用 `scheduler._timers()` 私表做 timer 循环。应提升为公共 `scheduler.step(now)`，消除重复、给用户一个正式的"外部驱动"入口。
 - **paint 链路显式 terminal 注入**：`tui_core.terminal` 是进程单例，`tui.testing` 靠整表替换+还原来做 mock，限制了同进程内多 harness 并存。改为 `paint(root, ctx)` 接受 `ctx.terminal`，让测试 harness 直接传 fake，无需全局劫持。
-- **ltest 并行 runner 兼容**：若未来 ltest 改并行，上面两项必须已完成，否则测试互相踩单例。目前在 `tui/testing.lua` 文件头注释里记录警告。
+- **ltest 并行 runner 兼容**：若未来 ltest 改并行，上面一项必须已完成，否则测试互相踩单例。目前在 `tui/testing.lua` 文件头注释里记录警告。
 - **`input.dispatch` 中间件链**：当前用 `handled_by_focus_nav` bool 手动串 `pre → focus → broadcast`。改为可插拔中间件链，方便将来插入 mouse / bracketed-paste / 日志中间件。
 - **订阅总线工具化**：input / resize / focus 三处重复实现 "订阅表 + dispatch"，提 `make_subscription_bus()`
 - **C 层 assert 走 `[tui:fatal]` 前缀**：当前 C 层 `luaL_error` 会被 ErrorBoundary 吞掉，不变式违反应该 bypass

@@ -92,31 +92,62 @@ function M.requestRedraw()
     dirty = true
 end
 
+-- Public monotonic clock. Delegates to the configured backend so tests
+-- running under harness get the virtual clock and production code gets
+-- real time. Useful for hooks that need to compute real elapsed deltas
+-- (useAnimation) independent of timer firing schedule.
+function M.now()
+    return now_ms()
+end
+
 function M.stop()
     running = false
 end
 
 -- ---------------------------------------------------------------------------
 -- Internal: process pending timers; returns true if any fired.
+--
+-- Semantics: one-shots fire once and are removed; intervals self-catch-up
+-- via fire_at+=interval so that a large step (e.g. testing:advance(N) with
+-- N >> interval) fires the interval the appropriate number of times in one
+-- call. Callbacks may mutate the timers table (add/remove); we iterate by
+-- snapshotting ids per outer pass and re-check each timer's live state.
 
 local function tick_timers(now)
     local fired = false
-    -- Snapshot ids so callbacks can safely add/remove timers.
     local ids = {}
     for id in pairs(timers) do ids[#ids + 1] = id end
     for _, id in ipairs(ids) do
         local t = timers[id]
-        if t and t.fire_at <= now then
+        -- Fire all due iterations for this timer. One-shots loop at most
+        -- once; intervals loop until fire_at passes `now`.
+        while t and t.fire_at <= now do
             if t.interval then
-                t.fire_at = now + t.interval
+                t.fire_at = t.fire_at + t.interval
             else
                 timers[id] = nil
             end
             t.fn()
             fired = true
+            t = timers[id]   -- may be nil if fn() called clearTimer(id)
         end
     end
     return fired
+end
+
+-- Public: advance time to `now` (absolute ms on the configured clock) and
+-- fire all due timers. Used by tui.testing:advance and by external event
+-- loops that want to drive the scheduler's timer wheel without running the
+-- full run() loop.
+--
+-- Callers are responsible for keeping the backend's `now` function in sync
+-- with the `now` passed here — otherwise a subsequent setInterval(fn, ms)
+-- will compute fire_at off the backend's idea of time and drift from the
+-- caller's. The testing harness does this by configuring now = function()
+-- return h._fake_now end; production integrators using step() manually
+-- should take the same care.
+function M.step(now)
+    tick_timers(now)
 end
 
 -- ---------------------------------------------------------------------------

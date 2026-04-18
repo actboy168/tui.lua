@@ -299,28 +299,13 @@ function Harness:press(name)
 end
 
 -- Advance the virtual clock and fire due timers.
--- Mirrors the loop used in test_scheduler's tick_to() helper; repeats until
--- no more timers are due so that intervals can self-reschedule.
+-- Delegates to `scheduler.step(now)` for timer iteration; interval timers
+-- self-catch-up within a single advance call, so advance(N) with N much
+-- larger than a subscribed interval fires the interval N/interval times.
 function Harness:advance(ms)
     assert(type(ms) == "number" and ms >= 0, "advance: non-negative ms required")
-    local target = self._fake_now + ms
-    self._fake_now = target
-    local timers = scheduler._timers()
-    local fired
-    repeat
-        fired = false
-        for tid, t in pairs(timers) do
-            if t.fire_at <= target then
-                if t.interval then
-                    t.fire_at = target + t.interval
-                else
-                    timers[tid] = nil
-                end
-                t.fn()
-                fired = true
-            end
-        end
-    until not fired
+    self._fake_now = self._fake_now + ms
+    scheduler.step(self._fake_now)
     self:_paint()
     return self
 end

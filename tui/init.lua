@@ -26,6 +26,7 @@ local focus_mod  = require "tui.focus"
 local static_mod = require "tui.builtin.static"
 local text_input = require "tui.builtin.text_input"
 local cursor_mod = require "tui.builtin.cursor"
+local spinner_mod = require "tui.builtin.spinner"
 local tui_core   = require "tui_core"
 
 local terminal = tui_core.terminal
@@ -72,6 +73,7 @@ M.Text           = element.Text
 M.ErrorBoundary  = element.ErrorBoundary
 M.Static         = static_mod.Static
 M.TextInput      = text_input.TextInput
+M.Spinner        = spinner_mod.Spinner
 
 -- Hooks
 M.useState       = hooks.useState
@@ -85,6 +87,7 @@ M.useContext     = hooks.useContext
 M.createContext  = hooks.createContext
 M.useInterval    = hooks.useInterval
 M.useTimeout     = hooks.useTimeout
+M.useAnimation   = hooks.useAnimation
 M.useInput       = hooks.useInput
 M.useWindowSize  = hooks.useWindowSize
 M.useApp         = hooks.useApp

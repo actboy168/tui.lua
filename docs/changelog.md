@@ -5,6 +5,12 @@
 
 ---
 
+## Stage 18 — Spinner + useAnimation
+- `useAnimation({ interval, isActive }) -> { frame, time, delta, reset }`（`delta` 为虚拟时钟实测差；暂停再恢复不累加离线时间；`reset` 身份稳定）
+- `Spinner { type="dots"|"line", label, color, frames=?, interval=? }`（内置 dots/line 两套；`type` 与 `frames` 互斥；无 `isActive` prop — 条件渲染控制生命周期）
+- `scheduler.now()` 公开 monotonic 时钟
+- `scheduler.step(now)` 公开 timer 步进 API；interval 在一次 step 里自追赶多次 fire；`testing:advance` 改调 `scheduler.step`
+
 ## Stage 17 — Dev-mode 三件套
 - `tui.setDevMode(bool)` 开关（默认关，测试 harness 自动启用）
 - Hook 顺序校验：hook 数量或类型在两次 render 间变化即抛 `[tui:fatal]`
