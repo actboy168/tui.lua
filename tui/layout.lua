@@ -25,6 +25,10 @@ local M = {}
 local _prev_element = nil
 local _pool = {}
 
+-- Per-node layout cache: maps yoga_node → {lx, ly, lw, lh, ox, oy, lines}
+-- Cleared when a node is released back to the pool.
+local _node_layout = {}
+
 local function pool_acquire()
     -- Pool nodes are already reset by release_subtree before insertion.
     -- yoga.node_new() returns a fresh node with default style.
@@ -43,6 +47,7 @@ local function release_subtree(element)
         end
     end
     yoga.node_reset(element.yoga_node)
+    _node_layout[element.yoga_node] = nil  -- clear stale cache entry
     _pool[#_pool + 1] = element.yoga_node
     element.yoga_node = nil
 end
@@ -152,24 +157,70 @@ local function build(element, parent_node)
     return node
 end
 
+-- Restore element.rect from the cache (using parent's absolute position), then
+-- recurse into children.  Used by readback's fast path when yoga layout is
+-- unchanged for the whole subtree.  Text lines are always recomputed from the
+-- current text content so stale content is never displayed.
+local function readback_from_cache(element, ax, ay)
+    local node  = element.yoga_node
+    local cache = _node_layout[node]
+    if not cache then
+        -- Cache miss — fall through to normal readback.
+        return false
+    end
+    local lw = cache[3]
+    local cax = ax + cache[1]
+    local cay = ay + cache[2]
+    element.rect = { x = cax, y = cay, w = lw, h = cache[4] }
+    if element.kind == "text" and element._wrap then
+        local mode = element._wrap_mode or "wrap"
+        if mode == "hard" then
+            element.lines = text_mod.wrap_hard(element.text or "", lw)
+        elseif mode == "truncate" or mode == "truncate-end" then
+            element.lines = { text_mod.truncate(element.text or "", lw) }
+        elseif mode == "truncate-start" then
+            element.lines = { text_mod.truncate_start(element.text or "", lw) }
+        elseif mode == "truncate-middle" then
+            element.lines = { text_mod.truncate_middle(element.text or "", lw) }
+        else
+            element.lines = text_mod.wrap(element.text or "", lw)
+        end
+    end
+    if element.kind == "box" then
+        for _, child in ipairs(element.children or {}) do
+            if not readback_from_cache(child, cax, cay) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 -- Recursively read computed layout back and stash it on each element.
 -- Returns absolute x/y by accumulating parent offsets (yoga only gives local).
 -- `phase` == "measure" : first pass, record rect on everything and collect
 --                         wrap-capable text nodes that need re-measuring.
 -- `phase` == "final"   : second pass, rect/lines final.
 local function readback(element, ox, oy, phase, wrap_nodes)
-    local lx, ly, lw, lh = yoga.node_get(element.yoga_node)
-    local ax, ay = ox + lx, oy + ly
-    element.rect = { x = ax, y = ay, w = lw, h = lh }
-    if element.kind == "box" then
-        for _, child in ipairs(element.children or {}) do
-            readback(child, ax, ay, phase, wrap_nodes)
-        end
-    elseif element.kind == "text" then
-        if element._wrap then
+    local node = element.yoga_node
+    local has_new = yoga.node_has_new_layout(node)
+    yoga.node_set_has_new_layout(node, false)
+
+    local cache = _node_layout[node]
+
+    -- FAST PATH: layout unchanged and parent offset unchanged → entire subtree
+    -- coordinates are identical to last frame.  Text lines are still
+    -- recomputed from current content so dynamic text is always fresh.
+    if not has_new and cache and cache[5] == ox and cache[6] == oy then
+        local ax = ox + cache[1]
+        local ay = oy + cache[2]
+        local lw = cache[3]
+        element.rect = { x = ax, y = ay, w = lw, h = cache[4] }
+        if element.kind == "text" and element._wrap then
             local mode = element._wrap_mode or "wrap"
+            local lines
             if mode == "hard" then
-                local lines = text_mod.wrap_hard(element.text or "", lw)
+                lines = text_mod.wrap_hard(element.text or "", lw)
                 element.lines = lines
                 if phase == "measure" and wrap_nodes and #lines > 1 then
                     wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
@@ -181,13 +232,75 @@ local function readback(element, ox, oy, phase, wrap_nodes)
             elseif mode == "truncate-middle" then
                 element.lines = { text_mod.truncate_middle(element.text or "", lw) }
             else
-                -- default "wrap" mode
-                local lines = text_mod.wrap(element.text or "", lw)
+                lines = text_mod.wrap(element.text or "", lw)
                 element.lines = lines
                 if phase == "measure" and wrap_nodes and #lines > 1 then
                     wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
                 end
             end
+        end
+        if element.kind == "box" then
+            for _, child in ipairs(element.children or {}) do
+                if not readback_from_cache(child, ax, ay) then
+                    -- Cache miss mid-subtree: full readback for this child.
+                    readback(child, ax, ay, phase, wrap_nodes)
+                end
+            end
+        end
+        return
+    end
+
+    -- NORMAL PATH: read local layout from Yoga (or from cache if only ox/oy changed).
+    local lx, ly, lw, lh
+    if has_new or not cache then
+        lx, ly, lw, lh = yoga.node_get(node)
+    else
+        -- Parent offset changed but local layout is the same; reuse cached values.
+        lx, ly, lw, lh = cache[1], cache[2], cache[3], cache[4]
+    end
+    local ax, ay = ox + lx, oy + ly
+    element.rect = { x = ax, y = ay, w = lw, h = lh }
+
+    -- Update cache.
+    if not cache then
+        cache = {}
+        _node_layout[node] = cache
+    end
+    cache[1], cache[2], cache[3], cache[4] = lx, ly, lw, lh
+    cache[5], cache[6] = ox, oy
+
+    if element.kind == "box" then
+        for _, child in ipairs(element.children or {}) do
+            readback(child, ax, ay, phase, wrap_nodes)
+        end
+    elseif element.kind == "text" then
+        if element._wrap then
+            local mode = element._wrap_mode or "wrap"
+            local lines
+            if mode == "hard" then
+                lines = text_mod.wrap_hard(element.text or "", lw)
+                element.lines = lines
+                if phase == "measure" and wrap_nodes and #lines > 1 then
+                    wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
+                end
+            elseif mode == "truncate" or mode == "truncate-end" then
+                lines = { text_mod.truncate(element.text or "", lw) }
+                element.lines = lines
+            elseif mode == "truncate-start" then
+                lines = { text_mod.truncate_start(element.text or "", lw) }
+                element.lines = lines
+            elseif mode == "truncate-middle" then
+                lines = { text_mod.truncate_middle(element.text or "", lw) }
+                element.lines = lines
+            else
+                -- default "wrap" mode
+                lines = text_mod.wrap(element.text or "", lw)
+                element.lines = lines
+                if phase == "measure" and wrap_nodes and #lines > 1 then
+                    wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
+                end
+            end
+            cache[7] = nil  -- lines not cached; always recomputed from current text
         end
     end
 end

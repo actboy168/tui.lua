@@ -39,18 +39,25 @@ function M.is_fatal(err)
     return type(err) == "string" and err:sub(1, #FATAL_PREFIX) == FATAL_PREFIX
 end
 
+-- Pre-built numeric path suffixes to avoid tostring(i) + concat per child.
+local _NUM_SUFFIX = {}
+for _i = 1, 64 do _NUM_SUFFIX[_i] = "/" .. _i end
+local function num_suffix(i)
+    return _NUM_SUFFIX[i] or ("/" .. i)
+end
+
 -- ---------------------------------------------------------------------------
 -- Instance registry: path-string -> instance
 
 local function make_state()
     return {
-        instances      = {},   -- path -> instance
-        seen           = {},   -- path -> true (for this render pass)
-        app            = nil,  -- app handle injected by tui.render
-        boundary_stack = {},   -- ancestor ErrorBoundary instances, innermost last
-        context_stack  = {},   -- ancestor Provider entries { context=ctx, value=v }
-        _key_warned    = {},   -- parent_path -> true, reset each render pass
-                               -- (dev_mode missing-key warning dedup)
+        instances        = {},   -- path -> instance
+        seen             = {},   -- path -> true (for this render pass)
+        app              = nil,  -- app handle injected by tui.render
+        boundary_stack   = {},   -- ancestor ErrorBoundary instances, innermost last
+        context_stack    = {},   -- ancestor Provider entries { context=ctx, value=v }
+        _key_warned      = {},   -- parent_path -> true, reset each render pass
+        _effects_to_flush = {},  -- instances with pending effects (reused each frame)
     }
 end
 
@@ -127,7 +134,7 @@ local function child_path_for(parent_path, i, child, seen_keys)
         seen_keys[ks] = true
         return parent_path .. "/#" .. ks
     end
-    return parent_path .. "/" .. tostring(i)
+    return parent_path .. num_suffix(i)
 end
 
 -- ---------------------------------------------------------------------------
@@ -416,11 +423,16 @@ end
 -- Walks the user's tree, expanding function components into host elements,
 -- unmounts any instances that disappeared this pass, and flushes effects.
 function M.render(state, root, app_handle)
-    state.seen = {}
+    -- Reuse existing tables by clearing them instead of allocating new ones.
+    local seen = state.seen
+    for k in next, seen do seen[k] = nil end
+    local kw = state._key_warned
+    for k in next, kw do kw[k] = nil end
+    local eff = state._effects_to_flush
+    for i = #eff, 1, -1 do eff[i] = nil end
+
     state.app  = app_handle
-    state._effects_to_flush = {}
     state.context_stack = state.context_stack or {}
-    state._key_warned = {}
 
     -- Publish the state so hooks.useContext can look up Providers. Wrap in
     -- pcall so _current_state is always cleared even if expand() throws.
@@ -442,7 +454,7 @@ function M.render(state, root, app_handle)
     for _, inst in ipairs(state._effects_to_flush) do
         hooks._flush_effects(inst)
     end
-    state._effects_to_flush = nil
+    -- (keep _effects_to_flush allocated; cleared at top of next render)
 
     return tree
 end
