@@ -101,6 +101,10 @@ typedef struct {
     int       gen;
 } row_pool_t;
 
+/* Rendering mode constants. */
+#define SCREEN_MODE_ALT  0   /* CUP-based (default, alt-screen compatible) */
+#define SCREEN_MODE_MAIN 1   /* relative-move + cursor-restore (main screen) */
+
 typedef struct {
     int w, h;
     cell_t *next;
@@ -109,6 +113,11 @@ typedef struct {
     slab_t  prev_slab;
     int     prev_valid;
     row_pool_t rows;
+    /* rendering mode and virtual cursor state (main-screen mode only) */
+    int  mode;              /* SCREEN_MODE_ALT or SCREEN_MODE_MAIN */
+    int  virt_x, virt_y;   /* virtual cursor after cursor_restore (0-based) */
+    int  display_x, display_y; /* declared TextInput cursor (0-based; -1 = none) */
+    int  has_display;       /* 1 if display_x/y is valid */
 } screen_t;
 
 #define SCREEN_MT "tui_core.screen"
@@ -240,6 +249,10 @@ lnew(lua_State *L) {
     fill_space(s->next, (int)ncells);
     fill_space(s->prev, (int)ncells);
     s->prev_valid = 0;
+    s->mode = SCREEN_MODE_ALT;
+    s->virt_x = 0; s->virt_y = 0;
+    s->display_x = -1; s->display_y = -1;
+    s->has_display = 0;
 
     luaL_getmetatable(L, SCREEN_MT);
     lua_setmetatable(L, -2);
@@ -683,10 +696,46 @@ reset_sgr(bytes_t *b, uint8_t *cur_fg_bg, uint8_t *cur_attrs) {
  * bytes for the gap is cheaper than a second CUP sequence (~6-9 bytes). */
 #define MERGE_GAP 3
 
-static int
-ldiff(lua_State *L) {
-    screen_t *s = check_screen(L, 1);
-    bytes_t out = {0};
+/* ── Cursor-movement helpers for main-screen mode ────────────────── */
+
+/* Emit CSI n <cmd>. Omits the parameter when n == 1 (e.g. "\x1b[B"
+ * not "\x1b[1B") to match common terminal conventions. */
+static void
+bytes_append_csi_n(bytes_t *b, int n, char cmd) {
+    char tmp[32];
+    int len;
+    if (n == 1) len = snprintf(tmp, sizeof(tmp), "\x1b[%c",    cmd);
+    else        len = snprintf(tmp, sizeof(tmp), "\x1b[%d%c", n, cmd);
+    bytes_append(b, tmp, (size_t)len);
+}
+
+/* Relative cursor move from (from_x, from_y) to (to_x, to_y).
+ * Implements Ink's moveCursorTo algorithm.  Coordinates are 0-based.
+ * width = screen width (used to detect the pending-wrap state). */
+static void
+emit_relative_move(bytes_t *b,
+                   int from_x, int from_y,
+                   int to_x,   int to_y,
+                   int width) {
+    int dy = to_y - from_y;
+    int dx = to_x - from_x;
+    if (from_x >= width || dy != 0) {
+        /* Cross-row or pending-wrap: CR resolves wrap, then vertical + forward. */
+        bytes_append(b, "\r", 1);
+        if      (dy > 0) bytes_append_csi_n(b,  dy, 'B');
+        else if (dy < 0) bytes_append_csi_n(b, -dy, 'A');
+        if (to_x > 0)    bytes_append_csi_n(b, to_x, 'C');
+    } else {
+        /* Same row, no wrap: horizontal only. */
+        if      (dx > 0) bytes_append_csi_n(b,  dx, 'C');
+        else if (dx < 0) bytes_append_csi_n(b, -dx, 'D');
+    }
+}
+
+/* ── Alt-screen diff (existing behavior, preserved verbatim) ─────── */
+
+static void
+diff_alt(screen_t *s, bytes_t *out) {
     uint8_t cur_fg_bg = 0;
     uint8_t cur_attrs = ATTR_DEFAULT;
 
@@ -694,16 +743,16 @@ ldiff(lua_State *L) {
         /* first-frame / invalidated: clear-screen + full redraw.
          * The trailing ESC[0m is a hard SGR baseline so (cur_fg_bg,
          * cur_attrs) = (0, ATTR_DEFAULT) is trustworthy going forward. */
-        bytes_append_cstr(&out, "\x1b[H\x1b[2J\x1b[0m");
+        bytes_append_cstr(out, "\x1b[H\x1b[2J\x1b[0m");
         for (int y = 0; y < s->h; y++) {
-            bytes_append_cup(&out, y, 0);
+            bytes_append_cup(out, y, 0);
             for (int x = 0; x < s->w; x++) {
                 const cell_t *c = cell_at(s->next, s->w, x, y);
                 if (c->len == 0) continue;  /* WIDE_TAIL: skip */
-                emit_sgr(&out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
+                emit_sgr(out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
                 const uint8_t *p; size_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
-                bytes_append(&out, p, n);
+                bytes_append(out, p, n);
             }
             /* No row-end reset: SGR state carries across CUP per ECMA-48,
              * and the next row's first changed cell will emit the exact
@@ -721,7 +770,6 @@ ldiff(lua_State *L) {
             int run_start = -1;      /* x of first changed cell in current run */
             int last_change = -1;    /* x of last changed cell emitted so far */
 
-            /* helper lambda substitute: flush current run if pending. */
             for (int x = 0; x < s->w; x++) {
                 const cell_t *cn = cell_at(s->next, s->w, x, y);
                 const cell_t *cp = cell_at(s->prev, s->w, x, y);
@@ -734,16 +782,16 @@ ldiff(lua_State *L) {
 
                 if (run_start < 0) {
                     /* open new run */
-                    bytes_append_cup(&out, y, x);
-                    emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                    bytes_append_cup(out, y, x);
+                    emit_sgr(out, &cur_fg_bg, &cur_attrs,
                              cn->fg_bg, cn->attrs);
                     const uint8_t *p; size_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
-                    bytes_append(&out, p, n);
+                    bytes_append(out, p, n);
                     run_start = x;
                     last_change = x;
                     /* skip over wide-char tail so we don't double-emit */
-                    if (cn->width == 2) x++;  /* outer loop will ++ again; */
+                    if (cn->width == 2) x++;  /* outer loop will ++ again */
                 } else {
                     int gap = x - last_change - 1;
                     if (gap <= MERGE_GAP) {
@@ -755,27 +803,27 @@ ldiff(lua_State *L) {
                         for (int k = last_change + 1; k < x; k++) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
-                            emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                            emit_sgr(out, &cur_fg_bg, &cur_attrs,
                                      bc->fg_bg, bc->attrs);
                             const uint8_t *bp; size_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
-                            bytes_append(&out, bp, bn);
+                            bytes_append(out, bp, bn);
                         }
-                        emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
                                  cn->fg_bg, cn->attrs);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
-                        bytes_append(&out, p, n);
+                        bytes_append(out, p, n);
                         last_change = x;
                         if (cn->width == 2) x++;
                     } else {
                         /* gap too big: close old run, open new one */
-                        bytes_append_cup(&out, y, x);
-                        emit_sgr(&out, &cur_fg_bg, &cur_attrs,
+                        bytes_append_cup(out, y, x);
+                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
                                  cn->fg_bg, cn->attrs);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
-                        bytes_append(&out, p, n);
+                        bytes_append(out, p, n);
                         run_start = x;
                         last_change = x;
                         if (cn->width == 2) x++;
@@ -791,7 +839,7 @@ ldiff(lua_State *L) {
 
     /* Final safety: if any SGR state is still non-default, reset it so
      * post-diff terminal output (status line, etc.) stays uncolored. */
-    reset_sgr(&out, &cur_fg_bg, &cur_attrs);
+    reset_sgr(out, &cur_fg_bg, &cur_attrs);
 
     /* swap next/prev (both cells and slabs) so next frame diffs against this. */
     cell_t *tc = s->prev; s->prev = s->next; s->next = tc;
@@ -805,12 +853,199 @@ ldiff(lua_State *L) {
      * `diff()` calls behave deterministically when paint isn't re-run. */
     fill_space(s->next, s->w * s->h);
     s->prev_valid = 1;
+}
 
-    if (out.size == 0) {
-        lua_pushlstring(L, "", 0);
-    } else {
-        lua_pushlstring(L, (const char *)out.buf, out.size);
+/* ── Main-screen diff (relative moves + cursor restore) ──────────── */
+
+static void
+diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
+    uint8_t cur_fg_bg = 0;
+    uint8_t cur_attrs = ATTR_DEFAULT;
+    int virt_x = s->virt_x;
+    int virt_y = s->virt_y;
+
+    /* Clamp effective_h: must be in [1, s->h]. */
+    if (effective_h < 1 || effective_h > s->h) effective_h = s->h;
+
+    /* first_render: true only when terminal cursor position is unknown.
+     * After force_clear, the cursor is at (0,0) so we can use relative moves.
+     * first_render uses \r\n to scroll rows into existence safely. */
+    int first_render = (!s->prev_valid && !force_clear);
+
+    /* Preamble: return physical cursor from display position to virt position. */
+    if (s->has_display) {
+        emit_relative_move(out, s->display_x, s->display_y,
+                           virt_x, virt_y, s->w);
     }
+    s->has_display = 0;
+
+    /* Frame header. */
+    if (force_clear) {
+        /* Resize: clear screen, home cursor. */
+        bytes_append_cstr(out, "\x1b[H\x1b[2J\x1b[0m");
+        virt_x = 0; virt_y = 0;
+        s->prev_valid = 0;
+    } else if (first_render) {
+        /* First frame: ensure column 0 without advancing a line.
+         * The shell already left the cursor on a fresh line; adding \n
+         * would create a spurious blank row before the TUI content. */
+        bytes_append(out, "\r", 1);
+        virt_x = 0; virt_y = 0;
+    }
+
+    /* Content rendering. */
+    if (first_render) {
+        /* First render: advance rows with \r\n so the viewport scrolls to
+         * make room. Only claim effective_h rows — don't scroll blank rows
+         * into existence. CUD is NOT used here because the cursor may be at
+         * the terminal bottom; CUD clamps and would collapse all rows. */
+        for (int y = 0; y < effective_h; y++) {
+            if (y > 0) {
+                bytes_append(out, "\r\n", 2);
+                virt_x = 0;
+                virt_y = y;
+            }
+            for (int x = 0; x < s->w; x++) {
+                const cell_t *c = cell_at(s->next, s->w, x, y);
+                if (c->len == 0) continue;  /* WIDE_TAIL: skip */
+                if (x > virt_x) {
+                    bytes_append_csi_n(out, x - virt_x, 'C');
+                } else if (x < virt_x) {
+                    bytes_append(out, "\r", 1);
+                    if (x > 0) bytes_append_csi_n(out, x, 'C');
+                }
+                virt_x = x;
+                emit_sgr(out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
+                const uint8_t *p; size_t n;
+                cell_bytes(c, &s->next_slab, &p, &n);
+                bytes_append(out, p, n);
+                virt_x += c->width;
+            }
+        }
+        virt_y = effective_h - 1;
+    } else if (!s->prev_valid) {
+        /* Full redraw after force_clear: cursor is at (0,0), safe to use
+         * emit_relative_move for all cells. Only redraw effective_h rows;
+         * rows beyond are already blank from the terminal clear. */
+        for (int y = 0; y < effective_h; y++) {
+            for (int x = 0; x < s->w; x++) {
+                const cell_t *c = cell_at(s->next, s->w, x, y);
+                if (c->len == 0) continue;
+                emit_relative_move(out, virt_x, virt_y, x, y, s->w);
+                virt_x = x; virt_y = y;
+                emit_sgr(out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
+                const uint8_t *p; size_t n;
+                cell_bytes(c, &s->next_slab, &p, &n);
+                bytes_append(out, p, n);
+                virt_x += c->width;
+            }
+        }
+    } else {
+        /* Segment-merge incremental diff with relative moves instead of CUP. */
+        for (int y = 0; y < s->h; y++) {
+            int run_start = -1;
+            int last_change = -1;
+
+            for (int x = 0; x < s->w; x++) {
+                const cell_t *cn = cell_at(s->next, s->w, x, y);
+                const cell_t *cp = cell_at(s->prev, s->w, x, y);
+                int changed = !cell_eq(cn, &s->next_slab, cp, &s->prev_slab);
+                if (cn->len == 0) changed = 0;
+
+                if (!changed) continue;
+
+                if (run_start < 0) {
+                    /* open new run */
+                    emit_relative_move(out, virt_x, virt_y, x, y, s->w);
+                    virt_x = x; virt_y = y;
+                    emit_sgr(out, &cur_fg_bg, &cur_attrs,
+                             cn->fg_bg, cn->attrs);
+                    const uint8_t *p; size_t n;
+                    cell_bytes(cn, &s->next_slab, &p, &n);
+                    bytes_append(out, p, n);
+                    virt_x = x + cn->width;
+                    run_start = x;
+                    last_change = x;
+                    if (cn->width == 2) x++;
+                } else {
+                    int gap = x - last_change - 1;
+                    if (gap <= MERGE_GAP) {
+                        /* bridge: emit unchanged cells; cursor ends up at x */
+                        for (int k = last_change + 1; k < x; k++) {
+                            const cell_t *bc = cell_at(s->next, s->w, k, y);
+                            if (bc->len == 0) continue;
+                            emit_sgr(out, &cur_fg_bg, &cur_attrs,
+                                     bc->fg_bg, bc->attrs);
+                            const uint8_t *bp; size_t bn;
+                            cell_bytes(bc, &s->next_slab, &bp, &bn);
+                            bytes_append(out, bp, bn);
+                        }
+                        virt_x = x;
+                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
+                                 cn->fg_bg, cn->attrs);
+                        const uint8_t *p; size_t n;
+                        cell_bytes(cn, &s->next_slab, &p, &n);
+                        bytes_append(out, p, n);
+                        virt_x = x + cn->width;
+                        last_change = x;
+                        if (cn->width == 2) x++;
+                    } else {
+                        /* gap too big: new run */
+                        emit_relative_move(out, virt_x, virt_y, x, y, s->w);
+                        virt_x = x; virt_y = y;
+                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
+                                 cn->fg_bg, cn->attrs);
+                        const uint8_t *p; size_t n;
+                        cell_bytes(cn, &s->next_slab, &p, &n);
+                        bytes_append(out, p, n);
+                        virt_x = x + cn->width;
+                        run_start = x;
+                        last_change = x;
+                        if (cn->width == 2) x++;
+                    }
+                }
+            }
+        }
+    }
+
+    /* Final SGR reset. */
+    reset_sgr(out, &cur_fg_bg, &cur_attrs);
+
+    /* Cursor restore: move to (0, effective_h-1) — the last claimed row.
+     * Never scrolls. Subsequent frames start here and use CUU to reach row 0. */
+    emit_relative_move(out, virt_x, virt_y, 0, effective_h - 1, s->w);
+    s->virt_x = 0;
+    s->virt_y = effective_h - 1;
+
+    /* Swap buffers (same as diff_alt). */
+    cell_t *tc = s->prev; s->prev = s->next; s->next = tc;
+    slab_t tmp_slab = s->prev_slab;
+    s->prev_slab = s->next_slab;
+    s->next_slab = tmp_slab;
+    slab_reset(&s->next_slab);
+    fill_space(s->next, s->w * s->h);
+    s->prev_valid = 1;
+}
+
+/* ── Lua API: diff ───────────────────────────────────────────────── */
+
+static int
+ldiff(lua_State *L) {
+    screen_t *s = check_screen(L, 1);
+    int force_clear = lua_toboolean(L, 2);  /* optional; false when absent */
+    /* Optional effective height (content rows). 0 or absent → use s->h. */
+    int effective_h = (int)luaL_optinteger(L, 3, 0);
+    bytes_t out = {0};
+
+    if (s->mode == SCREEN_MODE_MAIN)
+        diff_main(s, &out, force_clear, effective_h);
+    else
+        diff_alt(s, &out);
+
+    if (out.size == 0)
+        lua_pushlstring(L, "", 0);
+    else
+        lua_pushlstring(L, (const char *)out.buf, out.size);
     free(out.buf);
     return 1;
 }
@@ -895,6 +1130,54 @@ lrows(lua_State *L) {
 
 /* ── __gc ─────────────────────────────────────────────────────── */
 
+/* ── Lua API: set_mode / cursor_pos / set_display_cursor ─────────── */
+
+static int
+lset_mode(lua_State *L) {
+    screen_t *s = check_screen(L, 1);
+    const char *mode = luaL_checkstring(L, 2);
+    if (strcmp(mode, "main") == 0) {
+        s->mode = SCREEN_MODE_MAIN;
+    } else if (strcmp(mode, "alt") == 0) {
+        s->mode = SCREEN_MODE_ALT;
+    } else {
+        return luaL_error(L, "screen.set_mode: unknown mode '%s'", mode);
+    }
+    /* Reset virtual cursor state when switching modes. */
+    s->virt_x = 0; s->virt_y = 0;
+    s->display_x = -1; s->display_y = -1;
+    s->has_display = 0;
+    return 0;
+}
+
+/* Returns x, y — the virtual cursor position after the last cursor_restore.
+ * Lua uses this to compute a relative move for the TextInput cursor. */
+static int
+lcursor_pos(lua_State *L) {
+    screen_t *s = check_screen(L, 1);
+    lua_pushinteger(L, s->virt_x);
+    lua_pushinteger(L, s->virt_y);
+    return 2;
+}
+
+/* Records where the TextInput cursor was placed (0-based).
+ * Pass x=-1, y=-1 to clear (no declared cursor). */
+static int
+lset_display_cursor(lua_State *L) {
+    screen_t *s = check_screen(L, 1);
+    int x = (int)luaL_checkinteger(L, 2);
+    int y = (int)luaL_checkinteger(L, 3);
+    if (x < 0 || y < 0) {
+        s->has_display = 0;
+        s->display_x = -1; s->display_y = -1;
+    } else {
+        s->has_display = 1;
+        s->display_x = x;
+        s->display_y = y;
+    }
+    return 0;
+}
+
 static int
 lgc(lua_State *L) {
     screen_t *s = (screen_t *)luaL_checkudata(L, 1, SCREEN_MT);
@@ -919,6 +1202,9 @@ static const luaL_Reg screen_lib[] = {
     {"draw_line",  ldraw_line},
     {"diff",       ldiff},
     {"rows",       lrows},
+    {"set_mode",          lset_mode},
+    {"cursor_pos",        lcursor_pos},
+    {"set_display_cursor", lset_display_cursor},
     {NULL, NULL},
 };
 

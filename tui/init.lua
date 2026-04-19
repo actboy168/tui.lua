@@ -171,7 +171,9 @@ end
 
 -- Produce a fresh host tree (with layout applied) for the current frame.
 -- Caller is responsible for layout.free() after using the tree.
-local function produce_tree(rec_state, root, app_handle, w, h)
+-- In main-screen mode (is_main=true) the root box height is NOT auto-filled
+-- to h; content determines its own height so only the needed rows are claimed.
+local function produce_tree(rec_state, root, app_handle, w, h, is_main)
     local ok, tree_or_err = pcall(reconciler.render, rec_state, root, app_handle)
     local tree
     if ok then
@@ -183,11 +185,11 @@ local function produce_tree(rec_state, root, app_handle, w, h)
         tree = fallback_error_tree(tree_or_err, w, h)
     end
 
-    -- Expand root Box to fill the terminal if user didn't set size.
+    -- Expand root Box to fill the terminal width; fill height only in alt mode.
     if tree.kind == "box" then
         tree.props = tree.props or {}
         if tree.props.width  == nil then tree.props.width  = w end
-        if tree.props.height == nil then tree.props.height = h end
+        if not is_main and tree.props.height == nil then tree.props.height = h end
     end
 
     layout.compute(tree)
@@ -210,6 +212,9 @@ function M.render(root)
     local rec_state    = reconciler.new()
     local init_w, init_h = terminal.get_size()
     local screen_state = screen_mod.new(init_w, init_h)
+    if interactive then
+        screen_mod.set_mode(screen_state, "main")
+    end
     input_mod._reset()
     resize_mod._reset()
     focus_mod._reset()
@@ -221,33 +226,40 @@ function M.render(root)
     local function paint(term)
         local w, h = terminal.get_size()
         local cw, ch = screen_mod.size(screen_state)
-        if cw ~= w or ch ~= h then
+        local resized = (cw ~= w or ch ~= h)
+        if resized then
             screen_mod.resize(screen_state, w, h)
         end
         if resize_mod.observe(w, h) then
             screen_mod.invalidate(screen_state)
         end
-        local tree = produce_tree(rec_state, root, app_handle, w, h)
+        local tree = produce_tree(rec_state, root, app_handle, w, h, interactive)
         screen_mod.clear(screen_state)
         renderer.paint(tree, screen_state)
-        local diff = screen_mod.diff(screen_state)
+
+        -- Content height: how many rows the layout actually used. Clamped to h.
+        -- In main-screen mode this limits how many rows are claimed in the
+        -- terminal (so a small widget doesn't scroll the whole screen).
+        local content_h = tree.rect and math.min(tree.rect.h, h) or h
+        local diff = screen_mod.diff(screen_state, interactive and resized,
+                                     interactive and content_h or nil)
 
         -- Post-commit: cursor positioning.
-        -- Components declare cursor via useDeclaredCursor(); find_cursor()
-        -- resolves the declaration to absolute screen coordinates using
-        -- the element's Yoga rect. Skip when non-interactive.
-        --
-        -- Uses absolute cursor positioning (CSI row;colH) for reliability.
-        -- Main-screen apps don't have a clean slate each frame; absolute
-        -- CUP anchors to known coordinates regardless of where the terminal
-        -- cursor was left.
+        -- In main-screen mode: use relative cursor movement from cursor_pos()
+        -- (the virtual position after cursor_restore) to the TextInput coords.
+        -- In non-interactive mode: no cursor handling.
         local cursor_seq = ""
         if interactive then
             local ccol, crow = find_cursor(tree)
             if ccol and crow then
-                cursor_seq = ansi.cursorShow() .. ansi.cursorPosition(ccol, crow)
+                local cx, cy = screen_mod.cursor_pos(screen_state)
+                local dx = (ccol - 1) - cx
+                local dy = (crow - 1) - cy
+                cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
+                screen_mod.set_display_cursor(screen_state, ccol - 1, crow - 1)
             else
                 cursor_seq = ansi.cursorHide()
+                screen_mod.set_display_cursor(screen_state, -1, -1)
             end
         end
 
@@ -295,7 +307,7 @@ function M.render(root)
 
     -- Restore terminal state regardless of error.
     if interactive then
-        terminal.write(ansi.cursorShow() .. "\r\n")
+        terminal.write(ansi.cursorShow() .. "\n")
     end
     terminal.set_raw(false)
 

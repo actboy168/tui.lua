@@ -38,8 +38,10 @@ end
 --- Commit the next-frame buffer and return the ANSI bytes needed to update
 --  the terminal from the previous committed frame. After this call, rows()
 --  reads the just-committed frame.
-function M.diff(ud)
-    return screen_c.diff(ud)
+--  force_clear: optional boolean; when true, force a full clear+redraw (used
+--  for resize in main-screen mode).
+function M.diff(ud, force_clear, content_h)
+    return screen_c.diff(ud, force_clear, content_h)
 end
 
 --- Return an array of H row strings. Strings are backed by a ring pool;
@@ -48,6 +50,24 @@ end
 --  safe.
 function M.rows(ud)
     return screen_c.rows(ud)
+end
+
+--- Set the rendering mode: "main" (relative moves + cursor restore) or
+--  "alt" (CUP-based, default). Resets virtual cursor state.
+function M.set_mode(ud, mode)
+    screen_c.set_mode(ud, mode)
+end
+
+--- Return (x, y) — the virtual cursor position after the last cursor_restore
+--  (0-based). Used by init.lua to compute the TextInput cursor offset.
+function M.cursor_pos(ud)
+    return screen_c.cursor_pos(ud)
+end
+
+--- Record where the TextInput cursor was placed (0-based).
+--  Call with x=-1, y=-1 to clear (no declared cursor).
+function M.set_display_cursor(ud, x, y)
+    screen_c.set_display_cursor(ud, x, y)
 end
 
 return M

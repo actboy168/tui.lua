@@ -69,7 +69,6 @@ local function App()
     return tui.Box {
         flexDirection = "column",
         width  = size.cols,
-        height = size.rows,
         -- History (append-only) at the top.
         tui.Static {
             items  = history,
@@ -80,8 +79,6 @@ local function App()
             color = "cyan", dim = true,
             ("[bot] %s▍"):format(streaming.target:sub(1, streaming.shown))
         } or nil,
-        -- Spacer pushes the input to the bottom.
-        tui.Box { flexGrow = 1 },
         -- Input row.
         tui.Box {
             borderStyle = "round",

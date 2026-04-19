@@ -1,17 +1,25 @@
 -- examples/hello.lua — Stage 1 smoke demo.
 -- Run with: luamake lua examples/hello.lua
--- Exit with Ctrl+C, Ctrl+D, or 'q'.
+-- Exit with Ctrl+C, Ctrl+D, q, or Esc.
 
 local tui = require "tui"
 
-tui.render(
-    tui.Box {
+local function App()
+    local app = tui.useApp()
+    tui.useInput(function(input, key)
+        if input == "q" or key.name == "escape" then
+            app.exit()
+        end
+    end)
+    return tui.Box {
         justifyContent = "center",
         alignItems     = "center",
         tui.Box {
-            border  = "round",
-            padding = "0 1",
+            borderStyle = "round",
+            padding     = "0 1",
             tui.Text { "Hello, tui.lua" },
         },
     }
-)
+end
+
+tui.render(App)

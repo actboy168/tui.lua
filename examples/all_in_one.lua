@@ -312,8 +312,7 @@ local function App()
         tui.Box {
             flexDirection = "column",
             width = size.cols,
-            -- Chat-style: height grows with content, not full-screen.
-            -- Spacer pushes input to bottom when there's extra space.
+            -- Main-screen mode: height grows with content; no fixed full-screen.
 
             tui.Box { key = "header", Header { model = model } },
 
@@ -369,10 +368,7 @@ local function App()
                 },
             } or nil,
 
-            -- Spacer pushes input to bottom (chat-style layout).
-            tui.Spacer { key = "spacer" },
-
-            -- Input row fixed at bottom.
+            -- Input row.
             tui.Box {
                 key = "input",
                 flexDirection = "row",
