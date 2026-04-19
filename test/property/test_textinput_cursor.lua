@@ -4,11 +4,10 @@
 -- configuration, the cursor position reported by h:cursor() is a valid
 -- screen coordinate and consistent with the text element's position.
 --
--- NOTE: When TextInput has no explicit `width` prop, it computes render_width
--- from the text content before Yoga layout.  If the text is wider than the
--- container, the pre-layout caret_col can exceed the post-layout element rect.
--- To test the cursor invariant meaningfully, we always provide an explicit
--- `width` prop so render_width matches the Yoga-allocated space.
+-- Known bug: when TextInput has no explicit `width` prop and the text is
+-- wider than the container, the pre-layout caret_col can exceed the
+-- post-layout element rect, placing the cursor outside the screen.
+-- See roadmap: "TextInput 无 width prop 光标越界".
 
 local lt      = require "ltest"
 local tui     = require "tui"
@@ -200,3 +199,41 @@ function suite:test_cursor_within_bounds_after_navigation()
         end,
     }
 end
+
+-- ---------------------------------------------------------------------------
+-- Test 4: auto-width (no explicit width prop)
+-- SKIP: triggers "TextInput 无 width prop 光标越界" bug — when the text
+-- is wider than the container, caret_col exceeds the actual layout width.
+-- Will be enabled once useMeasure is implemented.
+
+function suite:test_cursor_within_bounds_auto_width()
+    pbt.check {
+        name       = "cursor within bounds for auto-width (no width prop)",
+        iterations = 100,
+        property   = function(rng)
+            local value_len = rng.int(0, 50)
+            local value     = rng.graphemes(value_len)
+            local cols = rng.int(5, 120)
+            local rows = rng.int(1, 10)
+
+            local v = value
+            local function App()
+                return tui.Box {
+                    width = cols, height = rows,
+                    tui.TextInput {
+                        value = v,
+                        onChange = function(nv) v = nv end,
+                    },
+                }
+            end
+
+            local h = testing.render(App, { cols = cols, rows = rows })
+            h:rerender()
+            local ok, err = pcall(assert_cursor_valid, h)
+            h:unmount()
+            if not ok then error(err, 0) end
+        end,
+    }
+end
+
+

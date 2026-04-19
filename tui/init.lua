@@ -149,13 +149,18 @@ M.intrinsicSize = layout.intrinsic_size
 local function find_cursor(tree)
     local first_candidate = nil
     local focused_candidate = nil
+    local root_w = tree.rect and tree.rect.w
+    local root_h = tree.rect and tree.rect.h
 
     local function walk(e)
         if not e then return end
         if e.kind == "text" and e._cursor_offset ~= nil then
             local r = e.rect or { x = 0, y = 0 }
-            local col = r.x + e._cursor_offset + 1
+            local offset = math.min(e._cursor_offset, r.w or e._cursor_offset)
+            local col = r.x + offset + 1
+            if root_w and col > root_w then col = root_w end
             local row = r.y + 1
+            if root_h and row > root_h then row = root_h end
             local cand = { col = col, row = row }
             if not first_candidate then
                 first_candidate = cand

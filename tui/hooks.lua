@@ -860,4 +860,34 @@ function M.useStderr()
     }
 end
 
+-- ---------------------------------------------------------------------------
+-- useMeasure() -> ref, { w, h }
+--
+-- Lets a component read the post-layout size (in cells) of one of its host
+-- (Box / Text) elements.  Usage:
+--
+--   local measureRef, size = tui.useMeasure()
+--   return Box { ref = measureRef, ... }
+--   -- size.w / size.h are the Yoga-allocated dims; 0 on the first frame.
+--
+-- After each layout pass the framework calls `ref._measure(w, h)`.  When the
+-- dimensions differ from the previous frame, setSize is called, the component
+-- is marked dirty and re-renders with accurate dimensions on the next frame.
+-- Multiple `useMeasure` calls in the same component are independent: each
+-- call gets its own ref/setSize pair.
+
+function M.useMeasure()
+    assert(current, "useMeasure called outside of a component render")
+    local size, setSize = M.useState({ w = 0, h = 0 })
+    local ref = M.useRef(nil)
+    -- Attach the update callback to the ref so the post-layout pass can call
+    -- it without re-allocating a closure on every render (ref is stable).
+    ref._measure = function(w, h)
+        if size.w ~= w or size.h ~= h then
+            setSize({ w = w, h = h })
+        end
+    end
+    return ref, size
+end
+
 return M
