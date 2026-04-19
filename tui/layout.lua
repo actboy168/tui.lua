@@ -305,8 +305,50 @@ local function readback(element, ox, oy, phase, wrap_nodes)
     end
 end
 
+-- Walk the element tree after layout and fire ref._measure(w, h) on any
+-- Box that carries a ref with a _measure callback (used by useMeasure()).
+-- `clip_bottom` is the absolute Y limit imposed by ancestor clipping (parent
+-- height + terminal height). When a Box's layout height would extend past
+-- clip_bottom, only the visible portion is reported so useMeasure()-based
+-- scroll windows are correctly capped at the actual visible area.
+local function fire_measure_refs(element, clip_bottom)
+    if element.kind ~= "box" then return end
+    local rect = element.rect
+    if not rect then return end
+
+    -- Compute visible height: min of intrinsic height and remaining space
+    -- above the clip boundary.
+    local visible_h = rect.h
+    if clip_bottom then
+        visible_h = math.max(0, math.min(rect.h, clip_bottom - rect.y))
+    end
+
+    local ref = element.ref
+    if ref and type(ref._measure) == "function" then
+        ref._measure(rect.w, visible_h)
+    end
+
+    -- Children are clipped by this element's visible bottom.
+    local child_clip = rect.y + visible_h
+    -- When a bordered box overflows the terminal clip, reserve the last
+    -- visible row for the bottom border so children's scroll windows don't
+    -- extend into the row that will be used to draw the border.
+    local props = element.props
+    if props and props.borderStyle
+       and clip_bottom and (rect.y + rect.h > clip_bottom)
+       and child_clip > rect.y then
+        child_clip = child_clip - 1
+    end
+    for _, child in ipairs(element.children or {}) do
+        fire_measure_refs(child, child_clip)
+    end
+end
+
 -- Public entry: build/reconcile → calc → readback.
-function M.compute(element)
+-- `term_h` (optional) is the terminal height in rows; passed to
+-- fire_measure_refs so useMeasure() consumers see the actually-visible
+-- height when content overflows the terminal.
+function M.compute(element, term_h)
     local root
     if _prev_element then
         root = reconcile(element, _prev_element)
@@ -336,6 +378,17 @@ function M.compute(element)
         yoga.node_calc(root)
         readback(element, 0, 0, "final", nil)
     end
+
+    -- Pass 3: fire ref._measure callbacks so useMeasure() consumers see the
+    -- Yoga-allocated dimensions on the next render frame.
+    -- Compute the initial clip bottom from the root rect and term_h.
+    local root_clip = nil
+    if element.rect then
+        root_clip = term_h and math.min(element.rect.y + element.rect.h, term_h)
+                           or  (element.rect.y + element.rect.h)
+    end
+    fire_measure_refs(element, root_clip)
+
     return root
 end
 

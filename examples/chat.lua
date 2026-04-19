@@ -5,7 +5,7 @@
 --   * <Textarea> with bracketed-paste multi-line support
 --   * useInterval to stream bot reply character-by-character
 --
--- Keys: Ctrl+Enter to submit, Enter for newline, Ctrl+C / Ctrl+D to quit.
+-- Keys: Ctrl+Enter or Shift+Enter to submit, Enter for newline, Ctrl+C / Ctrl+D to quit.
 
 local tui = require "tui"
 
@@ -103,12 +103,7 @@ local function App()
                 value    = input,
                 onChange = setInput,
                 onSubmit = submit,
-                placeholder = "type a message — Enter for newline, Ctrl+Enter to send",
-                height   = 3,
-            },
-            tui.Text {
-                dim = true, color = "yellow",
-                "Ctrl+Enter to send  ·  paste multi-line text freely",
+                placeholder = "type a message — Enter for newline, Ctrl+Enter or Shift+Enter to send",
             },
         },
     }

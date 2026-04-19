@@ -57,7 +57,18 @@ local function paint(element, screen, inherit)
         local border_style = props and props.borderStyle
         if border_style then
             local fg_bg, attrs = sgr.pack_border_bytes(props)
-            screen_c.put_border(screen, r.x, r.y, r.w, r.h, border_style,
+            -- When the box overflows the screen vertically, clamp draw_h so
+            -- the bottom border lands on the last visible row. Only apply
+            -- when the clamped height still has room for both border rows
+            -- (>= 2); otherwise keep r.h so OOB writes are dropped naturally
+            -- by the C layer (top border chars still appear).
+            local _, sh = screen_c.size(screen)
+            local draw_h = r.h
+            if r.y + r.h > sh then
+                local clamped = sh - r.y
+                if clamped >= 2 then draw_h = clamped end
+            end
+            screen_c.put_border(screen, r.x, r.y, r.w, draw_h, border_style,
                                 fg_bg, attrs)
         end
         local ci = child_inherit(props, inherit)

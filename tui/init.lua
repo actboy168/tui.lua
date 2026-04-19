@@ -231,7 +231,7 @@ local function produce_tree(rec_state, root, app_handle, w, h, is_main)
         if not is_main and tree.props.height == nil then tree.props.height = h end
     end
 
-    layout.compute(tree)
+    layout.compute(tree, h)
     return tree
 end
 
@@ -262,6 +262,9 @@ function M.render(root)
         exit = function() scheduler.stop() end,
     }
 
+    -- Track last display cursor position for clean exit (see teardown below).
+    local last_display_y = nil
+
     local function paint(term)
         local w, h = terminal.get_size()
         local cw, ch = screen_mod.size(screen_state)
@@ -290,15 +293,22 @@ function M.render(root)
         local cursor_seq = ""
         if interactive then
             local ccol, crow = find_cursor(tree)
-            if ccol and crow then
+            -- Guard: if the declared cursor row is outside the visible area
+            -- (content taller than the terminal), treat it as hidden. Storing
+            -- an out-of-bounds display_y would corrupt the next frame's preamble
+            -- because the terminal clamps the physical cursor but diff_main
+            -- calculates relative moves using the unclamped value.
+            if ccol and crow and (crow - 1) < content_h then
                 local cx, cy = screen_mod.cursor_pos(screen_state)
                 local dx = (ccol - 1) - cx
                 local dy = (crow - 1) - cy
                 cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
                 screen_mod.set_display_cursor(screen_state, ccol - 1, crow - 1)
+                last_display_y = crow - 1
             else
                 cursor_seq = ansi.cursorHide()
                 screen_mod.set_display_cursor(screen_state, -1, -1)
+                last_display_y = nil
             end
         end
 
@@ -346,7 +356,19 @@ function M.render(root)
 
     -- Restore terminal state regardless of error.
     if interactive then
-        terminal.write(ansi.disableBracketedPaste .. ansi.cursorShow() .. "\n")
+        -- The physical cursor is at the display cursor position (inside the
+        -- Textarea/TextInput caret). Move it down to the bottom row of the
+        -- rendered content (virt_y), go to column 0, then \n so the shell
+        -- prompt appears cleanly below all TUI output.
+        local move_seq = "\r"
+        if last_display_y then
+            local _, vy = screen_mod.cursor_pos(screen_state)
+            local dy = vy - last_display_y
+            if dy > 0 then
+                move_seq = ansi.cursorDown(dy) .. "\r"
+            end
+        end
+        terminal.write(ansi.disableBracketedPaste .. move_seq .. ansi.cursorShow() .. "\n")
     end
     terminal.set_raw(false)
 

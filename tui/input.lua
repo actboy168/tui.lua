@@ -117,6 +117,18 @@ function M.dispatch(bytes)
         bytes = bytes:sub(1, #bytes - tail_len)
         if #bytes == 0 then return false end
     end
+    -- Pre-parse normalization: some terminal integrations (e.g. VS Code with a
+    -- custom sendSequence binding) send "\" + CR/LF as a Shift+Enter substitute
+    -- because real modifier information is lost through the PTY layer.
+    -- Convert the pattern \x5C[\x0D\x0A]+ → ESC[13;2u (kitty Shift+Enter)
+    -- so keys.parse produces {name="enter", shift=true} instead of a bare
+    -- backslash char followed by newline events.
+    -- IMPORTANT: skip this normalization when the buffer contains a bracketed-paste
+    -- marker (\x1b[200~), because paste content may legitimately contain backslash
+    -- followed by newline and must not be corrupted.
+    if not bytes:find("\x1b%[200~") then
+        bytes = bytes:gsub("\x5c[\x0d\x0a]+", "\x1b[13;2u")
+    end
     -- Debug: log raw bytes and parsed events when _debug_log is set.
     if M._debug_log then
         local hex = bytes:gsub(".", function(c) return ("%02x "):format(c:byte()) end)
@@ -128,7 +140,8 @@ function M.dispatch(bytes)
             _dbg("  event name=" .. tostring(ev.name) ..
                  " input=" .. tostring(ev.input) ..
                  " ctrl=" .. tostring(ev.ctrl) ..
-                 " meta=" .. tostring(ev.meta))
+                 " meta=" .. tostring(ev.meta) ..
+                 " shift=" .. tostring(ev.shift))
         end
     end
     local should_exit = false

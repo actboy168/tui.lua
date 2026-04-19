@@ -265,19 +265,40 @@ function Harness:_paint()
     -- subscribers installed on prior renders.
     resize_mod.observe(self._w, self._h)
 
-    self._render_count = (self._render_count or 0) + 1
-    local tree = reconciler.render(self._state, self._App, self._app_handle)
-
-    if not tree then
-        tree = element.Box { width = self._w, height = self._h }
+    -- Helper: apply root size constraints and run layout.
+    -- Clears dirty flags set by effects BEFORE layout so that only
+    -- layout-triggered dirty (e.g. useMeasure) causes stabilization.
+    local function render_and_layout()
+        self._render_count = (self._render_count or 0) + 1
+        local t = reconciler.render(self._state, self._App, self._app_handle)
+        if not t then
+            t = element.Box { width = self._w, height = self._h }
+        end
+        if t.kind == "box" then
+            t.props = t.props or {}
+            if t.props.width  == nil then t.props.width  = self._w end
+            if t.props.height == nil then t.props.height = self._h end
+        end
+        -- Clear dirty flags from useEffect callbacks (legitimate next-frame
+        -- updates like useFocus). Only dirty flags set by layout.compute
+        -- (useMeasure → setSize) should trigger the stabilization loop.
+        reconciler.clear_dirty(self._state)
+        layout.compute(t, self._h)
+        return t
     end
-    if tree.kind == "box" then
-        tree.props = tree.props or {}
-        if tree.props.width  == nil then tree.props.width  = self._w end
-        if tree.props.height == nil then tree.props.height = self._h end
+
+    local tree = render_and_layout()
+
+    -- Stabilization loop: post-layout hooks (useMeasure) may update state,
+    -- marking components dirty. Re-render until stable (≤ 8 iterations to
+    -- guard against bugs that would otherwise spin forever).
+    for _ = 1, 8 do
+        if not reconciler.has_dirty(self._state) then break end
+        if self._tree then layout.free(self._tree) end
+        self._tree = tree      -- keep alive until next iteration frees it
+        tree = render_and_layout()
     end
 
-    layout.compute(tree)
     screen_mod.clear(self._screen)
     renderer.paint(tree, self._screen)
     local ansi = screen_mod.diff(self._screen)

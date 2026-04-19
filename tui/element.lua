@@ -36,14 +36,14 @@ end
 -- logic so `MyCtx.Provider { value=X, child1, child2 }` works like Box.
 M._split_props_children = split_props_children
 
--- Pull the reserved `key` prop off to the element's top level. `key` is used
--- by the reconciler for identity-preserving diff among sibling children; it
--- is NOT a Yoga layout prop, so we strip it from `props` to avoid leaking
--- into layout/renderer.
-local function pluck_key(props)
-    local k = props.key
+-- Pull reserved props off to the element's top level so they don't leak into
+-- layout/renderer. `key` is for reconciler identity; `ref` is for useMeasure().
+local function pluck_reserved(props)
+    local key = props.key
     props.key = nil
-    return k
+    local ref = props.ref
+    props.ref = nil
+    return key, ref
 end
 
 --- Box(props_and_children) -> element
@@ -51,8 +51,8 @@ end
 function M.Box(t)
     t = t or {}
     local props, children = split_props_children(t)
-    local key = pluck_key(props)
-    return { kind = "box", key = key, props = props, children = children }
+    local key, ref = pluck_reserved(props)
+    return { kind = "box", key = key, ref = ref, props = props, children = children }
 end
 
 --- Text(props_and_children) -> element
@@ -60,7 +60,8 @@ end
 function M.Text(t)
     t = t or {}
     local props, children = split_props_children(t)
-    local key = pluck_key(props)
+    local key, _ref = pluck_reserved(props)
+    _ref = nil  -- Text does not use ref
     -- Join all string children into a single string for now.
     local parts = {}
     for i, v in ipairs(children) do
@@ -93,7 +94,8 @@ end
 function M.ErrorBoundary(t)
     t = t or {}
     local props, children = split_props_children(t)
-    local key = pluck_key(props)
+    local key, _ref = pluck_reserved(props)
+    _ref = nil  -- ErrorBoundary does not use ref
     local fb = props.fallback
     if fb ~= nil and type(fb) ~= "function" and type(fb) ~= "table" then
         error("ErrorBoundary: fallback must be an element, function, or nil; got " .. type(fb), 2)

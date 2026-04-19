@@ -288,7 +288,9 @@ local function expand(state, element, path)
 
     if is_host_element(element) then
         -- Recurse into children.
-        local out = { kind = element.kind, props = element.props, children = {} }
+        -- Propagate `key` (reconciler identity) and `ref` (useMeasure) from the
+        -- original element so layout.fire_measure_refs can see the ref callback.
+        local out = { kind = element.kind, key = element.key, ref = element.ref, props = element.props, children = {} }
         if element.kind == "text" then
             -- Text children are strings; copy verbatim + keep .text field.
             for i, c in ipairs(element.children or {}) do out.children[i] = c end
@@ -457,6 +459,31 @@ function M.render(state, root, app_handle)
     -- (keep _effects_to_flush allocated; cleared at top of next render)
 
     return tree
+end
+
+--- has_dirty(state) -> bool
+-- Returns true if any component instance has been marked dirty since the
+-- last render pass. Used by the test harness (and can be used by any
+-- external driver) to detect that useMeasure / post-layout state updates
+-- need another render cycle to stabilize. See the "harness stabilization"
+-- comment in expand().
+function M.has_dirty(state)
+    for _, inst in pairs(state.instances) do
+        if inst.dirty then return true end
+    end
+    return false
+end
+
+--- clear_dirty(state): clear all inst.dirty flags.
+-- Called by the test harness immediately before layout.compute() so that
+-- only dirty flags set *during* layout (e.g. useMeasure firing setSize)
+-- trigger the stabilization re-render. Dirty flags set by useEffect
+-- callbacks (e.g. useFocus granting focus) represent legitimate next-frame
+-- updates and should not force a same-frame re-render.
+function M.clear_dirty(state)
+    for _, inst in pairs(state.instances) do
+        inst.dirty = false
+    end
 end
 
 --- shutdown(state): run cleanups on everything.

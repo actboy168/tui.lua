@@ -3,13 +3,14 @@
 -- Props:
 --   value       : current text (controlled, lines joined by "\n"). Required.
 --   onChange    : fn(new_value) — called when the user edits the buffer.
---   onSubmit    : fn(value)     — called on Ctrl+Enter.
+--   onSubmit    : fn(value)     — called on Enter or Ctrl+Enter.
 --   placeholder : string shown when value is empty and unfocused.
 --   focus       : when explicitly set to false, the input is disabled.
 --   autoFocus   : default true. Forwarded to useFocus.
 --   focusId     : optional id passed to useFocus.
 --   width       : optional cell width.
---   height      : visible row count (default 4).
+--   minHeight   : minimum visible row count (default 1).
+--   maxHeight   : maximum visible row count (default unlimited).
 --
 -- Cursor:
 --   Uses useDeclaredCursor() — the framework places the real terminal cursor
@@ -17,8 +18,8 @@
 --
 -- Key bindings:
 --   Printable chars / paste  — insert at caret
---   Enter                    — insert newline
---   Ctrl+Enter               — call onSubmit (does not insert newline)
+--   Enter / Ctrl+Enter       — call onSubmit (does not insert newline)
+--   Shift+Enter              — insert newline
 --   Backspace / Delete       — delete char; merges lines when at boundary
 --   Left / Right             — move within and across lines
 --   Up / Down                — move to the same visual column on prev/next line
@@ -130,12 +131,18 @@ end
 -- Viewport: given height rows, compute scroll_top so that `line` is visible.
 -- Returns new scroll_top.
 -- ---------------------------------------------------------------------------
-local function clamp_scroll(scroll_top, line, height)
+local function clamp_scroll(scroll_top, line, height, total_lines)
     -- line is 1-based
     if line < scroll_top + 1 then
         return line - 1
     elseif line > scroll_top + height then
         return line - height
+    end
+    -- Un-scroll when the viewport extends past the last content line
+    -- (happens when the window grew or content shrank). Keeps as much
+    -- content visible as possible while still showing the cursor.
+    if total_lines and scroll_top + height > total_lines then
+        return math.max(0, total_lines - height)
     end
     return scroll_top
 end
@@ -152,12 +159,30 @@ local function TextareaImpl(props)
     local onSubmit    = props.onSubmit
     local placeholder = props.placeholder or ""
     local disabled    = (props.focus == false)
-    local vis_height  = math.max(1, math.floor(props.height or 4))
+    local min_height  = math.max(1, math.floor(props.minHeight or 1))
+    local max_height  = props.maxHeight and math.max(min_height, math.floor(props.maxHeight)) or nil
 
     -- Parse value → lines. Done before useState so initial caret can point
     -- to the end of the document (mirrors TextInput behaviour).
     local lines_now = parse_lines(value)
     local nlines    = #lines_now
+
+    -- Auto-grow height: declared Yoga height = nlines (clamped to min/max).
+    -- Terminal overflow is handled via useMeasure (see scroll_window below).
+    local vis_height = nlines
+    if vis_height < min_height then
+        vis_height = min_height
+    elseif max_height and vis_height > max_height then
+        vis_height = max_height
+    end
+
+    -- Get the actual Yoga-allocated height for this component (may be less
+    -- than vis_height when the layout clips the textarea, e.g. when a bordered
+    -- parent fills the terminal). Use this as the scroll window so that
+    -- clamp_scroll keeps the cursor within the visible area. Falls back to
+    -- vis_height on the first frame before the measurement is available.
+    local measureRef, measured_size = hooks.useMeasure()
+    local scroll_window = (measured_size.h > 0) and measured_size.h or vis_height
 
     -- Persistent state: cursor (1-based line/col), scroll top (0-based),
     -- and preferred_x for sticky Up/Down column (nil = use current position).
@@ -180,11 +205,12 @@ local function TextareaImpl(props)
     ctx.lines       = lines_now
     ctx.cl          = cl
     ctx.cc          = cc
-    ctx.st          = clamp_scroll(scroll_top, cl, vis_height)
+    ctx.st          = clamp_scroll(scroll_top, cl, scroll_window, nlines)
     ctx.preferred_x = preferred_x
     ctx.onChange    = onChange
     ctx.onSubmit    = onSubmit
     ctx.value       = value
+    ctx.scroll_window = scroll_window
 
     -- Sync scroll_top if it changed.
     hooks.useEffect(function()
@@ -194,7 +220,11 @@ local function TextareaImpl(props)
     -- Emit helper: applies edit result and updates cursor + scroll.
     local function make_emit(ctx_ref)
         return function(new_lines, new_cl, new_cc)
-            local new_st = clamp_scroll(ctx_ref.st, new_cl, vis_height)
+            -- Use the measured scroll window (actual visible height, clipped by
+            -- terminal/parent bounds). This was set by useMeasure on the previous
+            -- render frame and is the correct viewport for scrolling purposes.
+            local win = ctx_ref.scroll_window
+            local new_st = clamp_scroll(ctx_ref.st, new_cl, win)
             setCaretLine(new_cl)
             setCaretCol(new_cc)
             setScrollTop(new_st)
@@ -231,7 +261,7 @@ local function TextareaImpl(props)
         setCaretCol(new_cc)
         ctx.cl = new_cl
         ctx.cc = new_cc
-        local new_st = clamp_scroll(ctx.st, new_cl, vis_height)
+        local new_st = clamp_scroll(ctx.st, new_cl, ctx.scroll_window, #ctx.lines)
         if new_st ~= ctx.st then setScrollTop(new_st); ctx.st = new_st end
     end
 
@@ -304,11 +334,12 @@ local function TextareaImpl(props)
                 insert_text(input)
 
             elseif name == "enter" then
-                if key.ctrl then
-                    -- Ctrl+Enter → submit without inserting newline.
-                    if ctx.onSubmit then ctx.onSubmit(ctx.value) end
-                else
+                if key.shift then
+                    -- Shift+Enter → insert newline.
                     insert_text("\n")
+                else
+                    -- Plain Enter or Ctrl+Enter → submit.
+                    if ctx.onSubmit then ctx.onSubmit(ctx.value) end
                 end
 
             elseif name == "backspace" then
@@ -359,7 +390,7 @@ local function TextareaImpl(props)
                     setCaretCol(new_cc)
                     ctx.cl = cl - 1
                     ctx.cc = new_cc
-                    local new_st = clamp_scroll(ctx.st, cl - 1, vis_height)
+                    local new_st = clamp_scroll(ctx.st, cl - 1, ctx.scroll_window, #lines)
                     if new_st ~= ctx.st then setScrollTop(new_st); ctx.st = new_st end
                 end
 
@@ -373,7 +404,7 @@ local function TextareaImpl(props)
                     setCaretCol(0)
                     ctx.cl = cl + 1
                     ctx.cc = 0
-                    local new_st = clamp_scroll(ctx.st, cl + 1, vis_height)
+                    local new_st = clamp_scroll(ctx.st, cl + 1, ctx.scroll_window, #lines)
                     if new_st ~= ctx.st then setScrollTop(new_st); ctx.st = new_st end
                 end
 
@@ -405,7 +436,7 @@ local function TextareaImpl(props)
                 setCaretLine(last)
                 setCaretCol(#lines[last])
                 ctx.cl = last; ctx.cc = #lines[last]
-                local new_st = clamp_scroll(ctx.st, last, vis_height)
+                local new_st = clamp_scroll(ctx.st, last, ctx.scroll_window, #ctx.lines)
                 if new_st ~= ctx.st then setScrollTop(new_st); ctx.st = new_st end
             end
         end,
@@ -447,6 +478,7 @@ local function TextareaImpl(props)
     end
 
     return element.Box {
+        ref = measureRef,
         flexDirection = "column",
         width = width,
         height = vis_height,

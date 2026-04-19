@@ -148,7 +148,27 @@ l_read_raw(lua_State *L) {
                 pending_high = 0;
             } else {
                 pending_high = 0;
-                len += utf16_to_utf8(wch, 0, 0, buf + len);
+                /* Detect Enter with Ctrl/Shift and emit kitty-style CSI u sequences
+                 * so the key parser can reconstruct the modifier. Plain terminals
+                 * send identical bytes for Ctrl+Enter and Enter (both CR = 0x0D). */
+                if (wch == '\r') {
+                    DWORD cs = r->Event.KeyEvent.dwControlKeyState;
+                    if (cs & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) {
+                        /* Ctrl+Enter → ESC [ 1 3 ; 5 u */
+                        buf[len++] = '\x1b'; buf[len++] = '[';
+                        buf[len++] = '1'; buf[len++] = '3'; buf[len++] = ';';
+                        buf[len++] = '5'; buf[len++] = 'u';
+                    } else if (cs & SHIFT_PRESSED) {
+                        /* Shift+Enter → ESC [ 1 3 ; 2 u */
+                        buf[len++] = '\x1b'; buf[len++] = '[';
+                        buf[len++] = '1'; buf[len++] = '3'; buf[len++] = ';';
+                        buf[len++] = '2'; buf[len++] = 'u';
+                    } else {
+                        len += utf16_to_utf8(wch, 0, 0, buf + len);
+                    }
+                } else {
+                    len += utf16_to_utf8(wch, 0, 0, buf + len);
+                }
             }
         } else {
             /* 规则4：功能键，映射到 ANSI escape */

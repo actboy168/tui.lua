@@ -125,6 +125,10 @@ typedef struct {
      * -1 means the row was not touched this frame (skip in incremental diff). */
     int *dirty_xmax;        /* next buffer: max x written per row */
     int *prev_xmax;         /* prev buffer: max x written last diff */
+    /* effective_h used in the last committed frame (main-screen mode only).
+     * Used to detect when content grows and new rows must be claimed via \r\n
+     * rather than CUD (which clamps at the terminal bottom). */
+    int  prev_effective_h;
 } screen_t;
 
 #define SCREEN_MT "tui_core.screen"
@@ -955,6 +959,21 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
     }
 
     /* Content rendering. */
+
+    /* Growth extension: when content height increases on an incremental frame,
+     * the new rows at the bottom haven't been claimed yet. CUD clamps at the
+     * terminal bottom and won't create new lines; \r\n will scroll if needed.
+     * Emit one \r\n per new row from the current bottom to claim them. */
+    if (s->prev_valid && !force_clear && effective_h > s->prev_effective_h) {
+        /* virt_x/virt_y is currently (0, prev_effective_h-1) after preamble. */
+        int grow = effective_h - s->prev_effective_h;
+        for (int i = 0; i < grow; i++) {
+            bytes_append(out, "\r\n", 2);
+        }
+        virt_x = 0;
+        virt_y = effective_h - 1;
+    }
+
     if (first_render) {
         /* First render: advance rows with \r\n so the viewport scrolls to
          * make room. Only claim effective_h rows — don't scroll blank rows
@@ -1083,6 +1102,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
     emit_relative_move(out, virt_x, virt_y, 0, effective_h - 1, s->w);
     s->virt_x = 0;
     s->virt_y = effective_h - 1;
+    s->prev_effective_h = effective_h;
 
     /* Swap buffers (same as diff_alt). */
     cell_t *tc = s->prev; s->prev = s->next; s->next = tc;

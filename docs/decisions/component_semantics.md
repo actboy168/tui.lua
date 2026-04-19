@@ -71,4 +71,17 @@
 
 ## TextInput 批量输入
 
-`h:dispatch("中文")` 已正确工作（ctxRef eager update）。剩余缺口：`keys.c` 缺少 bracketed-paste 协议（`\x1b[200~` / `\x1b[201~`）。真实终端粘贴以原始字节一次性到达 `read()`，`keys.parse` 会拆成单个事件。目前 ctxRef 已 eager update 所以功能正常，但 0x01–0x1A 范围的字节会被误解为 Ctrl+字母（keys.c 的另一个已知缺口）。
+`h:dispatch("中文")` 已正确工作（ctxRef eager update）。Bracketed-paste 协议（`\x1b[200~` / `\x1b[201~`）由 `keys.c` 识别为 `paste_start` / `paste_end` 事件，`input.lua` 累加器合并为单一 `paste` 事件再分发；TextInput 的 `on_input` 处理 `name=="paste"` 分支批量插入，`usePaste(fn)` 对外暴露为 `tui.usePaste`。
+
+## `ref` 和 `key` 必须显式传播
+
+**Element schema：** `element.lua` 创建 element 时会把 `ref` 和 `key` **从 props 里取出**，放到 element 的顶层字段（`element.ref`、`element.key`），props 里不再含有它们。因此任何对 element 做结构性复制（clone、expand 等）的代码，**必须显式拷贝 `ref` 和 `key`**，不能只拷贝 `props`。
+
+`reconciler.lua` 的 `expand()` 在重建 host element 时曾遗漏这两个字段，导致 `layout.fire_measure_refs` 找不到 ref 回调，`useMeasure` 永远收不到正确的 `scroll_window`，Textarea 滚动计算错误。修复：`{ kind=..., key=element.key, ref=element.ref, props=..., children={} }`。
+
+写新的 element 结构变换时，检查清单：
+1. `kind` — element 类型
+2. `key` — reconciler 身份（diffing 用）
+3. `ref` — useMeasure / 外部 DOM 引用
+4. `props` — 组件自定义属性（已不含 key/ref）
+5. `children` — 子节点

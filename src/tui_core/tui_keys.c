@@ -232,10 +232,21 @@ static int l_parse(lua_State *L) {
                 int consumed = parse_csi(s, n, i + 2, &name, &mod, &num);
                 size_t total = 2 + (size_t)consumed;
                 if (name == NULL) {
-                    /* Unknown CSI: emit a generic "csi" event carrying raw. */
-                    begin_event(L, s + i, total);
-                    set_cstr(L, "name", "csi");
-                    lua_rawseti(L, out_idx, ++emitted);
+                    /* Check for kitty-style "CSI <keycode> ; <mod> u" sequences.
+                     * The final byte is the last byte of the consumed CSI body. */
+                    char final_byte = (consumed > 0) ? s[i + 2 + consumed - 1] : 0;
+                    if (final_byte == 'u' && num == 13) {
+                        /* Enter with modifier: ESC[13;5u = Ctrl+Enter, ESC[13;2u = Shift+Enter */
+                        begin_event(L, s + i, total);
+                        set_cstr(L, "name", "enter");
+                        apply_mod(L, lua_gettop(L), mod);
+                        lua_rawseti(L, out_idx, ++emitted);
+                    } else {
+                        /* Unknown CSI: emit a generic "csi" event carrying raw. */
+                        begin_event(L, s + i, total);
+                        set_cstr(L, "name", "csi");
+                        lua_rawseti(L, out_idx, ++emitted);
+                    }
                 } else {
                     begin_event(L, s + i, total);
                     set_cstr(L, "name", name);

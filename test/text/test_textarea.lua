@@ -73,7 +73,29 @@ end
 -- Enter inserts a newline.
 -- ---------------------------------------------------------------------------
 
-function suite:test_enter_inserts_newline()
+-- Enter submits; Shift+Enter inserts a newline.
+function suite:test_enter_submits()
+    local value = "hello"
+    local submitted = {}
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            tui.Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted[#submitted + 1] = v end,
+                height = 4,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("enter")
+    lt.assertEquals(#submitted, 1)
+    lt.assertEquals(submitted[1], "hello")
+    h:unmount()
+end
+
+function suite:test_shift_enter_inserts_newline()
     local value = ""
     local function App()
         return tui.Box {
@@ -83,15 +105,113 @@ function suite:test_enter_inserts_newline()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:type("a")
-    h:press("enter")
+    h:dispatch("\x1b[13;2u")  -- Shift+Enter → insert newline
     h:type("b")
     lt.assertEquals(value, "a\nb")
     h:unmount()
 end
 
--- ---------------------------------------------------------------------------
--- Backspace across line boundary merges lines.
--- ---------------------------------------------------------------------------
+-- Auto-grow: after inserting a newline the cursor should sit on the NEW last
+-- line and both lines must be visible (scroll_top must stay 0).
+-- This test would have failed before the make_emit vis_height fix because
+-- clamp_scroll used the stale vis_height=1, pushing scroll_top to 1 and
+-- scrolling line 1 out of view.
+function suite:test_newline_cursor_on_last_line()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 10,
+            tui.Textarea { value = value, onChange = function(v) value = v end },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 10 })
+    h:type("hello")
+    h:dispatch("\x1b[13;2u")  -- Shift+Enter → insert newline
+    -- Cursor must be on row 2 (second line), column 1 (after the scroll origin).
+    local col, row = h:cursor()
+    lt.assertEquals(row, 2, "cursor should be on line 2 after newline")
+    lt.assertEquals(col, 1, "cursor should be at column 1 (start of new line)")
+    -- Both lines must be visible: row 1 shows "hello", row 2 shows "".
+    lt.assertEquals(h:row(1), "hello               ")
+    lt.assertEquals(h:row(2), "                    ")
+    h:unmount()
+end
+-- When content grows beyond the terminal height, the textarea should cap its
+-- height at terminal rows and scroll so the cursor remains visible.
+-- Previously vis_height was unbounded (= nlines), causing the terminal to clip
+-- the top rows and leaving the cursor off-screen.
+function suite:test_scroll_when_taller_than_terminal()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 5,
+            tui.Textarea { value = value, onChange = function(v) value = v end },
+        }
+    end
+    -- Terminal is only 5 rows; type 7 lines.
+    local h = testing.render(App, { cols = 20, rows = 5 })
+    for i = 1, 6 do
+        h:type("line" .. i)
+        h:dispatch("\x1b[13;2u")  -- Shift+Enter
+    end
+    h:type("line7")
+    -- value should have 7 lines
+    lt.assertEquals(value, "line1\nline2\nline3\nline4\nline5\nline6\nline7")
+    -- Cursor must be visible (within the 5-row terminal)
+    local col, row = h:cursor()
+    assert(row ~= nil, "cursor should be visible")
+    assert(row >= 1 and row <= 5, "cursor row must be within terminal: got " .. tostring(row))
+    -- The last line "line7" must appear somewhere in the visible rows
+    local found = false
+    for r = 1, 5 do
+        if h:row(r):match("^line7") then found = true; break end
+    end
+    assert(found, "last line 'line7' should be visible in the terminal")
+    h:unmount()
+end
+
+-- When content grows beyond the terminal height inside a BORDERED container,
+-- the bottom border must appear on the last visible row and the cursor must
+-- remain visible (not pushed behind the border).
+function suite:test_scroll_taller_than_terminal_with_border()
+    local value = ""
+    local function App()
+        -- 7-row terminal; bordered box fills it; textarea inside.
+        -- border takes 2 rows (top+bottom), leaving 5 for textarea content.
+        return tui.Box {
+            flexDirection = "column",
+            tui.Box {
+                borderStyle = "single",
+                tui.Textarea { value = value, onChange = function(v) value = v end },
+            },
+        }
+    end
+    -- Terminal is only 7 rows; type 8 lines so textarea overflows.
+    local h = testing.render(App, { cols = 20, rows = 7 })
+    for i = 1, 7 do
+        h:type("L" .. i)
+        h:dispatch("\x1b[13;2u")  -- Shift+Enter
+    end
+    h:type("L8")
+    -- Cursor must be visible (within the 7-row terminal)
+    local col, row = h:cursor()
+    assert(row ~= nil, "cursor should be visible")
+    assert(row >= 1 and row <= 7, "cursor row must be within terminal: got " .. tostring(row))
+    -- Bottom border must appear on the last terminal row
+    local last_row = h:row(7)
+    assert(last_row:find("\xe2\x94\x98") or last_row:find("\xe2\x94\x94") or last_row:find("+"),
+        "bottom border should appear on last terminal row, got: " .. last_row)
+    -- The last typed line "L8" must be visible somewhere in the terminal
+    local found = false
+    for r = 1, 7 do
+        if h:row(r):match("L8") then found = true; break end
+    end
+    assert(found, "last line 'L8' should be visible in the terminal")
+    -- Cursor must NOT be on the last row (that's the border)
+    assert(row < 7, "cursor should not be on the border row, got row=" .. tostring(row))
+    h:unmount()
+end
+
 
 function suite:test_backspace_merges_lines()
     local value = "a\nb"
@@ -251,6 +371,88 @@ function suite:test_ctrl_enter_submit()
     lt.assertEquals(#submitted, 1)
     lt.assertEquals(submitted[1], "hello")
     lt.assertEquals(value, "hello")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- Shift+Enter via ESC[13;2u (kitty-style, emitted by tui_terminal.c on
+-- Windows when Shift+Enter is pressed) inserts a newline.
+-- ---------------------------------------------------------------------------
+
+function suite:test_shift_enter_inserts_newline_via_csi_u()
+    local value = "hi"
+    local submitted = {}
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            tui.Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted[#submitted + 1] = v end,
+                height = 4,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    -- ESC [ 1 3 ; 2 u  (Shift+Enter in kitty keyboard protocol) → insert newline
+    h:dispatch("\x1b[13;2u")
+    h:_paint()
+    lt.assertEquals(#submitted, 0)
+    lt.assertEquals(value, "hi\n")
+    h:unmount()
+end
+
+-- Ctrl+Enter via ESC[13;5u (kitty-style) triggers onSubmit.
+function suite:test_ctrl_enter_submit_via_csi_u()
+    local value = "world"
+    local submitted = {}
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            tui.Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted[#submitted + 1] = v end,
+                height = 4,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    -- ESC [ 1 3 ; 5 u  (Ctrl+Enter in kitty keyboard protocol)
+    h:dispatch("\x1b[13;5u")
+    h:_paint()
+    lt.assertEquals(#submitted, 1)
+    lt.assertEquals(submitted[1], "world")
+    lt.assertEquals(value, "world")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- VS Code sendSequence Shift+Enter: "\" + CR + LF (0x5C 0x0D 0x0A).
+-- The dispatch() pre-processor converts this to ESC[13;2u before parsing,
+-- which results in {name="enter", shift=true} → insert newline.
+-- ---------------------------------------------------------------------------
+
+function suite:test_vscode_shift_enter_inserts_newline()
+    local value = "hello"
+    local submitted = {}
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            tui.Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted[#submitted + 1] = v end,
+                height = 4,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    -- VS Code sendSequence { text = "\\\r\n" } → 0x5C 0x0D 0x0A → ESC[13;2u → newline
+    h:dispatch("\x5c\x0d\x0a")
+    h:_paint()
+    lt.assertEquals(#submitted, 0)
+    lt.assertEquals(value, "hello\n")
     h:unmount()
 end
 
