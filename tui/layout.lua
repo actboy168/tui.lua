@@ -4,6 +4,13 @@
 --   * Box with optional border / padding / width / height
 --   * Text leaf: intrinsic width = display width via wcwidth; height accounts
 --     for soft-wrap when wrap != "nowrap" (handled in tui/text.lua).
+--
+-- Stage N: Yoga tree reuse + single-pass C property setting.
+--   * node_set_box_props / node_set_text_props: C iterates props directly,
+--     eliminating the Lua loop and the intermediate style table.
+--   * Cross-frame reconcile: Yoga nodes are pooled and reused.  Yoga's
+--     idempotent style setters preserve the internal layout cache for
+--     subtrees whose structure and props haven't changed.
 
 local yoga     = require "yoga"
 local tui_core = require "tui_core"
@@ -13,93 +20,126 @@ local wcwidth = tui_core.wcwidth
 
 local M = {}
 
--- Map our friendly Box prop names to yoga style keys.
--- Most keys pass through unchanged; only a couple need translation.
--- Hoisted to module level so the table is created once, not per-node per-frame.
-local PASSTHROUGH_KEYS = {
-    "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
-    "flexGrow", "flexShrink", "flexBasis", "flexDirection", "flexWrap",
-    "justifyContent", "alignItems", "alignContent", "alignSelf",
-    "margin", "marginTop", "marginBottom", "marginLeft", "marginRight",
-    "marginX", "marginY",
-    "padding", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight",
-    "paddingX", "paddingY",
-    "borderTop", "borderBottom", "borderLeft", "borderRight",
-    "gap", "rowGap", "columnGap",
-    "overflow", "boxSizing",
-    "display", "position", "top", "bottom", "left", "right",
-}
+-- Cross-frame state: element tree from previous frame (with yoga_node attached)
+-- and a pool of detached, reset Yoga nodes ready for reuse.
+local _prev_element = nil
+local _pool = {}
 
-local function apply_box_style(node, props)
-    local style = {}
-
-    -- borderStyle: "single" | "double" | "round" | "bold" | "singleDouble" | "doubleSingle" | "classic"
-    -- → 1 on every edge (for layout reservation). Actual glyph choice happens in renderer.
-    if props.borderStyle then
-        style.border = 1
-    end
-
-    -- pass-through keys that map 1:1 to luayoga style names
-    -- Note: Yoga binding only accepts integers (not floats or percentages)
-    for _, k in ipairs(PASSTHROUGH_KEYS) do
-        if props[k] ~= nil then
-            -- arrays like {1,2} become "1 2" for luayoga multi-value syntax
-            -- (e.g., margin = {1, 2} means top/bottom=1, left/right=2)
-            local v = props[k]
-            if type(v) == "table" then
-                v = table.concat(v, " ")
-            end
-            style[k] = v
-        end
-    end
-
-    -- overflowX/Y fallback to overflow (Yoga has no per-axis overflow)
-    if props.overflowX ~= nil then style.overflow = props.overflowX end
-    if props.overflowY ~= nil then style.overflow = props.overflowY end
-
-    yoga.node_set(node, style)
+local function pool_acquire()
+    -- Pool nodes are already reset by release_subtree before insertion.
+    -- yoga.node_new() returns a fresh node with default style.
+    return table.remove(_pool) or yoga.node_new()
 end
 
--- Recursively create yoga nodes; returns the root node.
--- Also attaches `element.yoga_node` on every element for later readback.
-local function build(element, parent)
+-- Release an element subtree to the pool.
+-- PRECONDITION: element.yoga_node has no parent (owner_ == nullptr) when called.
+-- For box nodes, detaches their Yoga children first so they can be released too.
+local function release_subtree(element)
+    if not element.yoga_node then return end
+    if element.kind == "box" then
+        yoga.node_remove_all_children(element.yoga_node)
+        for _, child in ipairs(element.children or {}) do
+            release_subtree(child)
+        end
+    end
+    yoga.node_reset(element.yoga_node)
+    _pool[#_pool + 1] = element.yoga_node
+    element.yoga_node = nil
+end
+
+-- Reconcile element against prev (previous-frame element with yoga_node attached).
+-- Returns the yoga_node to use for element.
+-- When a prev child was replaced (different kind), it stays attached to its Yoga
+-- parent until the parent calls node_remove_all_children, which sets owner_=nullptr.
+-- Only THEN is release_subtree called, satisfying the precondition above.
+local function reconcile(element, prev)
     local node
-    if parent then
-        node = yoga.node_new(parent)
+    if prev and prev.kind == element.kind then
+        -- Reuse: take the node and clear it from prev so the release loop skips it.
+        node = prev.yoga_node
+        prev.yoga_node = nil
     else
-        node = yoga.node_new()
+        node = pool_acquire()
     end
     element.yoga_node = node
 
     if element.kind == "box" then
-        apply_box_style(node, element.props or {})
+        -- Single C pass: iterate props array directly, no intermediate Lua table.
+        yoga.node_set_box_props(node, element.props or {})
+
+        local children      = element.children or {}
+        local prev_children = (prev and prev.kind == "box" and prev.children) or {}
+
+        -- Reconcile all children first (builds new_nodes; replaced prev nodes
+        -- keep their yoga_node until we detach them below).
+        local new_nodes = {}
+        for i, child in ipairs(children) do
+            new_nodes[i] = reconcile(child, prev_children[i])
+        end
+
+        -- Check whether the Yoga child list needs to change.
+        -- If unchanged, no structural C calls → parent stays clean → Yoga skips
+        -- the entire subtree when layout props are also unchanged.
+        local needs_rewire = yoga.node_child_count(node) ~= #children
+        if not needs_rewire then
+            for i, cn in ipairs(new_nodes) do
+                if yoga.node_get_child(node, i - 1) ~= cn then
+                    needs_rewire = true; break
+                end
+            end
+        end
+
+        if needs_rewire then
+            -- Detach ALL current Yoga children (sets their owner_ to nullptr).
+            yoga.node_remove_all_children(node)
+            -- Now safe to release replaced / excess prev children.
+            for i = 1, math.max(#children, #prev_children) do
+                local pc = prev_children[i]
+                if pc and pc.yoga_node then
+                    release_subtree(pc)
+                end
+            end
+            -- Re-wire the new children in order.
+            for i, cn in ipairs(new_nodes) do
+                yoga.node_insert_child(node, cn, i - 1)
+            end
+        end
+
+    elseif element.kind == "text" then
+        local iw    = wcwidth.string_width(element.text or "")
+        local props = element.props or {}
+        yoga.node_set_text_props(node, props, iw, 1)
+        local wrap = props.wrap; if wrap == nil then wrap = "wrap" end
+        if wrap ~= "nowrap" then element._wrap = true end
+    end
+
+    return node
+end
+
+-- Recursively create yoga nodes; returns the root node.
+-- Uses pool_acquire() so nodes released by M.reset() can be reused.
+-- Used for the first frame (no _prev_element yet) and for intrinsic_size.
+-- Also attaches `element.yoga_node` on every element for later readback.
+local function build(element, parent_node)
+    local node = pool_acquire()
+    element.yoga_node = node
+    if parent_node then
+        yoga.node_insert_child(parent_node, node,
+            yoga.node_child_count(parent_node))
+    end
+
+    if element.kind == "box" then
+        yoga.node_set_box_props(node, element.props or {})
         for _, child in ipairs(element.children or {}) do
             build(child, node)
         end
     elseif element.kind == "text" then
-        -- Intrinsic size via wcwidth. Soft-wrap decisions defer to yoga
-        -- measure when wrap is enabled; for now compute a single-line width
-        -- and let tui/text.lua install a measure callback if wrap is on.
         local text  = element.text or ""
         local iw    = wcwidth.string_width(text)
         local props = element.props or {}
         local wrap  = props.wrap
         if wrap == nil then wrap = "wrap" end
-        -- Respect user-supplied width/height; otherwise fall back to intrinsic.
-        local style = {
-            width  = props.width  or iw,
-            height = props.height or 1,
-        }
-        if props.flexGrow     ~= nil then style.flexGrow     = props.flexGrow end
-        if props.flexShrink   ~= nil then style.flexShrink   = props.flexShrink end
-        if props.flexBasis    ~= nil then style.flexBasis    = props.flexBasis end
-        if props.alignSelf    ~= nil then style.alignSelf    = props.alignSelf end
-        if props.overflow     ~= nil then style.overflow     = props.overflow end
-        if props.marginTop  ~= nil then style.marginTop  = props.marginTop end
-        if props.marginBottom ~= nil then style.marginBottom = props.marginBottom end
-        if props.marginLeft ~= nil then style.marginLeft = props.marginLeft end
-        if props.marginRight~= nil then style.marginRight= props.marginRight end
-        yoga.node_set(node, style)
+        yoga.node_set_text_props(node, props, iw, 1)
         if wrap ~= "nowrap" then
             element._wrap = true
         end
@@ -133,10 +173,21 @@ local function readback(element, ox, oy, phase, wrap_nodes)
     end
 end
 
--- Public entry: build → calc → readback. Frees nothing; caller owns the root
--- and should call free(root) when done.
+-- Public entry: build/reconcile → calc → readback.
 function M.compute(element)
-    local root = build(element, nil)
+    local root
+    if _prev_element then
+        root = reconcile(element, _prev_element)
+        -- If root kind changed, _prev_element.yoga_node was not claimed by
+        -- reconcile (it didn't match).  Root has no parent so it's safe to
+        -- release directly.
+        if _prev_element.yoga_node then
+            release_subtree(_prev_element)
+        end
+    else
+        root = build(element, nil)
+    end
+    _prev_element = element
     yoga.node_calc(root)
 
     -- Pass 1: measure-only readback to gather text nodes whose wrapped height
@@ -157,10 +208,10 @@ function M.compute(element)
 end
 
 function M.free(element)
-    if element.yoga_node then
-        yoga.node_free(element.yoga_node)
-        element.yoga_node = nil
-    end
+    -- Nodes are now pooled and reused across frames; layout.lua manages their
+    -- lifetime via _prev_element.  This function is kept for API compatibility
+    -- (init.lua still calls it) but does nothing.
+    _ = element
 end
 
 -- Compute the minimum intrinsic size (cols, rows) the element tree needs.
@@ -180,6 +231,16 @@ function M.intrinsic_size(element)
     yoga.node_free(root)
     element.yoga_node = nil
     return w, h
+end
+
+-- Reset all cross-frame state. Call this at session end (e.g., unmount) to
+-- ensure the next compute() starts from a clean slate.  M.free() is kept as
+-- a no-op so the between-frame calling convention in testing.lua is harmless.
+function M.reset()
+    if _prev_element then
+        release_subtree(_prev_element)
+        _prev_element = nil
+    end
 end
 
 return M

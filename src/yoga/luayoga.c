@@ -505,6 +505,218 @@ lsetRight(lua_State *L, YGNodeRef node) {
 	setPosition(L, node, YGEdgeRight);
 }
 
+// --- node_set_box_props / node_set_text_props helpers ---
+
+// coerce_table_to_string: replace the table at stack top with "v1 v2 ..." string.
+// Used so margin={1,2} can be passed as the string "1 2" to setFourNumber.
+static void
+coerce_table_to_string(lua_State *L) {
+	luaL_Buffer b;
+	luaL_buffinit(L, &b);
+	for (int j = 1; ; j++) {
+		lua_rawgeti(L, -1, j);
+		if (lua_type(L, -1) == LUA_TNIL) { lua_pop(L, 1); break; }
+		if (j > 1) luaL_addchar(&b, ' ');
+		size_t len;
+		const char *s = lua_tolstring(L, -1, &len);
+		if (s) luaL_addlstring(&b, s, len);
+		lua_pop(L, 1);
+	}
+	luaL_pushresult(&b);
+	lua_replace(L, -2);
+}
+
+// Static setter array for all box-layout props (matches layout.lua's PASSTHROUGH_KEYS
+// plus borderStyle special-casing).  Upvalue 2 = enum table (same as lnodeSet).
+static const struct { const char *key; setfunc fn; } box_setter_list[] = {
+	{ "width",          lsetWidth          },
+	{ "height",         lsetHeight         },
+	{ "minWidth",       lsetMinWidth       },
+	{ "maxWidth",       lsetMaxWidth       },
+	{ "minHeight",      lsetMinHeight      },
+	{ "maxHeight",      lsetMaxHeight      },
+	{ "flexGrow",       lsetFlexGrow       },
+	{ "flexShrink",     lsetFlexShrink     },
+	{ "flexBasis",      lsetFlexBasis      },
+	{ "flexDirection",  lsetFlexDirection  },
+	{ "flexWrap",       lsetFlexWrap       },
+	{ "justifyContent", lsetJustifyContent },
+	{ "alignItems",     lsetAlignItems     },
+	{ "alignContent",   lsetAlignContent   },
+	{ "alignSelf",      lsetAlignSelf      },
+	{ "margin",         lsetMargin         },
+	{ "marginTop",      lsetMarginTop      },
+	{ "marginBottom",   lsetMarginBottom   },
+	{ "marginLeft",     lsetMarginLeft     },
+	{ "marginRight",    lsetMarginRight    },
+	{ "marginX",        lsetMarginX        },
+	{ "marginY",        lsetMarginY        },
+	{ "padding",        lsetPadding        },
+	{ "paddingTop",     lsetPaddingTop     },
+	{ "paddingBottom",  lsetPaddingBottom  },
+	{ "paddingLeft",    lsetPaddingLeft    },
+	{ "paddingRight",   lsetPaddingRight   },
+	{ "paddingX",       lsetPaddingX       },
+	{ "paddingY",       lsetPaddingY       },
+	{ "borderTop",      lsetBorderTop      },
+	{ "borderBottom",   lsetBorderBottom   },
+	{ "borderLeft",     lsetBorderLeft     },
+	{ "borderRight",    lsetBorderRight    },
+	{ "gap",            lsetGap            },
+	{ "rowGap",         lsetRowGap         },
+	{ "columnGap",      lsetColumnGap      },
+	{ "overflow",       lsetOverflow       },
+	{ "boxSizing",      lsetBoxSizing      },
+	{ "display",        lsetDisplay        },
+	{ "position",       lsetPosition       },
+	{ "top",            lsetTop            },
+	{ "bottom",         lsetBottom         },
+	{ "left",           lsetLeft           },
+	{ "right",          lsetRight          },
+};
+#define N_BOX_SETTERS (int)(sizeof(box_setter_list)/sizeof(box_setter_list[0]))
+
+// yoga.node_set_box_props(node, props)
+// Single-pass: directly lua_getfield each key from props, no intermediate table.
+// Requires upvalue 2 = enum table (same convention as lnodeSet).
+static int
+lnodeSetBoxProps(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	luaL_checktype(L, 2, LUA_TTABLE);
+
+	// borderStyle → set 1px border on all edges for layout reservation
+	if (lua_getfield(L, 2, "borderStyle") != LUA_TNIL)
+		YGNodeStyleSetBorder(node, YGEdgeAll, 1.0f);
+	lua_pop(L, 1);
+
+	for (int i = 0; i < N_BOX_SETTERS; i++) {
+		int vtype = lua_getfield(L, 2, box_setter_list[i].key);
+		if (vtype == LUA_TTABLE) {
+			coerce_table_to_string(L);
+			vtype = LUA_TSTRING;
+		}
+		if (vtype != LUA_TNIL)
+			box_setter_list[i].fn(L, node);
+		lua_pop(L, 1);
+	}
+
+	// overflowX/Y fallback (Yoga has no per-axis overflow); Y wins if both set
+	if (lua_getfield(L, 2, "overflowX") != LUA_TNIL) lsetOverflow(L, node);
+	lua_pop(L, 1);
+	if (lua_getfield(L, 2, "overflowY") != LUA_TNIL) lsetOverflow(L, node);
+	lua_pop(L, 1);
+
+	return 0;
+}
+
+// yoga.node_set_text_props(node, props, iw, ih)
+// Sets width/height (with integer defaults iw/ih) plus optional flex/margin/overflow.
+// Requires upvalue 2 = enum table (alignSelf and overflow use getEnum).
+static int
+lnodeSetTextProps(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	luaL_checktype(L, 2, LUA_TTABLE);
+	int iw = (int)luaL_checkinteger(L, 3);
+	int ih = (int)luaL_checkinteger(L, 4);
+
+	if (lua_getfield(L, 2, "width") != LUA_TNIL) {
+		lsetWidth(L, node);
+	} else {
+		lua_pop(L, 1);
+		lua_pushinteger(L, iw);
+		lsetWidth(L, node);
+	}
+	lua_pop(L, 1);
+
+	if (lua_getfield(L, 2, "height") != LUA_TNIL) {
+		lsetHeight(L, node);
+	} else {
+		lua_pop(L, 1);
+		lua_pushinteger(L, ih);
+		lsetHeight(L, node);
+	}
+	lua_pop(L, 1);
+
+	static const struct { const char *key; setfunc fn; } text_opt[] = {
+		{ "flexGrow",     lsetFlexGrow     },
+		{ "flexShrink",   lsetFlexShrink   },
+		{ "flexBasis",    lsetFlexBasis    },
+		{ "alignSelf",    lsetAlignSelf    },
+		{ "overflow",     lsetOverflow     },
+		{ "marginTop",    lsetMarginTop    },
+		{ "marginBottom", lsetMarginBottom },
+		{ "marginLeft",   lsetMarginLeft   },
+		{ "marginRight",  lsetMarginRight  },
+	};
+	for (int i = 0; i < (int)(sizeof(text_opt)/sizeof(text_opt[0])); i++) {
+		if (lua_getfield(L, 2, text_opt[i].key) != LUA_TNIL)
+			text_opt[i].fn(L, node);
+		lua_pop(L, 1);
+	}
+	return 0;
+}
+
+// --- Structural tree APIs (no upvalues needed) ---
+
+// yoga.node_child_count(node) -> int
+static int
+lnodeChildCount(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	lua_pushinteger(L, (int)YGNodeGetChildCount(node));
+	return 1;
+}
+
+// yoga.node_get_child(node, i) -> lightuserdata  (0-based index)
+static int
+lnodeGetChild(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	int i = (int)luaL_checkinteger(L, 2);
+	lua_pushlightuserdata(L, YGNodeGetChild(node, (size_t)i));
+	return 1;
+}
+
+// yoga.node_remove_all_children(node)
+static int
+lnodeRemoveAllChildren(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	YGNodeRemoveAllChildren(node);
+	return 0;
+}
+
+// yoga.node_insert_child(parent, child, i)  (0-based index)
+static int
+lnodeInsertChild(lua_State *L) {
+	YGNodeRef parent = lua_touserdata(L, 1);
+	YGNodeRef child  = lua_touserdata(L, 2);
+	int i = (int)luaL_checkinteger(L, 3);
+	YGNodeInsertChild(parent, child, (size_t)i);
+	return 0;
+}
+
+// yoga.node_reset(node) — reset style to defaults; node must have no parent/children
+static int
+lnodeReset(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	YGNodeReset(node);
+	return 0;
+}
+
+// yoga.node_has_new_layout(node) -> bool
+static int
+lnodeHasNewLayout(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	lua_pushboolean(L, YGNodeGetHasNewLayout(node));
+	return 1;
+}
+
+// yoga.node_set_has_new_layout(node, bool)
+static int
+lnodeSetHasNewLayout(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	YGNodeSetHasNewLayout(node, lua_toboolean(L, 2));
+	return 0;
+}
+
 static int
 lnodeSet(lua_State *L) {
 	YGNodeRef node = lua_touserdata(L, 1);
@@ -530,15 +742,22 @@ DLL_EXPORT LUAMOD_API int
 luaopen_yoga(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
-		{ "node_new", lnodeNew },
-		{ "node_free", lnodeFree },
-		{ "node_calc", lnodeCalc },
-		{ "node_get", lnodeGet },
-		{ "node_set", NULL },
+		{ "node_new",                lnodeNew                },
+		{ "node_free",               lnodeFree               },
+		{ "node_calc",               lnodeCalc               },
+		{ "node_get",                lnodeGet                },
+		{ "node_child_count",        lnodeChildCount         },
+		{ "node_get_child",          lnodeGetChild           },
+		{ "node_remove_all_children",lnodeRemoveAllChildren  },
+		{ "node_insert_child",       lnodeInsertChild        },
+		{ "node_reset",              lnodeReset              },
+		{ "node_has_new_layout",     lnodeHasNewLayout       },
+		{ "node_set_has_new_layout", lnodeSetHasNewLayout    },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
-	
+	int lib_idx = lua_gettop(L);
+
 	struct {
 		const char *name;
 		setfunc func;
@@ -591,11 +810,12 @@ luaopen_yoga(lua_State *L) {
 	};
 	int n = sizeof(setter) / sizeof(setter[0]);
 	int i;
-	lua_createtable(L, n, 0);
+	lua_createtable(L, 0, n);
 	for (i=0;i<n;i++) {
 		lua_pushlightuserdata(L, (void *)setter[i].func);
 		lua_setfield(L, -2, setter[i].name);
 	}
+	int setter_idx = lua_gettop(L);
 
 	struct enum_string	estr[] = {
 		ENUM(FlexDirection, Column)
@@ -633,7 +853,7 @@ luaopen_yoga(lua_State *L) {
 		ENUM(BoxSizing, ContentBox)
 	};
 	n = sizeof(estr) / sizeof(estr[0]);
-	lua_createtable(L, n, 0);
+	lua_createtable(L, 0, n);
 	for (i=0;i<n;i++) {
 		int v = 0;
 		if (lua_getfield(L, -1, estr[i].name) == LUA_TNUMBER) {
@@ -645,8 +865,25 @@ luaopen_yoga(lua_State *L) {
 		lua_pushinteger(L, estr[i].value | v);
 		lua_setfield(L, -2, estr[i].name);
 	}
+	int enum_idx = lua_gettop(L);
+
+	// Register the three closures that need the enum table as upvalue 2.
+	// Upvalue 1 = setter dispatch table (only lnodeSet uses it).
+	// Upvalue 2 = enum table (lnodeSet, lnodeSetBoxProps, lnodeSetTextProps).
+	lua_pushvalue(L, setter_idx); lua_pushvalue(L, enum_idx);
 	lua_pushcclosure(L, lnodeSet, 2);
-	lua_setfield(L, -2, "node_set");
+	lua_setfield(L, lib_idx, "node_set");
+
+	lua_pushvalue(L, setter_idx); lua_pushvalue(L, enum_idx);
+	lua_pushcclosure(L, lnodeSetBoxProps, 2);
+	lua_setfield(L, lib_idx, "node_set_box_props");
+
+	lua_pushvalue(L, setter_idx); lua_pushvalue(L, enum_idx);
+	lua_pushcclosure(L, lnodeSetTextProps, 2);
+	lua_setfield(L, lib_idx, "node_set_text_props");
+
+	// Discard setter and enum tables; closures hold references via upvalues.
+	lua_settop(L, lib_idx);
 
 	// Set PointScaleFactor=1 on default config so all Yoga nodes produce
 	// integer coordinates (TUI is cell-based; fractional positions like

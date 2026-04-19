@@ -36,10 +36,9 @@ _暂无_
 - `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索 O(n) → O(1)）
 - **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点（Ink 行为），解决动态 UI（弹窗关闭后焦点丢失）问题
 - **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
-- **StylePool 缓存**：Ink 的 style_id → SGR 会话级缓存，避免每帧重复计算 ANSI 序列。方案：独立 style pool，cell_t 存 style_id (uint16_t) 索引到 pool，首次 interning 后续直接查找
+- **StylePool 缓存**：Ink 的 style_id → SGR 会话级缓存，避免每帧重复计算 ANSI 序列。方案：独立 style pool，cell_t 存 style_id (uint16_t) 索引到 pool，首次 interning 后续直接查找。前置工作已完成：`sgr.pack_border_bytes` 已内联 border 颜色逻辑，入口处预留缓存插入点
 - **CharPool 字符串去重**：相同文本共享存储，减少内存占用
 - **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
-- **Yoga 树复用**：当前每帧 layout.build() 从零创建所有 Yoga 节点（堆分配），用完丢弃。复用上一帧的 Yoga 树、只更新变化的 style 属性，避免大量分配。基准显示 nested_box_100 主要开销在此
 - **Reconciler 表复用**：`state.seen` / `_effects_to_flush` 每帧新建表产生 GC 压力；`child_path_for` 每帧拼接路径字符串；host element 每帧深拷贝——都是可优化的分配热点
 - **screen.c fill_space 冗余消除**：diff 后 fill_space 清空 next 缓冲，但下一帧 clear() 又会清一遍，可以跳过 diff 后的 fill_space
 - **光标 shape 支持**：`\x1B[n q` 切换 bar / block / underline（TextInput 可声明 `cursorShape` prop）

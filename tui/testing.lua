@@ -580,6 +580,7 @@ function Harness:unmount()
         layout.free(self._tree)
         self._tree = nil
     end
+    layout.reset()
     input_mod._reset()
     resize_mod._reset()
     focus_mod._reset()
