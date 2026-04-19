@@ -50,8 +50,6 @@ _暂无_
 - ErrorBoundary 嵌套场景
 - 并发 setState 导致的稳定化循环边界（MAX_STABILIZE_PASSES）
 - 无覆盖核心模块入门测试：init.lua、renderer.lua、input.dispatch 中间件链（pre → focus → broadcast）
-- 属性测试（Property-Based Testing）：布局不变量（子节点不溢出父节点）、任意合法尺寸 (1×1 ~ 200×100) 不崩溃、TextInput 任意 value 长度下 cursor 位置合法
-- 快照测试扩展：每个内置组件至少 1 个快照、边界尺寸快照（1×1、窄宽 10×3、宽屏 120×40）、主题/样式快照（borderStyle / color 组合）
 - 集成测试场景扩展：表单提交（TextInput + Select + useFocus Tab 导航）、实时监控仪表盘（useInterval + ProgressBar + Spinner）、错误恢复流程（ErrorBoundary + useInput）、终端缩放（useWindowSize + Box 动态 resize）
 - helpers 工具库扩展：make_form_app、make_async_app、with_dev_mode wrapper、assert_no_warnings 便利函数
 
