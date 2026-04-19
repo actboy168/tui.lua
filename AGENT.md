@@ -79,6 +79,6 @@ C 层负责 5 项，落在这 5 项里的默认走 C：
 
 - Stage 用递增整数，不加字母后缀
 - 一个 stage = 一组相关能力，不是每个组件/hook 单独一个
-- 已完成特性写 features.md，不写 roadmap
+- 已完成特性通过代码和 LuaDoc 表达，不写单独的 features.md
 - 简化方案的待办不要括注来源 stage
-- 不默认每 stage 归档决策，只记代码和 features.md 表达不出来的
+- 不默认每 stage 归档决策，只记代码和 API 本身表达不出来的

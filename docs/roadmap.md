@@ -1,10 +1,9 @@
 # tui.lua 路线图
 
-本文件是 tui.lua 的主路线图，由用户与助手共同维护。**新增/调整规划时先改这里**，
-实施完毕再把条目挪到 [features.md](features.md)。当前会话的细项由 TaskCreate 辅助
-跟踪，不在此处重复罗列。
+本文件是 tui.lua 的主路线图，由用户与助手共同维护。**新增/调整规划时先改这里**。
+当前会话的细项由 TaskCreate 辅助跟踪，不在此处重复罗列。
 
-已支持特性见 [features.md](features.md)。
+已支持特性通过代码和 LuaDoc 注释表达，见 `tui/` 目录下各模块。
 
 ---
 
@@ -95,6 +94,6 @@ _暂无_
 
 - 新增计划项：直接编辑本文件，在"未完成"相应类别下加条目
 - 进入实施：移到"正在进行"，同时 TaskCreate 拆会话级子任务
-- 完成：把 stage bullet 挪到 `changelog.md`，roadmap 这里只保留规划
+- 完成：从 roadmap 删除对应条目，代码和 LuaDoc 即是最新特性文档
 - 不做的想法记到"非目标"，避免反复纠结
 - 开新 stage 前先对照技术路线的 C 层 scope（Terminal I/O / wcwidth / Yoga / Render 后端 / Key parser）—— 落在这 5 项里的工作默认走 C，要改成 Lua 实现需要显式在 roadmap 里说明原因

@@ -33,12 +33,11 @@ Stage 标题用递增整数（Stage 6, Stage 7...），不加字母后缀（5A /
 
 ## 已完成特性的记录
 
-已支持的特性放在 `docs/features.md`（不在 roadmap.md 里），按组件/Hook/测试/C 层分类，每个条目简要列出 API 签名和核心功能点。
+已支持的特性通过代码和 LuaDoc 注释表达，不再维护单独的 features.md 清单。
 
 **How to apply:**
-- 新增能力完成时，在 `docs/features.md` 对应分类下加一行
-- 写"组件/Hook/API 签名 + 核心功能点"，不写实现细节
-- 外部可见的 prop/hook/组件名可以留；内部私有字段不写
+- 新增组件/Hook 时，在代码中写 LuaDoc 注释（---@param / ---@return）
+- 外部可见的 API 通过 `tui.*` 模块导出，内部私有字段以下划线开头
 - 不写测试相关 bullet：测试是内部质量手段，不进特性清单
 - Roadmap 的正在进行/未完成区块不受此约束，可以写细
 - 实现细节和设计决策放到 `docs/decisions/` 里
@@ -50,7 +49,7 @@ Stage 标题用递增整数（Stage 6, Stage 7...），不加字母后缀（5A /
 - ✅ 写：**非显然的选择理由** — "为什么不是方案 X"，否决的备选方案
 - ✅ 写：**代码里看不出来的外部约束** — 平台、工具链、上游库限制
 - ✅ 写：**会影响未来决策的判断性结论** — 如"阈值取 N 是对齐某先例"
-- ❌ 不写：功能清单（"实现了 useMemo / useCallback"）— features.md 已有
+- ❌ 不写：功能清单（"实现了 useMemo / useCallback"）— 代码和 LuaDoc 已有
 - ❌ 不写：内部算法、函数名、文件行号 — 读代码更准
 - ❌ 不写：bug 修复经过 — git log / commit message 有
 

@@ -1,6 +1,6 @@
 # Decisions
 
-项目决策记录 — 代码和 features.md 表达不出来的判断、约束、否决备选。
+项目决策记录 — 代码和 API 本身表达不出来的判断、约束、否决备选。
 
 - [project.md](project.md) — 项目概览与技术栈（C/Lua 划界、Ink 参考路径）
 - [roadmap_conventions.md](roadmap_conventions.md) — Roadmap 编写规范（Stage 命名/颗粒度/待办写法/特性记录/决策记录标准）
