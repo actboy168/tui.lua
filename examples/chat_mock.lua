@@ -9,6 +9,10 @@
 
 local tui = require "tui"
 
+-- Uncomment the next two lines to capture raw input bytes for debugging:
+-- require("tui.input")._debug_log = "input_debug.txt"
+-- io.open("input_debug.txt", "w"):close()  -- truncate on start
+
 -- Scripted bot replies in lock-step with user input count.
 local replies = {
     "hi there! how can I help?",

@@ -25,6 +25,7 @@ local resize_mod = require "tui.resize"
 local focus_mod  = require "tui.focus"
 local static_mod = require "tui.builtin.static"
 local text_input = require "tui.builtin.text_input"
+local textarea   = require "tui.builtin.textarea"
 local cursor_mod = require "tui.builtin.cursor"
 local spinner_mod = require "tui.builtin.spinner"
 local select_mod = require "tui.builtin.select"
@@ -34,25 +35,22 @@ local ansi       = require "tui.ansi"
 local text_mod   = require "tui.text"
 local tui_core   = require "tui_core"
 local info       = require "tui.terminal_info"
+local platform   = require "tui.platform"
 
 local terminal = tui_core.terminal
 
 -- ---------------------------------------------------------------------------
--- Default scheduler backend (bee-based).
+-- Default scheduler backend (platform-agnostic).
 --
 -- The scheduler itself is platform-agnostic; here we install sensible defaults
 -- so out-of-the-box `tui.render(App)` just works. Production integrators may
 -- call `tui.configureScheduler{ now=..., sleep=... }` before `tui.render` to
 -- plug in ltask / libuv / their own event loop.
 local function install_default_backend()
-    local ok_time,   time   = pcall(require, "bee.time")
-    local ok_thread, thread = pcall(require, "bee.thread")
-    if ok_time and ok_thread then
-        scheduler.configure {
-            now   = function() return time.monotonic() end,
-            sleep = function(ms) thread.sleep(ms) end,
-        }
-    end
+    scheduler.configure {
+        now   = function() return platform.monotonic() end,
+        sleep = function(ms) platform.sleep(ms) end,
+    }
 end
 install_default_backend()
 
@@ -79,6 +77,7 @@ M.Text           = element.Text
 M.ErrorBoundary  = element.ErrorBoundary
 M.Static         = static_mod.Static
 M.TextInput      = text_input.TextInput
+M.Textarea       = textarea.Textarea
 M.Spinner        = spinner_mod.Spinner
 M.Select         = select_mod.Select
 M.ProgressBar    = progress_mod.ProgressBar
@@ -127,6 +126,7 @@ M.useWindowSize  = hooks.useWindowSize
 M.useApp         = hooks.useApp
 M.useStdout      = hooks.useStdout
 M.useStderr      = hooks.useStderr
+M.usePaste       = hooks.usePaste
 M.useFocus        = hooks.useFocus
 M.useFocusManager = hooks.useFocusManager
 M.useDeclaredCursor = cursor_mod.useDeclaredCursor
@@ -246,7 +246,7 @@ function M.render(root)
     terminal.windows_vt_enable()
     terminal.set_raw(true)
     if interactive then
-        terminal.write(ansi.cursorHide())
+        terminal.write(ansi.cursorHide() .. ansi.enableBracketedPaste)
     end
 
     local rec_state    = reconciler.new()
@@ -347,7 +347,7 @@ function M.render(root)
 
     -- Restore terminal state regardless of error.
     if interactive then
-        terminal.write(ansi.cursorShow() .. "\n")
+        terminal.write(ansi.disableBracketedPaste .. ansi.cursorShow() .. "\n")
     end
     terminal.set_raw(false)
 

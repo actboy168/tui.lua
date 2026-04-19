@@ -115,6 +115,8 @@ static const char* tilde_name(int n) {
         case 5:  return "pageup";
         case 6:  return "pagedown";
         case 11: return "f1";
+        case 200: return "paste_start";
+        case 201: return "paste_end";
         case 12: return "f2";
         case 13: return "f3";
         case 14: return "f4";

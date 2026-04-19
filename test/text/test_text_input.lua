@@ -1701,3 +1701,60 @@ function suite:test_multi_input_focused_cursor_wins()
 
     h:unmount()
 end
+
+-- ---------------------------------------------------------------------------
+-- Bracketed paste tests.
+-- ---------------------------------------------------------------------------
+
+function suite:test_paste_into_empty_input()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 40, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 40, rows = 1 })
+    h:dispatch("\x1b[200~hello world\x1b[201~")
+    lt.assertEquals(value, "hello world")
+    h:unmount()
+end
+
+function suite:test_paste_inserts_at_caret_middle()
+    local value = "ac"
+    local function App()
+        return tui.Box {
+            width = 40, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 40, rows = 1 })
+    h:press("left")  -- move caret before 'c'
+    h:dispatch("\x1b[200~b\x1b[201~")
+    lt.assertEquals(value, "abc")
+    h:unmount()
+end
+
+function suite:test_paste_multiline()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 40, height = 1,
+            tui.TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 40, rows = 1 })
+    -- TextInput is single-line: newlines in pasted text are replaced with spaces.
+    h:dispatch("\x1b[200~line1\nline2\x1b[201~")
+    lt.assertEquals(value, "line1 line2")
+    h:unmount()
+end

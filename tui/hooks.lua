@@ -652,6 +652,24 @@ function M.useInput(fn)
 end
 
 -- ---------------------------------------------------------------------------
+-- usePaste(handler) — subscribe to bracketed-paste events for the lifetime of
+-- the component. Handler signature: handler(text: string).
+-- Ink API parity: called once with the complete pasted text after the terminal
+-- sends the closing ESC[201~ marker.
+
+function M.usePaste(fn)
+    if not input_mod then input_mod = require "tui.input" end
+    local ref = useLatestRef(fn)
+    assert(current, "usePaste called outside of a component render")
+    local inst = current
+    M.useEffect(function()
+        return input_mod.subscribe_paste(wrap_handler_for_boundary(inst, function(text)
+            ref.current(text)
+        end))
+    end, {})
+end
+
+-- ---------------------------------------------------------------------------
 -- useFocus(opts) — register this component into the focus chain.
 --
 -- opts = {

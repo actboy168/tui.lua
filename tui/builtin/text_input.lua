@@ -229,6 +229,18 @@ local function TextInputImpl(props)
                 for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
                 for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
                 emit(nc, c + #ins)
+            elseif name == "paste" and input and input ~= "" then
+                -- Bracketed paste: strip newlines (single-line field), then
+                -- insert all remaining chars at once.
+                local sanitized = input:gsub("\r\n", " "):gsub("[\r\n]", " ")
+                if sanitized ~= "" then
+                    local ins = to_chars(sanitized)
+                    local nc = {}
+                    for i = 1, c do nc[i] = cs[i] end
+                    for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
+                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
+                    emit(nc, c + #ins)
+                end
             end
         end,
     }

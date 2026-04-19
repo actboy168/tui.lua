@@ -154,15 +154,15 @@ l_read_raw(lua_State *L) {
             /* 规则4：功能键，映射到 ANSI escape */
             pending_high = 0;
             switch (vk) {
-            case VK_UP:     buf[len++]='\27';buf[len++]='[';buf[len++]='A'; break;
-            case VK_DOWN:   buf[len++]='\27';buf[len++]='[';buf[len++]='B'; break;
-            case VK_RIGHT:  buf[len++]='\27';buf[len++]='[';buf[len++]='C'; break;
-            case VK_LEFT:   buf[len++]='\27';buf[len++]='[';buf[len++]='D'; break;
-            case VK_HOME:   buf[len++]='\27';buf[len++]='[';buf[len++]='H'; break;
-            case VK_END:    buf[len++]='\27';buf[len++]='[';buf[len++]='F'; break;
-            case VK_DELETE: buf[len++]='\27';buf[len++]='[';buf[len++]='3';buf[len++]='~'; break;
-            case VK_PRIOR:  buf[len++]='\27';buf[len++]='[';buf[len++]='5';buf[len++]='~'; break;
-            case VK_NEXT:   buf[len++]='\27';buf[len++]='[';buf[len++]='6';buf[len++]='~'; break;
+            case VK_UP:     buf[len++]='\x1b';buf[len++]='[';buf[len++]='A'; break;
+            case VK_DOWN:   buf[len++]='\x1b';buf[len++]='[';buf[len++]='B'; break;
+            case VK_RIGHT:  buf[len++]='\x1b';buf[len++]='[';buf[len++]='C'; break;
+            case VK_LEFT:   buf[len++]='\x1b';buf[len++]='[';buf[len++]='D'; break;
+            case VK_HOME:   buf[len++]='\x1b';buf[len++]='[';buf[len++]='H'; break;
+            case VK_END:    buf[len++]='\x1b';buf[len++]='[';buf[len++]='F'; break;
+            case VK_DELETE: buf[len++]='\x1b';buf[len++]='[';buf[len++]='3';buf[len++]='~'; break;
+            case VK_PRIOR:  buf[len++]='\x1b';buf[len++]='[';buf[len++]='5';buf[len++]='~'; break;
+            case VK_NEXT:   buf[len++]='\x1b';buf[len++]='[';buf[len++]='6';buf[len++]='~'; break;
             default: break;
             }
         }

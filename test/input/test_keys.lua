@@ -194,6 +194,29 @@ function dsuite:test_multiple_subscribers_all_notified()
     input_mod.dispatch("x")
     lt.assertEquals(a, 1)
     lt.assertEquals(b, 1)
+
+-- ---------------------------------------------------------------------------
+-- Bracketed paste sequences.
+-- ---------------------------------------------------------------------------
+
+local paste_suite = lt.test "keys_paste_sequences"
+
+function paste_suite:test_paste_start_sequence()
+    local ev = first("\x1b[200~")
+    lt.assertEquals(ev.name, "paste_start")
+end
+
+function paste_suite:test_paste_end_sequence()
+    local ev = first("\x1b[201~")
+    lt.assertEquals(ev.name, "paste_end")
+end
+
+function paste_suite:test_paste_start_and_end_in_one_buffer()
+    local evs = keys.parse("\x1b[200~hello\x1b[201~")
+    -- Should yield: paste_start, char h, char e, char l, char l, char o, paste_end
+    lt.assertEquals(evs[1].name, "paste_start")
+    lt.assertEquals(evs[#evs].name, "paste_end")
+end
 end
 
 function dsuite:test_unsubscribe_mid_dispatch_is_safe()
