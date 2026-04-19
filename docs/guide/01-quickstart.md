@@ -6,10 +6,17 @@
 # 克隆仓库
 git clone https://github.com/yourusername/tui.lua.git
 cd tui.lua
+```
 
-# 安装依赖（如果使用 luamake）
+## 编译
+
+使用 luamake 编译项目：
+
+```bash
 luamake
 ```
+
+这将编译 C 扩展模块（wcwidth、screen、terminal 等）并生成必要的构建产物。
 
 ## 第一个应用
 
@@ -33,8 +40,12 @@ tui.render(App)
 运行：
 
 ```bash
-lua hello.lua
+luamake lua hello.lua
 ```
+
+> **注意**：必须使用 `luamake lua` 运行脚本，它会正确设置 Lua 路径以加载 tui 模块。
+
+> 💡 **提示**：完整代码在 [examples/hello.lua](../../examples/hello.lua)，可以直接运行。
 
 ## 交互式应用
 

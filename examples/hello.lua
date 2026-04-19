@@ -1,24 +1,24 @@
--- examples/hello.lua — Stage 1 smoke demo.
--- Run with: luamake lua examples/hello.lua
--- Exit with Ctrl+C, Ctrl+D, q, or Esc.
+-- examples/hello.lua - Hello World 示例
+-- 运行: luamake lua examples/hello.lua
+-- 退出: Ctrl+C, Ctrl+D, q, 或 Esc
 
 local tui = require "tui"
 
 local function App()
     local app = tui.useApp()
+
     tui.useInput(function(input, key)
         if input == "q" or key.name == "escape" then
-            app.exit()
+            app:exit()
         end
     end)
+
     return tui.Box {
-        justifyContent = "center",
-        alignItems     = "center",
-        tui.Box {
-            borderStyle = "round",
-            padding     = "0 1",
-            tui.Text { "Hello, tui.lua" },
-        },
+        flexDirection = "column",
+        padding = 2,
+        tui.Text { bold = true, "Hello, tui.lua!" },
+        tui.Newline {},
+        tui.Text { "按 q 或 Esc 退出" }
     }
 end
 

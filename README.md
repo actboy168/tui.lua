@@ -2,9 +2,35 @@
 
 一个用于 Lua 的 React 风格终端 UI 框架。
 
-## 快速开始
+## 安装
+
+```bash
+git clone https://github.com/yourusername/tui.lua.git
+cd tui.lua
+```
+
+## 编译
+
+使用 luamake 编译项目：
+
+```bash
+luamake
+```
+
+这将编译 C 扩展模块并生成必要的构建产物。
+
+## 运行脚本
+
+使用 `luamake lua` 运行 tui.lua 脚本：
+
+```bash
+luamake lua examples/counter.lua
+```
+
+或者创建自己的脚本：
 
 ```lua
+-- myapp.lua
 local tui = require "tui"
 
 local function App()
@@ -27,6 +53,16 @@ end
 
 tui.render(App)
 ```
+
+运行：
+
+```bash
+luamake lua myapp.lua
+```
+
+## 快速开始示例
+
+查看 [examples/README.md](examples/README.md) 了解所有示例。
 
 ## 核心概念
 

@@ -2,10 +2,10 @@
 --
 -- Demonstrates:
 --   * <Static> for append-only message history (rows don't redraw once set)
---   * <TextInput> with IME-aware cursor placement
+--   * <Textarea> with bracketed-paste multi-line support
 --   * useInterval to stream bot reply character-by-character
 --
--- Keys: Enter to submit, Ctrl+C / Ctrl+D to quit.
+-- Keys: Ctrl+Enter to submit, Enter for newline, Ctrl+C / Ctrl+D to quit.
 
 local tui = require "tui"
 
@@ -17,11 +17,24 @@ local replies = {
     "再见 👋",
 }
 
+-- Render a single chat message.  Multi-line values (pasted text) are shown
+-- with the tag on the first line and subsequent lines indented to align.
 local function formatMsg(msg)
-    -- msg = { who = "user"|"bot", text = string }
-    local tag = msg.who == "user" and "you" or "bot"
+    local tag   = msg.who == "user" and "you" or "bot"
     local color = msg.who == "user" and "green" or "cyan"
-    return tui.Text { color = color, ("[%s] %s"):format(tag, msg.text) }
+    local prefix  = ("[%s] "):format(tag)
+    local indent  = (" "):rep(#prefix)
+    local lines   = {}
+    for line in (msg.text .. "\n"):gmatch("([^\n]*)\n") do
+        lines[#lines + 1] = line
+    end
+    local children = {}
+    for i, line in ipairs(lines) do
+        local text = (i == 1 and prefix or indent) .. line
+        children[#children + 1] = tui.Text { color = color, text }
+    end
+    if #children == 1 then return children[1] end
+    return tui.Box { flexDirection = "column", table.unpack(children) }
 end
 
 local function App()
@@ -34,7 +47,6 @@ local function App()
         if not streaming then return end
         local s = streaming
         if s.shown >= #s.target then
-            -- Finalize: commit the full bot message to history.
             setHistory(function(h)
                 local nh = {}
                 for i, m in ipairs(h) do nh[i] = m end
@@ -48,22 +60,20 @@ local function App()
     end, 40)
 
     local function submit(value)
-        if value == "" then return end
-        -- Append user message.
+        -- Trim trailing whitespace/newlines before sending.
+        local trimmed = value:match("^(.-)%s*$")
+        if trimmed == "" then return end
         setHistory(function(h)
             local nh = {}
             for i, m in ipairs(h) do nh[i] = m end
-            nh[#nh + 1] = { who = "user", text = value }
+            nh[#nh + 1] = { who = "user", text = trimmed }
             return nh
         end)
         setInput("")
-        -- Queue a bot reply (cycle through scripted replies).
         local idx = ((#history) % #replies) + 1
         setStream({ target = replies[idx], shown = 0 })
     end
 
-    -- Build the Static items list. When a bot reply is streaming, show the
-    -- partial text as a dynamic row below Static (not part of history yet).
     local size = tui.useWindowSize()
 
     return tui.Box {
@@ -79,16 +89,22 @@ local function App()
             color = "cyan", dim = true,
             ("[bot] %s▍"):format(streaming.target:sub(1, streaming.shown))
         } or nil,
-        -- Input row.
+        -- Multi-line input area.
         tui.Box {
+            flexDirection = "column",
             borderStyle = "round",
             color  = "yellow",
             paddingX = 1,
-            tui.TextInput {
+            tui.Textarea {
                 value    = input,
                 onChange = setInput,
                 onSubmit = submit,
-                placeholder = "type a message and press Enter",
+                placeholder = "type a message — Enter for newline, Ctrl+Enter to send",
+                height   = 3,
+            },
+            tui.Text {
+                dim = true, color = "yellow",
+                "Ctrl+Enter to send  ·  paste multi-line text freely",
             },
         },
     }
