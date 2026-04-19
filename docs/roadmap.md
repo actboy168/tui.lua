@@ -27,7 +27,6 @@ _暂无_
 
 - truecolor / 256 色扩展：`cell_t` 扩到 16 字节 or 独立 style pool，给 `fg / bg` 加 16/24 bit 值
 - Text per-run inline style：`Text { "plain ", {text="red", color="red"} }`，wrap 沿 run 边界切片
-- Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text
 - `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索 O(n) → O(1)）
 - **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点（Ink 行为），解决动态 UI（弹窗关闭后焦点丢失）问题
 - **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
@@ -35,6 +34,8 @@ _暂无_
 - **CharPool 字符串去重**：相同文本共享存储，减少内存占用
 - **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
 - **Yoga readback 跳过**：`node_has_new_layout` / `node_set_has_new_layout` 已暴露在 luayoga.c 中，目前未使用——未来可在 layout.lua readback 阶段跳过未变更子树的属性读取，减少 Lua↔C 调用次数
+- **useMeasure hook**：组件读取宿主元素 Yoga 布局后尺寸的 hook（Ink 的 `measureElement` / `useBoxMetrics`）。前置工作：element `ref` 提取、reconciler ref 回写、layout 后 metrics 更新。用于修复 TextInput 无 width prop 时光标越界问题（见下）
+- **TextInput 无 width prop 光标越界**：当 `width` 未设置时 `render_width = prefix_width + 1`，可能超出容器；Yoga 会 clamp 但 `caret_col` 基于预 layout 的 render_width 计算，导致 `_cursor_offset` 超出实际 `rect.w`。需要 `useMeasure` 获取 Yoga 分配的实际宽度后重新计算 `make_window` 和 `caret_col`
 - **Reconciler 表复用**：`state.seen` / `_effects_to_flush` 每帧新建表产生 GC 压力；`child_path_for` 每帧拼接路径字符串；host element 每帧深拷贝——都是可优化的分配热点
 - **screen.c fill_space 冗余消除**：diff 后 fill_space 清空 next 缓冲，但下一帧 clear() 又会清一遍，可以跳过 diff 后的 fill_space
 - **光标 shape 支持**：`\x1B[n q` 切换 bar / block / underline（TextInput 可声明 `cursorShape` prop）

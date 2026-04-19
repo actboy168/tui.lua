@@ -7,13 +7,49 @@
 -- Stage 15: style props are packed in Lua (tui/sgr.pack_bytes) into the
 -- two bytes the C layer stores per cell; we pass (fg_bg, attrs) directly
 -- instead of a style table so C never walks Lua tables during paint.
+--
+-- Color inheritance: `color` and `backgroundColor` on a Box propagate down
+-- to all descendant Text nodes, mirroring Ink's CSS-style color context.
+-- A child Text (or Box) that sets its own explicit color overrides the
+-- inherited value for itself and its subtree.
 
 local screen_c = require "tui_core".screen
 local sgr      = require "tui.sgr"
 
 local M = {}
 
-local function paint(element, screen)
+-- Merge `color` / `backgroundColor` from `inherit` into `props` when the
+-- child doesn't already set them. Returns `props` unchanged when there is
+-- nothing to inherit, avoiding any table allocation on the common fast path.
+local function effective_props(props, inherit)
+    if not inherit then return props end
+    local ic  = inherit.color
+    local ibg = inherit.backgroundColor
+    if not ic and not ibg then return props end
+    local needs_color = ic  and not (props and (props.color or props.dimColor))
+    local needs_bg    = ibg and not (props and props.backgroundColor)
+    if not needs_color and not needs_bg then return props end
+    local merged = {}
+    if props then for k, v in pairs(props) do merged[k] = v end end
+    if needs_color then merged.color           = ic  end
+    if needs_bg    then merged.backgroundColor = ibg end
+    return merged
+end
+
+-- Build the inherited color context that children will see.
+-- Returns `inherit` unchanged when the box adds nothing new (avoids alloc).
+local function child_inherit(props, inherit)
+    if not props then return inherit end
+    local c  = props.color or (inherit and inherit.color)
+    local bg = props.backgroundColor or (inherit and inherit.backgroundColor)
+    if c  == (inherit and inherit.color)
+    and bg == (inherit and inherit.backgroundColor) then
+        return inherit
+    end
+    return { color = c, backgroundColor = bg }
+end
+
+local function paint(element, screen, inherit)
     local r = element.rect
     if not r then return end
     if element.kind == "box" then
@@ -24,11 +60,13 @@ local function paint(element, screen)
             screen_c.put_border(screen, r.x, r.y, r.w, r.h, border_style,
                                 fg_bg, attrs)
         end
-        for _, child in ipairs(element.children or {}) do
-            paint(child, screen)
+        local ci = child_inherit(props, inherit)
+        for _, ch in ipairs(element.children or {}) do
+            paint(ch, screen, ci)
         end
     elseif element.kind == "text" then
-        local fg_bg, attrs = sgr.pack_bytes(element.props)
+        local props = effective_props(element.props, inherit)
+        local fg_bg, attrs = sgr.pack_bytes(props)
         if element.lines then
             for li, line in ipairs(element.lines) do
                 if li - 1 >= r.h then break end
@@ -45,7 +83,7 @@ end
 --- Paint element tree into the given C-owned screen. Caller is responsible
 --  for screen_c.clear(...) beforehand and screen_c.diff(...) afterwards.
 function M.paint(element, screen)
-    paint(element, screen)
+    paint(element, screen, nil)
 end
 
 return M
