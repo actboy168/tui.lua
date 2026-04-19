@@ -22,14 +22,13 @@ _暂无_
 
 ### 内置组件扩充
 
-- `Newline { count }` / `Spacer` / `Transform { transform=fn }`
+- `Transform { transform=fn }`
 - `form.lua`：多输入框 + 导航
 - **Ansi**：解析 ANSI 转义序列（SGR / OSC）渲染为带样式 Text，用于外部工具输出（`git diff --color`）
 - Markdown / syntax-highlight（AI chat 核心诉求，Stage 靠后）
 
 ### 渲染性能与稳定性
 
-- alternate screen buffer（类 vim 进出全屏）
 - truecolor / 256 色扩展：`cell_t` 扩到 16 字节 or 独立 style pool，给 `fg / bg` 加 16/24 bit 值
 - Text 样式补齐：`italic` / `strikethrough` / `dimColor` / `wrap` 模式（`wrap` / `hard` / `truncate` / `truncate-start` / `truncate-middle` / `truncate-end`）
 - Text per-run inline style：`Text { "plain ", {text="red", color="red"} }`，wrap 沿 run 边界切片
@@ -45,7 +44,6 @@ _暂无_
 - **Damage Tracking 损坏区域跟踪**：只扫描修改过的行，跳过未变区域（长期：结合增量 blit 跳过未变子树）
 - **多光标竞争**：当前 `find_cursor` 深度优先取第一个 `_cursor_offset`，多 TextInput 场景应按焦点优先级选择；或改为 `cursor.lua` 单写者模型，焦点组件 `cursor.set()` 声明
 - **光标 shape 支持**：`\x1B[n q` 切换 bar / block / underline（TextInput 可声明 `cursorShape` prop）
-- **alternate screen 光标管理**：进出 alternate screen 时光标显隐策略不同（进入时 hide，退出时 restore），需与启动序列协调
 - **超链接 HyperlinkPool（OSC 8）**：终端超链接支持，URL 去重存储
 
 ### 开发者体验
@@ -106,6 +104,7 @@ _暂无_
 - **Ink `patchConsole`**：Lua 里 `print` 重定向一行 `_G.print = ...` 就够，不需要复杂机制。
 - **kitty keyboard protocol 全套**：keys.c 解析复杂度大，对 AI chat CLI 场景收益低；先做鼠标 + bracketed paste 已足够。
 - **Timer 最小堆搬进 C**：需要 C→Lua callback 回调，边界开销不划算；若要优化，继续在 Lua 侧改堆。
+- **alternate screen buffer**：Ink 默认使用主屏幕，alt screen 不是其核心场景；tui.lua 同样聚焦主屏幕，通过 Static 组件实现跨渲染保持内容，无需 alt screen 的复杂进出管理。
 
 ---
 

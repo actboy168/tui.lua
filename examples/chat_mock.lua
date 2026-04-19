@@ -84,7 +84,7 @@ local function App()
         tui.Box { flexGrow = 1 },
         -- Input row.
         tui.Box {
-            border = "round",
+            borderStyle = "round",
             color  = "yellow",
             paddingX = 1,
             tui.TextInput {

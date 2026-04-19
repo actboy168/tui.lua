@@ -12,6 +12,8 @@
 - **ProgressBar** — 进度条，支持 `value` / `width` / `color` / `chars`
 - **ErrorBoundary** — 错误隔离，支持 `fallback` 元素或函数、`useErrorBoundary()`
 - **Static** — 跨渲染保持内容
+- **Newline** — 垂直空行，`{ count = n }` 创建 n 个空行（默认 1）
+- **Spacer** — 弹性占位，自动填充父容器剩余空间
 
 ## Hook
 

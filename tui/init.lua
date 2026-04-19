@@ -29,6 +29,7 @@ local cursor_mod = require "tui.builtin.cursor"
 local spinner_mod = require "tui.builtin.spinner"
 local select_mod = require "tui.builtin.select"
 local progress_mod = require "tui.builtin.progress_bar"
+local newline_mod = require "tui.builtin.newline"
 local ansi       = require "tui.ansi"
 local tui_core   = require "tui_core"
 local info       = require "tui.terminal_info"
@@ -80,6 +81,8 @@ M.TextInput      = text_input.TextInput
 M.Spinner        = spinner_mod.Spinner
 M.Select         = select_mod.Select
 M.ProgressBar    = progress_mod.ProgressBar
+M.Newline        = newline_mod.Newline
+M.Spacer         = newline_mod.Spacer
 
 -- Hooks
 M.useState       = hooks.useState

@@ -37,7 +37,7 @@ local function Counter()
         justifyContent = "center", alignItems = "center",
         flexDirection = "column",
         tui.Box {
-            border = "round", padding = "0 1",
+            borderStyle = "round", padding = "0 1",
             tui.Text { "ticks: " .. tostring(n) .. "  step: " .. tostring(step) },
         },
         tui.Text { "[" .. status .. "]  +/-: step   space: pause   q: quit" },

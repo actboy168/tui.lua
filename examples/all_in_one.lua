@@ -5,7 +5,7 @@
 -- chat REPL. The example stays self-contained (no real model call) but
 -- exercises most of the framework in a realistic shape:
 --
---   Layout & styling     : Box (flex / border / padding / color), Text
+--   Layout & styling     : Box (flex / border / padding / color), Text, Newline, Spacer
 --   Builtin components   : Static, TextInput, Spinner, Select, ProgressBar
 --   Hooks                : useState, useEffect, useInterval, useAnimation,
 --                          useContext, useFocus, useFocusManager, useInput,
@@ -22,6 +22,8 @@
 --   /reset                reset the ErrorBoundary
 --   ? or F1               toggle help overlay
 --   q / Esc / Ctrl+C/D    quit
+--
+-- Layout: chat-style bottom-fixed input (like chat_mock.lua), not full-screen.
 
 local tui = require "tui"
 
@@ -108,10 +110,10 @@ local History = component(function(props)
     local theme = tui.useContext(ThemeCtx)
     return tui.Static {
         items  = props.messages,
-        render = function(m)
+        render = function(m, i)
             local color = m.who == "user" and theme.user or theme.bot
             local tag   = m.who == "user" and "you" or "bot"
-            return tui.Text { color = color, ("[%s] %s"):format(tag, m.text) }
+            return tui.Text { key = "msg" .. tostring(i), color = color, ("[%s] %s"):format(tag, m.text) }
         end,
     }
 end)
@@ -209,8 +211,8 @@ local function App()
             alignItems = "center",
             justifyContent = "center",
             width = size.cols, height = size.rows,
-            tui.Text { color = "red", bold = true, "terminal too small" },
-            tui.Text { color = "gray", ("need %dx%d, got %dx%d"):format(minCols, minRows, size.cols, size.rows) },
+            tui.Text { key = "err", color = "red", bold = true, "terminal too small" },
+            tui.Text { key = "info", color = "gray", ("need %dx%d, got %dx%d"):format(minCols, minRows, size.cols, size.rows) },
         }
     end
 
@@ -309,16 +311,16 @@ local function App()
         value = theme_value,
         tui.Box {
             flexDirection = "column",
-            width  = size.cols,
-            height = size.rows,
+            width = size.cols,
+            -- Chat-style: height grows with content, not full-screen.
+            -- Spacer pushes input to bottom when there's extra space.
 
             tui.Box { key = "header", Header { model = model } },
 
-            -- Messages area — grows to fill available space.
+            -- Messages area — natural height, no flexGrow (chat-style scroll).
             tui.Box {
                 key = "msgs",
                 flexDirection = "column",
-                flexGrow = 1,
                 paddingX = 1,
                 tui.ErrorBoundary {
                     fallback = function(err, reset)
@@ -367,7 +369,10 @@ local function App()
                 },
             } or nil,
 
-            -- Input row.
+            -- Spacer pushes input to bottom (chat-style layout).
+            tui.Spacer { key = "spacer" },
+
+            -- Input row fixed at bottom.
             tui.Box {
                 key = "input",
                 flexDirection = "row",
@@ -375,6 +380,7 @@ local function App()
                 color = theme_value.border_fg,
                 paddingX = 1,
                 tui.TextInput {
+                    key         = "input",
                     focusId     = "prompt",
                     autoFocus   = not showModel,
                     focus       = not showModel,
