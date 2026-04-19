@@ -42,7 +42,6 @@ _暂无_
 - **行尾空白跳过**：diff 时跳过行尾空白单元格，减少比较开销
 - **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
 - **Damage Tracking 损坏区域跟踪**：只扫描修改过的行，跳过未变区域（长期：结合增量 blit 跳过未变子树）
-- **多光标竞争**：当前 `find_cursor` 深度优先取第一个 `_cursor_offset`，多 TextInput 场景应按焦点优先级选择；或改为 `cursor.lua` 单写者模型，焦点组件 `cursor.set()` 声明
 - **光标 shape 支持**：`\x1B[n q` 切换 bar / block / underline（TextInput 可声明 `cursorShape` prop）
 - **超链接 HyperlinkPool（OSC 8）**：终端超链接支持，URL 去重存储
 
