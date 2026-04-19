@@ -1,0 +1,12 @@
+╔══════════════════════════════════════╗
+║Service Status                        ║
+╚══════════════════════════════════════╝
+● Database: healthy
+● API: healthy
+◐ Cache: degraded
+○ Queue: down
+
+
+
+
+

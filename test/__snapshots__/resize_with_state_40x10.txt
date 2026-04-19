@@ -1,0 +1,10 @@
+Count: 0
+Text: initial
+Size: 40x10
+
+
+
+
+
+
+
