@@ -19,30 +19,18 @@
 
 local tui_core  = require "tui_core"
 local focus_mod = require "tui.focus"
+local bus_mod   = require "tui.bus"
 local keys      = tui_core.keys
 
 local M = {}
 
--- Broadcast subscribers (plain useInput).
-local broadcast_handlers = {}
+-- Broadcast channel (plain useInput subscribers).
+local _broadcast = bus_mod.new()
 
 --- subscribe(fn) -> unsubscribe
 -- Registers a broadcast handler. `fn` is called as fn(input_str, key_table)
 -- for each non-intercepted parsed event.
-function M.subscribe(fn)
-    broadcast_handlers[#broadcast_handlers + 1] = fn
-    local active = true
-    return function()
-        if not active then return end
-        active = false
-        for i = #broadcast_handlers, 1, -1 do
-            if broadcast_handlers[i] == fn then
-                table.remove(broadcast_handlers, i)
-                break
-            end
-        end
-    end
-end
+M.subscribe = _broadcast.subscribe
 
 --- dispatch(bytes) -> should_exit
 -- Parses `bytes` into key events and routes them. Returns `true` if any
@@ -74,21 +62,14 @@ function M.dispatch(bytes)
             -- Focused component sees it first (order within a single event:
             -- focused → broadcast).
             focus_mod.dispatch_focused(ev.input or "", ev)
-
-            -- Snapshot broadcast list so mid-dispatch unsubscribe doesn't
-            -- skew iteration.
-            local snapshot = {}
-            for i, h in ipairs(broadcast_handlers) do snapshot[i] = h end
-            for _, h in ipairs(snapshot) do
-                h(ev.input or "", ev)
-            end
+            _broadcast.dispatch(ev.input or "", ev)
         end
     end
     return should_exit
 end
 
 -- Introspection for tests.
-function M._handlers() return broadcast_handlers end
+function M._handlers() return _broadcast._handlers() end
 
 --- Dispatch a single pre-built event table (for testing IME composing, etc.).
 -- Routes through the same pipeline as dispatch(), but skips key parsing.
@@ -106,18 +87,14 @@ function M._dispatch_event(ev)
 
     if not handled_by_focus_nav then
         focus_mod.dispatch_focused(ev.input or "", ev)
-        local snapshot = {}
-        for i, h in ipairs(broadcast_handlers) do snapshot[i] = h end
-        for _, h in ipairs(snapshot) do
-            h(ev.input or "", ev)
-        end
+        _broadcast.dispatch(ev.input or "", ev)
     end
 end
 
 -- Reset broadcast channel only. focus is a separate singleton; callers
 -- (tui/init.lua and tui/testing.lua) reset both explicitly.
 function M._reset()
-    broadcast_handlers = {}
+    _broadcast._reset()
 end
 
 return M

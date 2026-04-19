@@ -835,4 +835,29 @@ function M.useApp()
     return current.app
 end
 
+-- ---------------------------------------------------------------------------
+-- useStdout() -> { write = fn(s) }
+-- Returns a handle for writing directly to the terminal's output stream.
+-- Intended for use inside effects or event handlers, not during render.
+
+local tui_core_mod
+function M.useStdout()
+    assert(current, "useStdout called outside of a component render")
+    if not tui_core_mod then tui_core_mod = require "tui_core" end
+    return {
+        write = function(s) tui_core_mod.terminal.write(s) end,
+    }
+end
+
+-- ---------------------------------------------------------------------------
+-- useStderr() -> { write = fn(s) }
+-- Returns a handle for writing to stderr (diagnostics, debug output, etc.).
+
+function M.useStderr()
+    assert(current, "useStderr called outside of a component render")
+    return {
+        write = function(s) io.stderr:write(s) end,
+    }
+end
+
 return M
