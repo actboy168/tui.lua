@@ -47,8 +47,20 @@ end
 -- Wrap `s` to lines no wider than `max_cols`. Returns an array of strings.
 -- Each line's display width is <= max_cols. A double-wide char that would
 -- straddle the boundary is pushed to the next line.
-function M.wrap(s, max_cols)
-    return text_c.wrap(s or "", max_cols or 0)
-end
+M.wrap = text_c.wrap
+
+-- Hard-wrap `s` at column boundaries (no whitespace detection).
+-- Returns an array of line strings.
+M.wrap_hard = text_c.wrap_hard
+
+-- Truncate `s` from the end to fit within `max_cols` display columns.
+-- If truncation occurs, replaces the excess with U+2026 (…).
+M.truncate = text_c.truncate
+
+-- Truncate `s` from the start; prepend U+2026 if truncation occurs.
+M.truncate_start = text_c.truncate_start
+
+-- Truncate `s` from the middle; insert U+2026 at the midpoint.
+M.truncate_middle = text_c.truncate_middle
 
 return M

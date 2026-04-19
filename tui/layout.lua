@@ -110,7 +110,10 @@ local function reconcile(element, prev)
         local props = element.props or {}
         yoga.node_set_text_props(node, props, iw, 1)
         local wrap = props.wrap; if wrap == nil then wrap = "wrap" end
-        if wrap ~= "nowrap" then element._wrap = true end
+        if wrap ~= "nowrap" then
+            element._wrap = true
+            element._wrap_mode = wrap
+        end
     end
 
     return node
@@ -142,6 +145,7 @@ local function build(element, parent_node)
         yoga.node_set_text_props(node, props, iw, 1)
         if wrap ~= "nowrap" then
             element._wrap = true
+            element._wrap_mode = wrap
         end
     end
 
@@ -163,11 +167,26 @@ local function readback(element, ox, oy, phase, wrap_nodes)
         end
     elseif element.kind == "text" then
         if element._wrap then
-            -- Produce line array bounded by the current rect width.
-            local lines = text_mod.wrap(element.text or "", lw)
-            element.lines = lines
-            if phase == "measure" and wrap_nodes and #lines > 1 then
-                wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
+            local mode = element._wrap_mode or "wrap"
+            if mode == "hard" then
+                local lines = text_mod.wrap_hard(element.text or "", lw)
+                element.lines = lines
+                if phase == "measure" and wrap_nodes and #lines > 1 then
+                    wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
+                end
+            elseif mode == "truncate" or mode == "truncate-end" then
+                element.lines = { text_mod.truncate(element.text or "", lw) }
+            elseif mode == "truncate-start" then
+                element.lines = { text_mod.truncate_start(element.text or "", lw) }
+            elseif mode == "truncate-middle" then
+                element.lines = { text_mod.truncate_middle(element.text or "", lw) }
+            else
+                -- default "wrap" mode
+                local lines = text_mod.wrap(element.text or "", lw)
+                element.lines = lines
+                if phase == "measure" and wrap_nodes and #lines > 1 then
+                    wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
+                end
             end
         end
     end

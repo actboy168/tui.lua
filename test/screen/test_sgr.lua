@@ -174,3 +174,77 @@ function suite:test_colors_table_bright_colors()
     lt.assertEquals(sgr.COLORS.brightRed, 9)
     lt.assertEquals(sgr.COLORS.brightWhite, 15)
 end
+
+-- ---------------------------------------------------------------------------
+-- pack_bytes: italic and strikethrough
+
+function suite:test_pack_bytes_italic()
+    local _, attrs = sgr.pack_bytes { italic = true }
+    lt.assertEquals(attrs & 0x40, 0x40)
+end
+
+function suite:test_pack_bytes_italic_off()
+    local _, attrs = sgr.pack_bytes { bold = true }
+    lt.assertEquals(attrs & 0x40, 0)
+end
+
+function suite:test_pack_bytes_strikethrough()
+    local _, attrs = sgr.pack_bytes { strikethrough = true }
+    lt.assertEquals(attrs & 0x80, 0x80)
+end
+
+function suite:test_pack_bytes_italic_and_strikethrough()
+    local _, attrs = sgr.pack_bytes { italic = true, strikethrough = true }
+    lt.assertEquals(attrs & 0x40, 0x40)
+    lt.assertEquals(attrs & 0x80, 0x80)
+end
+
+-- ---------------------------------------------------------------------------
+-- pack_bytes: dimColor
+
+function suite:test_pack_bytes_dimColor_sets_dim_bit()
+    local _, attrs = sgr.pack_bytes { dimColor = "red" }
+    lt.assertEquals(attrs & 0x02, 0x02)
+end
+
+function suite:test_pack_bytes_dimColor_sets_fg()
+    local fg_bg, _ = sgr.pack_bytes { dimColor = "red" }
+    lt.assertEquals((fg_bg >> 4) & 0xF, 1)
+end
+
+function suite:test_pack_bytes_dimColor_overrides_color()
+    -- dimColor takes precedence over color
+    local fg_bg, attrs = sgr.pack_bytes { dimColor = "blue", color = "red" }
+    lt.assertEquals((fg_bg >> 4) & 0xF, 4) -- blue, not red
+    lt.assertEquals(attrs & 0x02, 0x02)     -- dim set
+end
+
+function suite:test_pack_bytes_color_no_dim()
+    -- plain color does not set dim
+    local _, attrs = sgr.pack_bytes { color = "red" }
+    lt.assertEquals(attrs & 0x02, 0)
+end
+
+-- ---------------------------------------------------------------------------
+-- pack_props: italic, strikethrough, dimColor
+
+function suite:test_pack_props_italic()
+    local style = sgr.pack_props { italic = true }
+    lt.assertEquals(style.italic, true)
+end
+
+function suite:test_pack_props_strikethrough()
+    local style = sgr.pack_props { strikethrough = true }
+    lt.assertEquals(style.strikethrough, true)
+end
+
+function suite:test_pack_props_dimColor()
+    local style = sgr.pack_props { dimColor = "green" }
+    lt.assertEquals(style.fg, 2)
+    lt.assertEquals(style.dim, true)
+end
+
+function suite:test_pack_props_italic_false_is_nil()
+    local style = sgr.pack_props { color = "white", italic = false }
+    lt.assertEquals(style.italic, nil)
+end

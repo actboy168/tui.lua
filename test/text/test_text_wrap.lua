@@ -100,3 +100,162 @@ function suite:test_renderer_handles_wide_char_cells()
     lt.assertEquals(rows[1], "中a  ")
     layout.free(root)
 end
+
+-- ---------------------------------------------------------------------------
+-- wrap_hard
+
+function suite:test_wrap_hard_empty()
+    local r = text_mod.wrap_hard("", 10)
+    lt.assertEquals(#r, 1)
+    lt.assertEquals(r[1], "")
+end
+
+function suite:test_wrap_hard_fits()
+    local r = text_mod.wrap_hard("hello", 10)
+    lt.assertEquals(#r, 1)
+    lt.assertEquals(r[1], "hello")
+end
+
+function suite:test_wrap_hard_breaks_at_boundary()
+    local r = text_mod.wrap_hard("abcdefgh", 4)
+    lt.assertEquals(#r, 2)
+    lt.assertEquals(r[1], "abcd")
+    lt.assertEquals(r[2], "efgh")
+end
+
+function suite:test_wrap_hard_no_whitespace_break()
+    -- hard wrap never breaks at whitespace — spaces stay in-line
+    local r = text_mod.wrap_hard("ab cd", 4)
+    lt.assertEquals(r[1], "ab c")
+    lt.assertEquals(r[2], "d")
+end
+
+function suite:test_wrap_hard_respects_newlines()
+    local r = text_mod.wrap_hard("line1\nline2", 80)
+    lt.assertEquals(#r, 2)
+    lt.assertEquals(r[1], "line1")
+    lt.assertEquals(r[2], "line2")
+end
+
+function suite:test_wrap_hard_cjk()
+    -- Each CJK char = 2 cols, hard break at 4 = 2 chars per line.
+    local r = text_mod.wrap_hard("今天天气", 4)
+    lt.assertEquals(#r, 2)
+    lt.assertEquals(r[1], "今天")
+    lt.assertEquals(r[2], "天气")
+end
+
+-- ---------------------------------------------------------------------------
+-- truncate (end)
+
+function suite:test_truncate_fits()
+    lt.assertEquals(text_mod.truncate("hello", 10), "hello")
+end
+
+function suite:test_truncate_exact()
+    lt.assertEquals(text_mod.truncate("hello", 5), "hello")
+end
+
+function suite:test_truncate_over()
+    -- "hello world" = 11 cols, max 8 → "hello w…" (7 + ellipsis)
+    lt.assertEquals(text_mod.truncate("hello world", 8), "hello w\xe2\x80\xa6")
+end
+
+function suite:test_truncate_single_char()
+    -- max_cols=1: budget=0 → just "…"
+    lt.assertEquals(text_mod.truncate("hello", 1), "\xe2\x80\xa6")
+end
+
+function suite:test_truncate_cjk()
+    -- "今天天气" = 8 cols, max 5 → "今天" (4 cols) + "…" = 5
+    lt.assertEquals(text_mod.truncate("今天天气", 5), "今天\xe2\x80\xa6")
+end
+
+-- ---------------------------------------------------------------------------
+-- truncate_start
+
+function suite:test_truncate_start_fits()
+    lt.assertEquals(text_mod.truncate_start("hello", 10), "hello")
+end
+
+function suite:test_truncate_start_over()
+    -- "hello world" = 11 cols, max 8 → "…" + last 7 cols = "…o world"
+    lt.assertEquals(text_mod.truncate_start("hello world", 8), "\xe2\x80\xa6o world")
+end
+
+function suite:test_truncate_start_single()
+    lt.assertEquals(text_mod.truncate_start("hello", 1), "\xe2\x80\xa6")
+end
+
+-- ---------------------------------------------------------------------------
+-- truncate_middle
+
+function suite:test_truncate_middle_fits()
+    lt.assertEquals(text_mod.truncate_middle("hello", 10), "hello")
+end
+
+function suite:test_truncate_middle_over()
+    -- "hello world" = 11 cols, max 7 → head 3 + "…" + tail 3 = "hel…rld"
+    lt.assertEquals(text_mod.truncate_middle("hello world", 7), "hel\xe2\x80\xa6rld")
+end
+
+function suite:test_truncate_middle_even_budget()
+    -- budget = max_cols-1 = 6 (even) → head=3, tail=3
+    lt.assertEquals(text_mod.truncate_middle("abcdefghij", 7), "abc\xe2\x80\xa6hij")
+end
+
+function suite:test_truncate_middle_odd_budget()
+    -- budget = max_cols-1 = 5 (odd) → head=2, tail=3
+    lt.assertEquals(text_mod.truncate_middle("abcdefghij", 6), "ab\xe2\x80\xa6hij")
+end
+
+-- ---------------------------------------------------------------------------
+-- layout integration: wrap="hard"
+
+function suite:test_layout_hard_wrap()
+    local el = tui.Text { width = 4, wrap = "hard", "abcdefgh" }
+    local root = tui.Box { width = 20, height = 10, el }
+    layout.compute(root)
+    lt.assertEquals(el.rect.h, 2)
+    lt.assertEquals(el.lines[1], "abcd")
+    lt.assertEquals(el.lines[2], "efgh")
+    layout.free(root)
+end
+
+-- ---------------------------------------------------------------------------
+-- layout integration: wrap="truncate"
+
+function suite:test_layout_truncate_end()
+    local el = tui.Text { width = 8, wrap = "truncate", "hello world" }
+    local root = tui.Box { width = 20, height = 5, el }
+    layout.compute(root)
+    lt.assertEquals(el.rect.h, 1)
+    lt.assertEquals(el.lines[1], "hello w\xe2\x80\xa6")
+    layout.free(root)
+end
+
+function suite:test_layout_truncate_end_alias()
+    local el = tui.Text { width = 8, wrap = "truncate-end", "hello world" }
+    local root = tui.Box { width = 20, height = 5, el }
+    layout.compute(root)
+    lt.assertEquals(el.lines[1], "hello w\xe2\x80\xa6")
+    layout.free(root)
+end
+
+function suite:test_layout_truncate_start()
+    local el = tui.Text { width = 8, wrap = "truncate-start", "hello world" }
+    local root = tui.Box { width = 20, height = 5, el }
+    layout.compute(root)
+    lt.assertEquals(el.rect.h, 1)
+    lt.assertEquals(el.lines[1], "\xe2\x80\xa6o world")
+    layout.free(root)
+end
+
+function suite:test_layout_truncate_middle()
+    local el = tui.Text { width = 7, wrap = "truncate-middle", "hello world" }
+    local root = tui.Box { width = 20, height = 5, el }
+    layout.compute(root)
+    lt.assertEquals(el.rect.h, 1)
+    lt.assertEquals(el.lines[1], "hel\xe2\x80\xa6rld")
+    layout.free(root)
+end

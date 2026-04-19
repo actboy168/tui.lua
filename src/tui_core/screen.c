@@ -54,14 +54,17 @@
  *           be treated as "terminal default" regardless of its value. The
  *           default-filled cell is `attrs = ATTR_DEFAULT_STYLE` = 0x30.
  */
-#define ATTR_BOLD       0x01u
-#define ATTR_DIM        0x02u
-#define ATTR_UNDERLINE  0x04u
-#define ATTR_INVERSE    0x08u
-#define ATTR_FG_DEFAULT 0x10u
-#define ATTR_BG_DEFAULT 0x20u
-#define ATTR_STYLE_MASK (ATTR_BOLD | ATTR_DIM | ATTR_UNDERLINE | ATTR_INVERSE)
-#define ATTR_DEFAULT    (ATTR_FG_DEFAULT | ATTR_BG_DEFAULT)
+#define ATTR_BOLD          0x01u
+#define ATTR_DIM           0x02u
+#define ATTR_UNDERLINE     0x04u
+#define ATTR_INVERSE       0x08u
+#define ATTR_FG_DEFAULT    0x10u
+#define ATTR_BG_DEFAULT    0x20u
+#define ATTR_ITALIC        0x40u
+#define ATTR_STRIKETHROUGH 0x80u
+#define ATTR_STYLE_MASK    (ATTR_BOLD | ATTR_DIM | ATTR_UNDERLINE | ATTR_INVERSE \
+                            | ATTR_ITALIC | ATTR_STRIKETHROUGH)
+#define ATTR_DEFAULT       (ATTR_FG_DEFAULT | ATTR_BG_DEFAULT)
 
 typedef struct {
     union {
@@ -671,6 +674,18 @@ emit_sgr(bytes_t *b,
     if ((*cur_attrs ^ next_attrs) & ATTR_INVERSE) {
         if (next_attrs & ATTR_INVERSE) EMIT_PARAM("7");
         else                           EMIT_PARAM("27");
+    }
+
+    /* --- italic --- */
+    if ((*cur_attrs ^ next_attrs) & ATTR_ITALIC) {
+        if (next_attrs & ATTR_ITALIC) EMIT_PARAM("3");
+        else                          EMIT_PARAM("23");
+    }
+
+    /* --- strikethrough --- */
+    if ((*cur_attrs ^ next_attrs) & ATTR_STRIKETHROUGH) {
+        if (next_attrs & ATTR_STRIKETHROUGH) EMIT_PARAM("9");
+        else                                 EMIT_PARAM("29");
     }
 
     /* --- fg --- */

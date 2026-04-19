@@ -30,7 +30,6 @@ _暂无_
 ### 渲染性能与稳定性
 
 - truecolor / 256 色扩展：`cell_t` 扩到 16 字节 or 独立 style pool，给 `fg / bg` 加 16/24 bit 值
-- Text 样式补齐：`italic` / `strikethrough` / `dimColor` / `wrap` 模式（`wrap` / `hard` / `truncate` / `truncate-start` / `truncate-middle` / `truncate-end`）
 - Text per-run inline style：`Text { "plain ", {text="red", color="red"} }`，wrap 沿 run 边界切片
 - Ink 式颜色继承：父 Box 的 color prop 自动透到子 Text
 - `focus` 链表 entry→idx 映射（当前 Tab 切换做线性搜索 O(n) → O(1)）
@@ -39,6 +38,7 @@ _暂无_
 - **StylePool 缓存**：Ink 的 style_id → SGR 会话级缓存，避免每帧重复计算 ANSI 序列。方案：独立 style pool，cell_t 存 style_id (uint16_t) 索引到 pool，首次 interning 后续直接查找。前置工作已完成：`sgr.pack_border_bytes` 已内联 border 颜色逻辑，入口处预留缓存插入点
 - **CharPool 字符串去重**：相同文本共享存储，减少内存占用
 - **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
+- **Yoga readback 跳过**：`node_has_new_layout` / `node_set_has_new_layout` 已暴露在 luayoga.c 中，目前未使用——未来可在 layout.lua readback 阶段跳过未变更子树的属性读取，减少 Lua↔C 调用次数
 - **Reconciler 表复用**：`state.seen` / `_effects_to_flush` 每帧新建表产生 GC 压力；`child_path_for` 每帧拼接路径字符串；host element 每帧深拷贝——都是可优化的分配热点
 - **screen.c fill_space 冗余消除**：diff 后 fill_space 清空 next 缓冲，但下一帧 clear() 又会清一遍，可以跳过 diff 后的 fill_space
 - **光标 shape 支持**：`\x1B[n q` 切换 bar / block / underline（TextInput 可声明 `cursorShape` prop）
