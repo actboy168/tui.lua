@@ -1,4 +1,4 @@
-/*
+﻿/*
  * screen.c — cell buffer + double-buffered ANSI diff renderer.
  *
  * Exposed Lua API (registered under `tui_core.screen`):
@@ -242,7 +242,7 @@ dirty_xmax_init(int *arr, int h) {
 /* ── Lua API: new / size / resize / invalidate / clear / __gc ── */
 
 static int
-lnew(lua_State *L) {
+l_new(lua_State *L) {
     lua_Integer w = luaL_checkinteger(L, 1);
     lua_Integer h = luaL_checkinteger(L, 2);
     luaL_argcheck(L, w > 0 && w < 100000, 1, "width out of range");
@@ -285,7 +285,7 @@ lnew(lua_State *L) {
 }
 
 static int
-lsize(lua_State *L) {
+l_size(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     lua_pushinteger(L, s->w);
     lua_pushinteger(L, s->h);
@@ -293,7 +293,7 @@ lsize(lua_State *L) {
 }
 
 static int
-lresize(lua_State *L) {
+l_resize(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     lua_Integer w = luaL_checkinteger(L, 2);
     lua_Integer h = luaL_checkinteger(L, 3);
@@ -327,14 +327,14 @@ lresize(lua_State *L) {
 }
 
 static int
-linvalidate(lua_State *L) {
+l_invalidate(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     s->prev_valid = 0;
     return 0;
 }
 
 static int
-lclear(lua_State *L) {
+l_clear(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     fill_space(s->next, s->w * s->h);
     slab_reset(&s->next_slab);
@@ -344,7 +344,7 @@ lclear(lua_State *L) {
 
 /* ── Lua API: put ─────────────────────────────────────────────── */
 
-/* Internal cell writer used by lput / draw_line / put_border.
+/* Internal cell writer used by l_put / draw_line / put_border.
  * x,y 0-based. Length-0 strings are rejected. Returns 1 on success, 0 OOB.
  * Uses inline_bytes for len <= 8; falls through to next_slab for longer
  * grapheme clusters (up to UINT16_MAX bytes; practical limit is 255 per
@@ -398,7 +398,7 @@ put_cell(screen_t *s, int x, int y,
 }
 
 static int
-lput(lua_State *L) {
+l_put(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     int x = (int)luaL_checkinteger(L, 2);
     int y = (int)luaL_checkinteger(L, 3);
@@ -494,7 +494,7 @@ border_lookup(const char *name) {
 }
 
 static int
-lput_border(lua_State *L) {
+l_put_border(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     int x = (int)luaL_checkinteger(L, 2);
     int y = (int)luaL_checkinteger(L, 3);
@@ -532,7 +532,7 @@ lput_border(lua_State *L) {
  * cell — see wcwidth.h for the UAX#29 subset actually covered. Zero-width
  * base clusters (lone combining marks, controls) are skipped. */
 static int
-ldraw_line(lua_State *L) {
+l_draw_line(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     int x = (int)luaL_checkinteger(L, 2);
     int y = (int)luaL_checkinteger(L, 3);
@@ -1104,7 +1104,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
 /* ── Lua API: diff ───────────────────────────────────────────────── */
 
 static int
-ldiff(lua_State *L) {
+l_diff(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     int force_clear = lua_toboolean(L, 2);  /* optional; false when absent */
     /* Optional effective height (content rows). 0 or absent → use s->h. */
@@ -1141,7 +1141,7 @@ ldiff(lua_State *L) {
  * rows() invocations. Test harness and snapshot use reads rows within a
  * single frame window, which is safe. Docs + roadmap call this out. */
 static int
-lrows(lua_State *L) {
+l_rows(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     /* After a paint+diff cycle, `prev` holds the committed frame; when no
      * diff has happened yet, `next` holds the in-progress frame. */
@@ -1207,7 +1207,7 @@ lrows(lua_State *L) {
 /* ── Lua API: set_mode / cursor_pos / set_display_cursor ─────────── */
 
 static int
-lset_mode(lua_State *L) {
+l_set_mode(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     const char *mode = luaL_checkstring(L, 2);
     if (strcmp(mode, "main") == 0) {
@@ -1227,7 +1227,7 @@ lset_mode(lua_State *L) {
 /* Returns x, y — the virtual cursor position after the last cursor_restore.
  * Lua uses this to compute a relative move for the TextInput cursor. */
 static int
-lcursor_pos(lua_State *L) {
+l_cursor_pos(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     lua_pushinteger(L, s->virt_x);
     lua_pushinteger(L, s->virt_y);
@@ -1237,7 +1237,7 @@ lcursor_pos(lua_State *L) {
 /* Records where the TextInput cursor was placed (0-based).
  * Pass x=-1, y=-1 to clear (no declared cursor). */
 static int
-lset_display_cursor(lua_State *L) {
+l_set_display_cursor(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     int x = (int)luaL_checkinteger(L, 2);
     int y = (int)luaL_checkinteger(L, 3);
@@ -1253,7 +1253,7 @@ lset_display_cursor(lua_State *L) {
 }
 
 static int
-lgc(lua_State *L) {
+l_gc(lua_State *L) {
     screen_t *s = (screen_t *)luaL_checkudata(L, 1, SCREEN_MT);
     free(s->next); s->next = NULL;
     free(s->prev); s->prev = NULL;
@@ -1268,27 +1268,27 @@ lgc(lua_State *L) {
 /* ── registration ─────────────────────────────────────────────── */
 
 static const luaL_Reg screen_lib[] = {
-    {"new",        lnew},
-    {"size",       lsize},
-    {"resize",     lresize},
-    {"invalidate", linvalidate},
-    {"clear",      lclear},
-    {"put",        lput},
-    {"put_border", lput_border},
-    {"draw_line",  ldraw_line},
-    {"diff",       ldiff},
-    {"rows",       lrows},
-    {"set_mode",          lset_mode},
-    {"cursor_pos",        lcursor_pos},
-    {"set_display_cursor", lset_display_cursor},
+    {"new",        l_new},
+    {"size",       l_size},
+    {"resize",     l_resize},
+    {"invalidate", l_invalidate},
+    {"clear",      l_clear},
+    {"put",        l_put},
+    {"put_border", l_put_border},
+    {"draw_line",  l_draw_line},
+    {"diff",       l_diff},
+    {"rows",       l_rows},
+    {"set_mode",          l_set_mode},
+    {"cursor_pos",        l_cursor_pos},
+    {"set_display_cursor", l_set_display_cursor},
     {NULL, NULL},
 };
 
 int
-luaopen_screen(lua_State *L) {
+tui_open_screen(lua_State *L) {
     /* metatable for the screen userdata */
     if (luaL_newmetatable(L, SCREEN_MT)) {
-        lua_pushcfunction(L, lgc);
+        lua_pushcfunction(L, l_gc);
         lua_setfield(L, -2, "__gc");
     }
     lua_pop(L, 1);

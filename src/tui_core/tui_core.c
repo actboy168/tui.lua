@@ -15,6 +15,9 @@
  *       wcwidth  = { wcwidth, string_width, char_width },
  *       screen   = { new, size, resize, invalidate, clear, put, diff, rows, ... },
  *   }
+ *
+ * Source files: tui_terminal.c, tui_keys.c, tui_wcwidth.c, tui_screen.c,
+ *               tui_text.c, tui_text_extra.c
  */
 
 #define LUA_LIB
@@ -31,11 +34,12 @@
 /* Forward declarations of the sub-module openers defined in other .c files
  * that are compiled into this DLL. They follow the standard Lua loader
  * signature and push a single table on the stack. */
-int luaopen_terminal(lua_State *L);
-int luaopen_keys(lua_State *L);
-int luaopen_wcwidth(lua_State *L);
-int luaopen_screen(lua_State *L);
-int luaopen_tui_core_text(lua_State *L);
+int tui_open_terminal(lua_State *L);
+int tui_open_keys(lua_State *L);
+int tui_open_wcwidth(lua_State *L);
+int tui_open_screen(lua_State *L);
+int tui_open_text(lua_State *L);
+int tui_open_text_extra(lua_State *L);
 
 DLL_EXPORT LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
@@ -43,23 +47,24 @@ luaopen_tui_core(lua_State *L) {
     lua_createtable(L, 0, 5);
 
     /* terminal sub-table */
-    luaopen_terminal(L);
+    tui_open_terminal(L);
     lua_setfield(L, -2, "terminal");
 
     /* keys sub-table */
-    luaopen_keys(L);
+    tui_open_keys(L);
     lua_setfield(L, -2, "keys");
 
     /* wcwidth sub-table */
-    luaopen_wcwidth(L);
+    tui_open_wcwidth(L);
     lua_setfield(L, -2, "wcwidth");
 
     /* screen sub-table */
-    luaopen_screen(L);
+    tui_open_screen(L);
     lua_setfield(L, -2, "screen");
 
-    /* text sub-table (wrap) */
-    luaopen_tui_core_text(L);
+    /* text sub-table (wrap + wrap_hard + truncate variants) */
+    tui_open_text(L);
+    tui_open_text_extra(L);
     lua_setfield(L, -2, "text");
 
     return 1;

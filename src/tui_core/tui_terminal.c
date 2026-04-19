@@ -10,7 +10,7 @@
 /* ── 输出 ─────────────────────────────────────────────────────── */
 
 static int
-lwindows_vt_enable(lua_State *L) {
+l_windows_vt_enable(lua_State *L) {
     SetConsoleOutputCP(65001);
     SetConsoleCP(65001);
     HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -24,7 +24,7 @@ lwindows_vt_enable(lua_State *L) {
 }
 
 static int
-lwrite(lua_State *L) {
+l_write(lua_State *L) {
     size_t len;
     const char *s = luaL_checklstring(L, 1, &len);
     HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -35,7 +35,7 @@ lwrite(lua_State *L) {
 }
 
 static int
-lget_size(lua_State *L) {
+l_get_size(lua_State *L) {
     HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     if (hout == INVALID_HANDLE_VALUE || !GetConsoleScreenBufferInfo(hout, &csbi)) {
@@ -70,7 +70,7 @@ static DWORD s_orig_out_mode = 0;
 static int   s_raw_saved     = 0;
 
 static int
-lset_raw(lua_State *L) {
+l_set_raw(lua_State *L) {
     int enable = lua_toboolean(L, 1);
     HANDLE hin  = GetStdHandle(STD_INPUT_HANDLE);
     HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -96,7 +96,7 @@ lset_raw(lua_State *L) {
     return 0;
 }
 
-/* ── lread_raw：非阻塞，ReadConsoleInputW + 正确 IME 过滤 ─────── */
+/* ── l_read_raw：非阻塞，ReadConsoleInputW + 正确 IME 过滤 ─────── */
 /*
  * 规则（参考 Windows 文本控件行为）：
  *   1. 只处理 bKeyDown == TRUE 的事件，忽略 key-up。
@@ -107,7 +107,7 @@ lset_raw(lua_State *L) {
  *   4. uChar.UnicodeChar == 0：功能键，通过 vk 映射到 ANSI escape。
  */
 static int
-lread_raw(lua_State *L) {
+l_read_raw(lua_State *L) {
     HANDLE hin = GetStdHandle(STD_INPUT_HANDLE);
     if (hin == INVALID_HANDLE_VALUE) return 0;
 
@@ -184,10 +184,10 @@ lread_raw(lua_State *L) {
 static struct termios s_orig_termios;
 static int            s_raw_saved = 0;
 
-static int lwindows_vt_enable(lua_State *L) { (void)L; return 0; }
+static int l_windows_vt_enable(lua_State *L) { (void)L; return 0; }
 
 static int
-lset_raw(lua_State *L) {
+l_set_raw(lua_State *L) {
     int enable = lua_toboolean(L, 1);
     if (enable) {
         struct termios raw;
@@ -215,7 +215,7 @@ lset_raw(lua_State *L) {
 }
 
 static int
-lget_size(lua_State *L) {
+l_get_size(lua_State *L) {
     struct winsize ws;
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0 || ws.ws_col == 0) {
         lua_pushinteger(L, 80); lua_pushinteger(L, 24);
@@ -227,7 +227,7 @@ lget_size(lua_State *L) {
 }
 
 static int
-lread_raw(lua_State *L) {
+l_read_raw(lua_State *L) {
     fd_set fds; struct timeval tv = {0, 0};
     FD_ZERO(&fds); FD_SET(STDIN_FILENO, &fds);
     if (select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv) <= 0) return 0;
@@ -239,7 +239,7 @@ lread_raw(lua_State *L) {
 }
 
 static int
-lwrite(lua_State *L) {
+l_write(lua_State *L) {
     size_t len;
     const char *s = luaL_checklstring(L, 1, &len);
     if (len == 0) return 0;
@@ -249,15 +249,15 @@ lwrite(lua_State *L) {
 
 #endif /* _WIN32 */
 
-LUAMOD_API int
-luaopen_terminal(lua_State *L) {
+int
+tui_open_terminal(lua_State *L) {
     luaL_checkversion(L);
     luaL_Reg l[] = {
-        { "set_raw",           lset_raw           },
-        { "get_size",          lget_size          },
-        { "windows_vt_enable", lwindows_vt_enable },
-        { "read_raw",          lread_raw          },
-        { "write",             lwrite             },
+        { "set_raw",           l_set_raw           },
+        { "get_size",          l_get_size          },
+        { "windows_vt_enable", l_windows_vt_enable },
+        { "read_raw",          l_read_raw          },
+        { "write",             l_write             },
         { NULL, NULL },
     };
     luaL_newlib(L, l);

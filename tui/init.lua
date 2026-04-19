@@ -31,6 +31,7 @@ local select_mod = require "tui.builtin.select"
 local progress_mod = require "tui.builtin.progress_bar"
 local newline_mod = require "tui.builtin.newline"
 local ansi       = require "tui.ansi"
+local text_mod   = require "tui.text"
 local tui_core   = require "tui_core"
 local info       = require "tui.terminal_info"
 
@@ -138,6 +139,14 @@ M.clearTimer  = scheduler.clearTimer
 
 -- Layout utilities
 M.intrinsicSize = layout.intrinsic_size
+
+-- Text utilities
+M.displayWidth   = text_mod.display_width
+M.wrap           = text_mod.wrap
+M.wrapHard       = text_mod.wrap_hard
+M.truncate       = text_mod.truncate
+M.truncateStart  = text_mod.truncate_start
+M.truncateMiddle = text_mod.truncate_middle
 
 
 -- Cursor position is set by the focused component via cursor.set(col, row)

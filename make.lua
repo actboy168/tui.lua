@@ -39,13 +39,7 @@ lm:lua_dll "yoga" {
 -- Lua DLL #2: tui_core (Stage 4: terminal + keys + wcwidth)
 lm:lua_dll "tui_core" {
     sources = {
-        "src/tui_core/tui_core.c",
-        "src/tui_core/terminal.c",
-        "src/tui_core/keys.c",
-        "src/tui_core/wcwidth.c",
-        "src/tui_core/screen.c",
-        "src/tui_core/text.c",
-        "src/tui_core/text_extra.c",
+        "src/tui_core/*.c",
     },
 }
 

@@ -527,8 +527,8 @@ static const luaL_Reg lib[] = {
     { NULL, NULL },
 };
 
-LUAMOD_API int
-luaopen_wcwidth(lua_State *L) {
+int
+tui_open_wcwidth(lua_State *L) {
     luaL_checkversion(L);
     luaL_newlib(L, lib);
     return 1;
