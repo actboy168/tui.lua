@@ -47,10 +47,6 @@ _暂无_
 
 ### 开发者体验
 
-- **组件自动包装** —— 当前规则："调 hook 的函数必须显式包装为 `{ kind="component", fn=..., props=... }`"，写 example 时极易翻车（plain function 调用把 hook 挂到父 instance，条件渲染时触发 hook count mismatch）。两种方向取一：
-  - A) reconciler 在 children 归一化时发现 function，自动包成 component element（对齐 React 直觉，但 helper function 误塞进 children 会被误认为组件）
-  - B) 提供 `tui.component(fn)` 工厂助手到框架层（显式、可 grep、1 行 boilerplate）
-  - 若选 A，还需 dev-mode 检测"hook 在未注册为 component 的函数里被调用"给早期报错，而不是等 hook count mismatch 才炸
 - ErrorBoundary fallback 接收 `{message, trace}` 而不只是字符串（保留 `debug.traceback(err, 2)`）
 - `screen.c` full-redraw 模式下行末加 `reset_sgr`，避免 SGR 状态跨行继承导致视觉 bug
 - `tui._VERSION` 字符串常量

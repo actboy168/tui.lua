@@ -198,11 +198,14 @@ function suite:test_bare_focus_next_prev()
     local function A() tui.useFocus { id = "a" }; return tui.Text { "a" } end
     local function B() tui.useFocus { id = "b", autoFocus = true }; return tui.Text { "b" } end
     local function C() tui.useFocus { id = "c" }; return tui.Text { "c" } end
+    local CompA = tui.component(A)
+    local CompB = tui.component(B)
+    local CompC = tui.component(C)
     local function App()
         return tui.Box {
-            { kind = "component", fn = A, props = {}, key = "a" },
-            { kind = "component", fn = B, props = {}, key = "b" },
-            { kind = "component", fn = C, props = {}, key = "c" },
+            CompA { key = "a" },
+            CompB { key = "b" },
+            CompC { key = "c" },
         }
     end
     local b = testing.mount_bare(App)
@@ -222,10 +225,12 @@ end
 function suite:test_bare_focus_explicit()
     local function A() tui.useFocus { id = "a", autoFocus = true }; return tui.Text { "a" } end
     local function B() tui.useFocus { id = "b" }; return tui.Text { "b" } end
+    local CompA = tui.component(A)
+    local CompB = tui.component(B)
     local function App()
         return tui.Box {
-            { kind = "component", fn = A, props = {}, key = "a" },
-            { kind = "component", fn = B, props = {}, key = "b" },
+            CompA { key = "a" },
+            CompB { key = "b" },
         }
     end
     local b = testing.mount_bare(App)

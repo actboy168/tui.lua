@@ -64,6 +64,7 @@ C 层负责 5 项，落在这 5 项里的默认走 C：
 ## 组件语义要点
 
 - reconciler 已支持函数自动包装为组件，但 plain function 里直接调 hook 仍会挂错 instance
+- 含 hook 的函数用 `tui.component(fn)` 包装成工厂
 - Spinner 无 isActive prop，用条件渲染控制生命周期
 - useAnimation delta 用真实虚拟时钟差
 - useRef（不刷新）vs useLatestRef（每次 render 刷新）

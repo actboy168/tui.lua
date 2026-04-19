@@ -23,10 +23,11 @@ function suite:test_mount_unmount_loop_does_not_leak_handlers()
         tui.useInput(function() end)
         return tui.Text { "L" }
     end
+    local ListenerComp = tui.component(Listener)
     local function AppWithInput()
         return tui.Box {
             width = 4, height = 1,
-            { kind = "component", fn = Listener, props = {} },
+            ListenerComp {},
         }
     end
     -- Do one mount+unmount first to establish the post-unmount baseline
@@ -54,10 +55,11 @@ function suite:test_multiple_subscriptions_all_cleaned_up()
         tui.useInput(function() end)
         return tui.Text { "M" }
     end
+    local MultiListenerComp = tui.component(MultiListener)
     local function App()
         return tui.Box {
             width = 4, height = 1,
-            { kind = "component", fn = MultiListener, props = {} },
+            MultiListenerComp {},
         }
     end
     -- Warm-up cycle to stabilize any global state.

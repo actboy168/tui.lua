@@ -27,21 +27,6 @@
 
 local tui = require "tui"
 
--- Wrap a plain "render function" into a component element so its hooks
--- (useContext, useAnimation, etc.) live on their own instance rather than
--- leaking into whichever parent render happens to call us. Without this,
--- conditionally rendering something like HelpBox() would change the
--- parent's hook count between renders and trigger the Stage-17 hook-order
--- fatal. Analogous to `React.createElement(Fn, props)` vs `Fn(props)`.
-local function component(fn)
-    return function(props)
-        props = props or {}
-        local key = props.key
-        props.key = nil
-        return { kind = "component", fn = fn, props = props, key = key }
-    end
-end
-
 -- -----------------------------------------------------------------------------
 -- Theme context. Two palettes; flipped via `t` or `/theme`.
 
@@ -81,7 +66,7 @@ local REPLIES = {
 -- -----------------------------------------------------------------------------
 -- Header: title + current model + uptime (useAnimation-driven) + hints.
 
-local Header = component(function(props)
+local Header = tui.component(function(props)
     local theme = tui.useContext(ThemeCtx)
     local anim  = tui.useAnimation { interval = 1000 }
     local secs  = math.floor((anim.time or 0) / 1000)
@@ -106,7 +91,7 @@ end)
 -- -----------------------------------------------------------------------------
 -- Chat history: append-only Static log. Each message is a {who, text} pair.
 
-local History = component(function(props)
+local History = tui.component(function(props)
     local theme = tui.useContext(ThemeCtx)
     return tui.Static {
         items  = props.messages,
@@ -122,7 +107,7 @@ end)
 -- A component that throws on demand. Used to demo ErrorBoundary; armed via
 -- the `/crash` slash-command or the `e` hotkey.
 
-local Bomb = component(function(props)
+local Bomb = tui.component(function(props)
     if props.armed then
         error("demo explosion (type /reset or press r to recover)", 0)
     end
@@ -133,7 +118,7 @@ end)
 -- "Generating..." row. Visible while a reply is streaming. Shows Spinner +
 -- ProgressBar + percent. `progress` is 0..1, where 1 means fully streamed.
 
-local StreamingBanner = component(function(props)
+local StreamingBanner = tui.component(function(props)
     local theme = tui.useContext(ThemeCtx)
     return tui.Box {
         flexDirection = "row",
@@ -157,7 +142,7 @@ end)
 -- -----------------------------------------------------------------------------
 -- Help overlay. Rendered inline above the input when toggled.
 
-local HelpBox = component(function()
+local HelpBox = tui.component(function()
     local theme = tui.useContext(ThemeCtx)
     return tui.Box {
         flexDirection = "column",

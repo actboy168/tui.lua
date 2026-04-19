@@ -14,6 +14,7 @@
 - **Static** — 跨渲染保持内容
 - **Newline** — 垂直空行，`{ count = n }` 创建 n 个空行（默认 1）
 - **Spacer** — 弹性占位，自动填充父容器剩余空间
+- `tui.component(fn)` — 组件工厂助手，将含 hook 的函数包装为可传 props 的组件元素
 
 ## Hook
 

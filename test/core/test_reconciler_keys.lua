@@ -20,12 +20,6 @@ local testing = require "tui.testing"
 
 local suite = lt.test "reconciler_keys"
 
-local function comp(fn, props, key)
-    local e = { kind = "component", fn = fn, props = props or {} }
-    if key ~= nil then e.key = key end
-    return e
-end
-
 -- Build a component whose render captures its current state into `log[id]`
 -- and a setter into `setters[id]`. This lets a test detect whether the
 -- instance was preserved across renders (by watching if the setter still
@@ -46,12 +40,13 @@ end
 function suite:test_reorder_preserves_state_via_key()
     local log, setters = {}, {}
     local Tagger = make_tagger(log, setters)
+    local TaggerComp = tui.component(Tagger)
 
     local order = { "a", "b" }
     local function App()
         local kids = {}
         for _, id in ipairs(order) do
-            kids[#kids + 1] = comp(Tagger, { id = id }, id)
+            kids[#kids + 1] = TaggerComp { id = id, key = id }
         end
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
@@ -83,12 +78,13 @@ end
 function suite:test_insert_at_head_preserves_existing()
     local log, setters = {}, {}
     local Tagger = make_tagger(log, setters)
+    local TaggerComp = tui.component(Tagger)
 
     local items = { "a" }
     local function App()
         local kids = {}
         for _, id in ipairs(items) do
-            kids[#kids + 1] = comp(Tagger, { id = id }, id)
+            kids[#kids + 1] = TaggerComp { id = id, key = id }
         end
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
@@ -120,12 +116,13 @@ function suite:test_delete_middle_cleans_up_only_that_one()
         end, {})
         return tui.Text { id }
     end
+    local TaggerComp = tui.component(Tagger)
 
     local items = { "a", "b", "c" }
     local function App()
         local kids = {}
         for _, id in ipairs(items) do
-            kids[#kids + 1] = comp(Tagger, { id = id }, id)
+            kids[#kids + 1] = TaggerComp { id = id, key = id }
         end
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
@@ -151,13 +148,14 @@ function suite:test_no_key_positional_regression()
     testing.capture_stderr(function()
         local log, setters = {}, {}
         local Tagger = make_tagger(log, setters)
+        local TaggerComp = tui.component(Tagger)
 
         local order = { "a", "b" }
         local function App()
             local kids = {}
             for _, id in ipairs(order) do
                 -- no key
-                kids[#kids + 1] = comp(Tagger, { id = id })
+                kids[#kids + 1] = TaggerComp { id = id }
             end
             return tui.Box { flexDirection = "column", table.unpack(kids) }
         end
@@ -188,13 +186,14 @@ function suite:test_mixed_keyed_and_unkeyed()
     testing.capture_stderr(function()
         local log, setters = {}, {}
         local Tagger = make_tagger(log, setters)
+        local TaggerComp = tui.component(Tagger)
 
         local function App()
             return tui.Box {
                 flexDirection = "column",
-                comp(Tagger, { id = "a" }, "a"),   -- keyed
-                comp(Tagger, { id = "X" }),         -- unkeyed at index 2
-                comp(Tagger, { id = "c" }, "c"),   -- keyed
+                TaggerComp { id = "a", key = "a" },   -- keyed
+                TaggerComp { id = "X" },               -- unkeyed at index 2
+                TaggerComp { id = "c", key = "c" },   -- keyed
             }
         end
 
@@ -219,11 +218,12 @@ end
 
 function suite:test_duplicate_key_errors()
     local function Noop() return tui.Text { "x" } end
+    local NoopComp = tui.component(Noop)
 
     local function App()
         return tui.Box {
-            comp(Noop, {}, "same"),
-            comp(Noop, {}, "same"),
+            NoopComp { key = "same" },
+            NoopComp { key = "same" },
         }
     end
 
@@ -249,11 +249,12 @@ function suite:test_key_change_forces_remount()
         end, {})
         return tui.Text { props.id }
     end
+    local ChildComp = tui.component(Child)
 
     local current_key = "k1"
     local function App()
         return tui.Box {
-            comp(Child, { id = current_key }, current_key),
+            ChildComp { id = current_key, key = current_key },
         }
     end
 
@@ -277,6 +278,7 @@ end
 function suite:test_host_key_stabilizes_descendants()
     local log, setters = {}, {}
     local Tagger = make_tagger(log, setters)
+    local TaggerComp = tui.component(Tagger)
 
     local order = { "a", "b" }
     local function App()
@@ -284,7 +286,7 @@ function suite:test_host_key_stabilizes_descendants()
         for _, id in ipairs(order) do
             rows[#rows + 1] = tui.Box {
                 key = id,
-                comp(Tagger, { id = id }),
+                TaggerComp { id = id },
             }
         end
         return tui.Box { flexDirection = "column", table.unpack(rows) }
@@ -316,6 +318,7 @@ end
 function suite:test_large_random_reorder_preserves_all_state()
     local log, setters = {}, {}
     local Tagger = make_tagger(log, setters)
+    local TaggerComp = tui.component(Tagger)
 
     local ids = {}
     for i = 1, 100 do ids[i] = "k" .. i end
@@ -326,7 +329,7 @@ function suite:test_large_random_reorder_preserves_all_state()
     local function App()
         local kids = {}
         for _, id in ipairs(order) do
-            kids[#kids + 1] = comp(Tagger, { id = id }, id)
+            kids[#kids + 1] = TaggerComp { id = id, key = id }
         end
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
@@ -367,13 +370,14 @@ end
 
 -- ---------------------------------------------------------------------------
 -- 10. Mixed keyed + unkeyed siblings survive interleaved insert/delete.
---    Keyed children match by key; unkeyed fall back to positional slot
---    *within* the unkeyed subsequence.
+--     Keyed children match by key; unkeyed fall back to positional slot
+--     *within* the unkeyed subsequence.
 
 function suite:test_interleaved_insert_delete_mixed_keys()
     testing.capture_stderr(function()
         local log, setters = {}, {}
         local Tagger = make_tagger(log, setters)
+        local TaggerComp = tui.component(Tagger)
 
         -- Each entry is { id, use_key }. If use_key is true the element has a
         -- `key` equal to its id; otherwise it is unkeyed.
@@ -389,7 +393,7 @@ function suite:test_interleaved_insert_delete_mixed_keys()
             local kids = {}
             for _, it in ipairs(items) do
                 local id, use_key = it[1], it[2]
-                kids[#kids + 1] = comp(Tagger, { id = id }, use_key and id or nil)
+                kids[#kids + 1] = TaggerComp { id = id, key = use_key and id or nil }
             end
             return tui.Box { flexDirection = "column", table.unpack(kids) }
         end
@@ -420,11 +424,12 @@ end
 
 -- ---------------------------------------------------------------------------
 -- 11. Key rename + order change at the same time. A child whose key changes
---    is a fresh instance regardless of position; other keys still match.
+--     is a fresh instance regardless of position; other keys still match.
 
 function suite:test_key_rename_plus_reorder()
     local log, setters = {}, {}
     local Tagger = make_tagger(log, setters)
+    local TaggerComp = tui.component(Tagger)
 
     -- Original keys: a, b, c, d in order.
     local entries = {
@@ -437,7 +442,7 @@ function suite:test_key_rename_plus_reorder()
     local function App()
         local kids = {}
         for _, e in ipairs(entries) do
-            kids[#kids + 1] = comp(Tagger, { id = e.id }, e.key)
+            kids[#kids + 1] = TaggerComp { id = e.id, key = e.key }
         end
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end

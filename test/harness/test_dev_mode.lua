@@ -75,10 +75,6 @@ end
 -- Render-time setter guard
 -- ============================================================================
 
-local function comp(fn, props)
-    return { kind = "component", fn = fn, props = props or {} }
-end
-
 function suite.test_setstate_in_render_warns()
     local stderr = testing.capture_stderr(function()
         local did_dirty_set
@@ -217,14 +213,10 @@ function suite.test_hook_in_plain_function_is_fatal()
 end
 
 function suite.test_component_factory_passes()
-    local Wrapped = function(props)
-        props = props or {}
-        local key = props.key; props.key = nil
-        return { kind = "component", fn = function()
-            tui.useState(0)
-            return tui.Text { "" }
-        end, props = props, key = key }
-    end
+    local Wrapped = tui.component(function()
+        tui.useState(0)
+        return tui.Text { "" }
+    end)
 
     local function App()
         return tui.Box { Wrapped() }

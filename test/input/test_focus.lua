@@ -56,11 +56,13 @@ function suite:test_tab_and_shift_tab_cycle()
         local f = tui.useFocus { id = "b" }
         return tui.Text { f.isFocused and "B*" or "B " }
     end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B_impl)
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = A,      props = {} },
-            { kind = "component", fn = B_impl, props = {} },
+            AComp {},
+            BComp {},
         }
     end
 
@@ -85,14 +87,15 @@ function suite:test_focus_manager_jump()
         tui.useFocus { id = props.id, autoFocus = props.autoFocus }
         return tui.Text { props.id }
     end
+    local ChildComp = tui.component(Child)
     local function App()
         local fm = tui.useFocusManager()
         jump_to = fm.focus
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "x", autoFocus = true }, key = "x" },
-            { kind = "component", fn = Child, props = { id = "y" },                   key = "y" },
-            { kind = "component", fn = Child, props = { id = "z" },                   key = "z" },
+            ChildComp { id = "x", autoFocus = true, key = "x" },
+            ChildComp { id = "y", key = "y" },
+            ChildComp { id = "z", key = "z" },
         }
     end
 
@@ -148,16 +151,17 @@ function suite:test_unmount_transfers_focus()
         tui.useFocus { id = props.id, autoFocus = props.autoFocus }
         return tui.Text { props.id }
     end
+    local ChildComp = tui.component(Child)
     local function App()
         local s, setS = tui.useState(true)
         set_show = setS
         local children = {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "a", autoFocus = true }, key = "a" },
-            { kind = "component", fn = Child, props = { id = "b" },                   key = "b" },
+            ChildComp { id = "a", autoFocus = true, key = "a" },
+            ChildComp { id = "b", key = "b" },
         }
         if s then
-            children[#children + 1] = { kind = "component", fn = Child, props = { id = "c" }, key = "c" }
+            children[#children + 1] = ChildComp { id = "c", key = "c" }
         end
         return tui.Box(children)
     end
@@ -252,14 +256,15 @@ function suite:test_tab_order_stable_across_rerenders()
         tui.useFocus { id = props.id, autoFocus = props.autoFocus }
         return tui.Text { props.id }
     end
+    local ChildComp = tui.component(Child)
     local function App()
         local n, setN = tui.useState(0)
         bump = function() setN(n + 1) end
         return tui.Box {
             flexDirection = "column",
             tui.Text { ("n=%d"):format(n), key = "heading" },
-            { kind = "component", fn = Child, props = { id = "p", autoFocus = true }, key = "p" },
-            { kind = "component", fn = Child, props = { id = "q" },                   key = "q" },
+            ChildComp { id = "p", autoFocus = true, key = "p" },
+            ChildComp { id = "q", key = "q" },
         }
     end
 
@@ -291,17 +296,21 @@ end
 -- error out of render via the harness's pcall boundary.
 
 function suite:test_duplicate_focus_id_raises()
+    local function DupA()
+        tui.useFocus { id = "dup" }
+        return tui.Text { "a" }
+    end
+    local function DupB()
+        tui.useFocus { id = "dup" }
+        return tui.Text { "b" }
+    end
+    local DupAComp = tui.component(DupA)
+    local DupBComp = tui.component(DupB)
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = function()
-                tui.useFocus { id = "dup" }
-                return tui.Text { "a" }
-            end },
-            { kind = "component", fn = function()
-                tui.useFocus { id = "dup" }
-                return tui.Text { "b" }
-            end },
+            DupAComp {},
+            DupBComp {},
         }
     end
 
@@ -328,12 +337,13 @@ function suite:test_inactive_entry_is_skipped_by_tab()
         tui.useFocus { id = props.id, autoFocus = props.autoFocus, isActive = props.isActive }
         return tui.Text { props.id }
     end
+    local ChildComp = tui.component(Child)
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = Child, props = { id = "a", autoFocus = true }, key = "a" },
-            { kind = "component", fn = Child, props = { id = "b", isActive = false }, key = "b" },
-            { kind = "component", fn = Child, props = { id = "c" },                   key = "c" },
+            ChildComp { id = "a", autoFocus = true, key = "a" },
+            ChildComp { id = "b", isActive = false, key = "b" },
+            ChildComp { id = "c", key = "c" },
         }
     end
 
@@ -380,12 +390,15 @@ function suite:test_isactive_hot_update_transfers_focus()
         return tui.Text { "b" }
     end
     local function C() tui.useFocus { id = "c" }; return tui.Text { "c" } end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local CComp = tui.component(C)
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = A, props = {}, key = "a" },
-            { kind = "component", fn = B, props = {}, key = "b" },
-            { kind = "component", fn = C, props = {}, key = "c" },
+            AComp { key = "a" },
+            BComp { key = "b" },
+            CComp { key = "c" },
         }
     end
 
@@ -440,12 +453,14 @@ function suite:test_id_hot_update_resubscribes()
         return tui.Text { id }
     end
     local function Static(props) tui.useFocus { id = props.id }; return tui.Text { props.id } end
+    local StaticComp = tui.component(Static)
+    local BComp = tui.component(B)
     local function App()
         return tui.Box {
             flexDirection = "column",
-            { kind = "component", fn = Static, props = { id = "a" }, key = "a" },
-            { kind = "component", fn = B,      props = {},            key = "b" },
-            { kind = "component", fn = Static, props = { id = "c" }, key = "c" },
+            StaticComp { id = "a", key = "a" },
+            BComp { key = "b" },
+            StaticComp { id = "c", key = "c" },
         }
     end
 

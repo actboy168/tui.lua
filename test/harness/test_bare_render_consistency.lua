@@ -4,6 +4,7 @@
 -- and auto-rerender. This file tests that hook semantics are identical.
 
 local lt      = require "ltest"
+local tui     = require "tui"
 local testing = require "tui.testing"
 local hooks   = require "tui.hooks"
 local element = require "tui.element"
@@ -296,10 +297,12 @@ function suite:test_focus_next_advances_same()
         hooks.useFocus()
         return element.Text { "B" }
     end
+    local CompA = tui.component(A)
+    local CompB = tui.component(B)
     local App = function()
         return element.Box {
-            { kind = "component", fn = A, key = "a" },
-            { kind = "component", fn = B, key = "b" },
+            CompA { key = "a" },
+            CompB { key = "b" },
         }
     end
 

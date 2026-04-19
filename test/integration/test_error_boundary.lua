@@ -17,21 +17,17 @@ local testing = require "tui.testing"
 
 local suite = lt.test "error_boundary"
 
--- Small helper: build a component element.
-local function comp(fn, props)
-    return { kind = "component", fn = fn, props = props or {} }
-end
-
 -- ---------------------------------------------------------------------------
 -- 1. Boundary catches a child that throws, renders fallback.
 
 function suite:test_error_boundary_catches_child_throw()
-    local function Bad() error("bad!", 0) end
+    local function Bad_fn() error("bad!", 0) end
+    local Bad = tui.component(Bad_fn)
 
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FALLBACK" },
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -47,12 +43,13 @@ end
 -- 2. Normal case: no throw -> children render, fallback unused.
 
 function suite:test_error_boundary_no_throw_passthrough()
-    local function Good() return tui.Text { "OK" } end
+    local function Good_fn() return tui.Text { "OK" } end
+    local Good = tui.component(Good_fn)
 
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FB" },
-            comp(Good),
+            Good {},
         }
     end
 
@@ -65,19 +62,21 @@ end
 -- 3. Sibling isolation: one boundary catches, others keep working.
 
 function suite:test_error_boundary_isolates_sibling_subtrees()
-    local function Bad()  error("boom", 0) end
-    local function Good() return tui.Text { "GOOD" } end
+    local function Bad_fn()  error("boom", 0) end
+    local function Good_fn() return tui.Text { "GOOD" } end
+    local Bad  = tui.component(Bad_fn)
+    local Good = tui.component(Good_fn)
 
     local function App()
         return tui.Box {
             flexDirection = "column",
             tui.ErrorBoundary {
                 fallback = tui.Text { "BAD!" },
-                comp(Bad),
+                Bad {},
             },
             tui.ErrorBoundary {
                 fallback = tui.Text { "----" },
-                comp(Good),
+                Good {},
             },
         }
     end
@@ -92,14 +91,15 @@ end
 -- 4. Nested boundaries: the innermost one catches first.
 
 function suite:test_error_boundary_nested_inner_catches_first()
-    local function Bad() error("inner", 0) end
+    local function Bad_fn() error("inner", 0) end
+    local Bad = tui.component(Bad_fn)
 
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "OUTER" },
             tui.ErrorBoundary {
                 fallback = tui.Text { "INNER" },
-                comp(Bad),
+                Bad {},
             },
         }
     end
@@ -114,19 +114,22 @@ end
 --    boundary (error propagates through Box host nodes unchanged).
 
 function suite:test_error_from_deeper_descendant_caught()
-    local function Bad() error("deep", 0) end
+    local function Bad_fn() error("deep", 0) end
+    local Bad = tui.component(Bad_fn)
     local function Middle()
         return tui.Box {
             tui.Box {
-                comp(Bad),
+                Bad {},
             },
         }
     end
 
+    local MiddleComp = tui.component(Middle)
+
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "DEEP-FB" },
-            comp(Middle),
+            MiddleComp {},
         }
     end
 
@@ -142,8 +145,9 @@ end
 --    has a banner fallback on top of this, verified by example only.)
 
 function suite:test_no_boundary_error_propagates()
-    local function Bad() error("unhandled", 0) end
-    local function App() return comp(Bad) end
+    local function Bad_fn() error("unhandled", 0) end
+    local Bad = tui.component(Bad_fn)
+    local function App() return Bad {} end
 
     local ok, err = pcall(function()
         testing.render(App, { cols = 4, rows = 1 })
@@ -163,11 +167,12 @@ end
 
 function suite:test_fatal_error_bypasses_boundary()
     local reconciler = require "tui.reconciler"
-    local function Bad() reconciler.fatal("something broke") end
+    local function Bad_fn() reconciler.fatal("something broke") end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FB" },
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -184,12 +189,13 @@ end
 function suite:test_reconciler_duplicate_key_is_fatal_past_boundary()
     -- Duplicate key thrown by a child must NOT be swallowed by a wrapping
     -- ErrorBoundary — the key bug would otherwise silently corrupt state.
-    local function Noop() return tui.Text { "x" } end
+    local function Noop_fn() return tui.Text { "x" } end
+    local Noop = tui.component(Noop_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FB" },
-            { kind = "component", fn = Noop, key = "dup", props = {} },
-            { kind = "component", fn = Noop, key = "dup", props = {} },
+            Noop { key = "dup" },
+            Noop { key = "dup" },
         }
     end
 
@@ -213,14 +219,15 @@ end
 
 function suite:test_useeffect_body_throw_caught_by_boundary()
     local hooks = require "tui.hooks"
-    local function Bad()
+    local function Bad_fn()
         hooks.useEffect(function() error("effect-boom", 0) end, {})
         return tui.Text { "BAD" }
     end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FB!!" },
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -240,16 +247,17 @@ end
 function suite:test_useeffect_cleanup_throw_caught_by_boundary()
     local hooks = require "tui.hooks"
     local phase = { "first" }
-    local function Child()
+    local function Child_fn()
         hooks.useEffect(function()
             return function() error("cleanup-boom", 0) end
         end, { phase[1] })
         return tui.Text { "C" }
     end
+    local Child = tui.component(Child_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FB##" },
-            comp(Child),
+            Child {},
         }
     end
 
@@ -271,11 +279,12 @@ end
 
 function suite:test_useeffect_throw_without_boundary_propagates()
     local hooks = require "tui.hooks"
-    local function Bad()
+    local function Bad_fn()
         hooks.useEffect(function() error("loose-effect", 0) end, {})
         return tui.Text { "X" }
     end
-    local function App() return comp(Bad) end
+    local Bad = tui.component(Bad_fn)
+    local function App() return Bad {} end
 
     local ok, err = pcall(function()
         testing.render(App, { cols = 2, rows = 1 })
@@ -288,16 +297,17 @@ end
 function suite:test_boundary_caught_error_is_sticky()
     local hooks = require "tui.hooks"
     local armed = { true }  -- first mount throws; after we disarm, Bad returns clean
-    local function Bad()
+    local function Bad_fn()
         hooks.useEffect(function()
             if armed[1] then error("first-only", 0) end
         end, {})
         return tui.Text { "OK" }
     end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FBzz" },
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -321,14 +331,15 @@ end
 --     every render) rather than any ambient boundary stack.
 
 function suite:test_useinput_handler_throw_caught_by_boundary()
-    local function Bad()
+    local function Bad_fn()
         tui.useInput(function() error("key-boom", 0) end)
         return tui.Text { "BAD" }
     end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FBkb" },
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -345,17 +356,18 @@ end
 
 function suite:test_usefocus_on_input_throw_caught_by_boundary()
     local hooks = require "tui.hooks"
-    local function Bad()
+    local function Bad_fn()
         hooks.useFocus {
             autoFocus = true,
             on_input = function() error("focus-boom", 0) end,
         }
         return tui.Text { "BAD" }
     end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = tui.Text { "FBfb" },
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -372,11 +384,12 @@ end
 --     failure rather than silent swallowing.
 
 function suite:test_useinput_throw_without_boundary_propagates()
-    local function Bad()
+    local function Bad_fn()
         tui.useInput(function() error("loose-key", 0) end)
         return tui.Text { "x" }
     end
-    local function App() return comp(Bad) end
+    local Bad = tui.component(Bad_fn)
+    local function App() return Bad {} end
 
     local h = testing.render(App, { cols = 2, rows = 1 })
     local ok, err = pcall(function() h:type("a") end)
@@ -392,7 +405,8 @@ end
 
 function suite:test_fallback_function_receives_err_and_reset()
     local seen_err, seen_reset_type
-    local function Bad() error("bang", 0) end
+    local function Bad_fn() error("bang", 0) end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = function(err, reset)
@@ -400,7 +414,7 @@ function suite:test_fallback_function_receives_err_and_reset()
                 seen_reset_type = type(reset)
                 return tui.Text { "FN!!" }
             end,
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -419,17 +433,18 @@ end
 function suite:test_reset_clears_caught_error()
     local armed = { true }
     local captured_reset
-    local function Bad()
+    local function Bad_fn()
         if armed[1] then error("first", 0) end
         return tui.Text { "OK  " }
     end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = function(_err, reset)
                 captured_reset = reset
                 return tui.Text { "FB  " }
             end,
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -451,7 +466,8 @@ function suite:test_reset_then_rethrow_catches_new_error()
     local which = { "first" }
     local got_errs = {}
     local last_reset
-    local function Bad() error(which[1], 0) end
+    local function Bad_fn() error(which[1], 0) end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = function(err, reset)
@@ -459,7 +475,7 @@ function suite:test_reset_then_rethrow_catches_new_error()
                 last_reset = reset
                 return tui.Text { "FB" }
             end,
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -483,14 +499,15 @@ end
 
 function suite:test_reset_is_reference_stable()
     local seen = {}
-    local function Bad() error("x", 0) end
+    local function Bad_fn() error("x", 0) end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = function(_err, reset)
                 seen[#seen + 1] = reset
                 return tui.Text { "F" }
             end,
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -508,11 +525,12 @@ end
 --     box rather than crashing the whole render. Fatal prefix still escapes.
 
 function suite:test_fallback_function_that_throws_degrades_to_empty()
-    local function Bad() error("child", 0) end
+    local function Bad_fn() error("child", 0) end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = function() error("fallback-boom", 0) end,
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -524,11 +542,12 @@ end
 
 function suite:test_fallback_function_with_fatal_still_propagates()
     local reconciler = require "tui.reconciler"
-    local function Bad() error("normal", 0) end
+    local function Bad_fn() error("normal", 0) end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
             fallback = function() reconciler.fatal("fatal-from-fb") end,
-            comp(Bad),
+            Bad {},
         }
     end
 
@@ -548,16 +567,18 @@ function suite:test_useerrorboundary_sees_caught_error()
     local hooks = require "tui.hooks"
     -- Flag-flipping state so the fallback tree can observe a tripped boundary.
     local seen_err_in_fb
-    local function FbView()
+    local function FbView_fn()
         local eb = hooks.useErrorBoundary()
         seen_err_in_fb = eb.caught_error
         return tui.Text { "fb" }
     end
-    local function Bad() error("observed", 0) end
+    local FbView = tui.component(FbView_fn)
+    local function Bad_fn() error("observed", 0) end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
-            fallback = comp(FbView),
-            comp(Bad),
+            fallback = FbView {},
+            Bad {},
         }
     end
 
@@ -576,19 +597,21 @@ function suite:test_useerrorboundary_reset_clears_boundary()
     local hooks = require "tui.hooks"
     local armed = { true }
     local captured
-    local function FbView()
+    local function FbView_fn()
         local eb = hooks.useErrorBoundary()
         captured = eb
         return tui.Text { "fb  " }
     end
-    local function Bad()
+    local FbView = tui.component(FbView_fn)
+    local function Bad_fn()
         if armed[1] then error("e", 0) end
         return tui.Text { "CLEAN" }
     end
+    local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
-            fallback = comp(FbView),
-            comp(Bad),
+            fallback = FbView {},
+            Bad {},
         }
     end
 

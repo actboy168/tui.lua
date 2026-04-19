@@ -302,7 +302,7 @@ function suite:test_fn_identity_change_forces_remount()
 
     local which = A
     local function Root()
-        return tui.Box { { kind = "component", fn = which, props = {} } }
+        return tui.Box { tui.component(which, {}) }
     end
 
     local b = testing.mount_bare(Root)
@@ -332,8 +332,9 @@ function suite:test_fn_identity_stable_preserves_state()
         end, {})
         return tui.Text { tostring(n) }
     end
+    local CompEl = tui.component(Comp)
     local function Root()
-        return tui.Box { { kind = "component", fn = Comp, props = {} } }
+        return tui.Box { CompEl {} }
     end
 
     local b = testing.mount_bare(Root)

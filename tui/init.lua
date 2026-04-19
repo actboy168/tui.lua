@@ -84,6 +84,30 @@ M.ProgressBar    = progress_mod.ProgressBar
 M.Newline        = newline_mod.Newline
 M.Spacer         = newline_mod.Spacer
 
+-- Component factory helper
+--- Create a component factory from a render function. Two usage modes:
+---   1) Factory mode:  local Header = tui.component(fn)
+---                      Box { Header { title = "hi" } }
+---   2) Direct mode:   tui.component(fn, { title = "hi" })
+---                      — produces an element directly, useful when fn is dynamic
+--- In both modes, `key` in props is auto-plucked to element top level.
+function M.component(fn, props)
+    if props == nil then
+        -- Factory mode: return a callable factory
+        return function(p)
+            p = p or {}
+            local key = p.key
+            p.key = nil
+            return { kind = "component", fn = fn, props = p, key = key }
+        end
+    end
+    -- Direct mode: produce an element right away
+    props = props or {}
+    local key = props.key
+    props.key = nil
+    return { kind = "component", fn = fn, props = props, key = key }
+end
+
 -- Hooks
 M.useState       = hooks.useState
 M.useEffect      = hooks.useEffect
