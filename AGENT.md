@@ -47,6 +47,7 @@ C 层负责 5 项，落在这 5 项里的默认走 C：
 - prop 名用 camelCase（flexDirection/autoFocus），和 Ink 保持一致
 - 公开 API 写 LuaDoc 注释（---@class / ---@type / ---@param / ---@return）
 - 新增组件必须写对应的测试文件（test/test_<module>.lua）
+- 测试编写指南见 @docs/testing-guide.md
 
 ## 编码流程
 
