@@ -34,7 +34,6 @@ local newline_mod = require "tui.builtin.newline"
 local ansi       = require "tui.ansi"
 local text_mod   = require "tui.text"
 local tui_core   = require "tui_core"
-local info       = require "tui.terminal_info"
 local platform   = require "tui.platform"
 
 local terminal = tui_core.terminal
@@ -241,7 +240,7 @@ end
 -- until the app calls `useApp():exit()`, or an emergency key is received
 -- (Ctrl+C / Ctrl+D — always honored by the framework).
 function M.render(root)
-    local interactive = info.interactive()
+    local interactive = ansi.interactive()
 
     terminal.windows_vt_enable()
     terminal.set_raw(true)

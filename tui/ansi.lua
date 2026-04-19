@@ -24,7 +24,8 @@ local M = {}
 local <const> ESC = "\x1b"
 local <const> BEL = "\007"
 local <const> ST  = ESC .. "\\"
-local <const> IS_WINDOWS = (require "bee.platform").os == "windows"
+local platform = require "tui.platform"
+local <const> IS_WINDOWS = platform.os() == "windows"
 
 -- ---------------------------------------------------------------------------
 -- Terminal type detection
@@ -426,6 +427,49 @@ M.clearScreen = ESC .. "[H" .. ESC .. "[2J"
 -- scrollback clear (CSI 3J unsupported). Matches Ink's clearTerminal.ts.
 function M.clearScreenFull()
     return _clearScreenFull
+end
+
+-- ---------------------------------------------------------------------------
+-- Terminal info (merged from terminal_info.lua)
+-- CI/TTY checks and interactive gate.
+
+-- CI detection (internal)
+local function is_ci()
+    if os.getenv("CI") then return true end
+    if os.getenv("GITHUB_ACTIONS") then return true end
+    if os.getenv("JENKINS_URL") then return true end
+    if os.getenv("TRAVIS") then return true end
+    if os.getenv("CIRCLECI") then return true end
+    if os.getenv("GITLAB_CI") then return true end
+    if os.getenv("BUILDKITE") then return true end
+    if os.getenv("TF_BUILD") then return true end
+    return false
+end
+
+-- TTY detection (internal)
+local is_tty_cache = nil
+
+local function is_tty()
+    if is_tty_cache ~= nil then return is_tty_cache end
+    is_tty_cache = (os.getenv("TERM") ~= nil) or IS_WINDOWS
+    return is_tty_cache
+end
+
+--- Override TTY detection (for production integrators or tests).
+function M.set_tty(value)
+    is_tty_cache = value and true or false
+end
+
+-- Interactive mode
+
+--- Check if the terminal is interactive (TTY + not in CI).
+function M.interactive()
+    return is_tty() and not is_ci()
+end
+
+--- Force re-detection (useful if environment changes in tests).
+function M._reset_tty()
+    is_tty_cache = nil
 end
 
 return M
