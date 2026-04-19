@@ -16,10 +16,10 @@
 --                 by this single-char mask (e.g. "*" for passwords).
 --   width       : optional cell width; defaults to container-allocated width.
 --
--- Cursor rendering: the component writes a row of text into a Text element
--- and, post-commit, calls cursor.set(col, row) so tui/init.lua positions
--- the terminal's real cursor at the correct column. IME candidate window
--- placement follows the physical cursor position.
+-- Cursor rendering: TextInput uses useDeclaredCursor() to declare its
+-- cursor position (Ink-compatible API). The framework converts this to
+-- absolute coordinates via find_cursor() after layout. IME candidate
+-- window placement follows the physical cursor position.
 --
 -- Cursor position is a UTF-8 character index (1..#chars+1), not a byte
 -- offset. Conversions to display columns go through wcwidth.
@@ -274,10 +274,21 @@ local function TextInputImpl(props)
     -- Build the Text child; user may apply styling via a wrapper Box.
     local text_el = element.Text { width = render_width, wrap = "nowrap", visible }
 
-    -- Tag the Text element with the caret column when this input is focused;
-    -- tui/init.lua's paint pipeline translates that into an absolute cursor
-    -- move. Disabled and unfocused inputs leave _cursor_offset = nil.
-    text_el._cursor_offset = focus_flag and caret_col or nil
+    -- Single-writer cursor model: only the focused TextInput declares its
+    -- cursor position via useDeclaredCursor(). The tagger writes _cursor_offset
+    -- and _cursor_focused metadata onto the element; init.lua's find_cursor
+    -- resolves these to absolute screen coordinates after layout.
+    --
+    -- IMPORTANT: also check `disabled` (props.focus==false) here to avoid
+    -- stale cursor rendering when focus transitions between components.
+    -- The useFocus isFocused state updates asynchronously via effect, which
+    -- can cause one frame of incorrect cursor display after focus changes.
+    local declareCursor = cursor.useDeclaredCursor {
+        x = caret_col,
+        y = 0,
+        active = focus_flag and not disabled,
+    }
+    declareCursor(text_el)
 
     return text_el
 end

@@ -291,28 +291,41 @@ function Harness:_paint()
     -- block in tui/init.lua (Yoga uses PointScaleFactor=1 and the binding
     -- layer casts to int, so rect values are always whole numbers).
     --
-    -- Uses relative cursor movement (cursorMove) instead of absolute
-    -- cursorPosition to reduce byte count.
+    -- Uses absolute cursor positioning (CUP) for reliability.
+    -- Multi-cursor contention: prioritize _cursor_focused=true nodes.
     local ccol, crow
     do
+        local first_candidate = nil
+        local focused_candidate = nil
+
         local function walk(e)
-            if not e then return nil end
+            if not e then return end
             if e.kind == "text" and e._cursor_offset ~= nil then
                 local r = e.rect or { x = 0, y = 0 }
-                return r.x + e._cursor_offset + 1,
-                       r.y + 1
+                local col = r.x + e._cursor_offset + 1
+                local row = r.y + 1
+                local cand = { col = col, row = row }
+                if not first_candidate then
+                    first_candidate = cand
+                end
+                if e._cursor_focused and not focused_candidate then
+                    focused_candidate = cand
+                end
             end
             for _, c in ipairs(e.children or {}) do
-                local col, row = walk(c)
-                if col then return col, row end
+                walk(c)
             end
         end
-        ccol, crow = walk(tree)
+
+        walk(tree)
+        local chosen = focused_candidate or first_candidate
+        if chosen then
+            ccol, crow = chosen.col, chosen.row
+        end
     end
     if ccol and crow then
-        local dx = ccol - self._last_cursor_col
-        local dy = crow - self._last_cursor_row
-        self._terminal.write(ansi_mod.cursorShow() .. ansi_mod.cursorMove(dx, dy))
+        -- Use absolute cursor positioning (CUP) for reliability.
+        self._terminal.write(ansi_mod.cursorShow() .. ansi_mod.cursorPosition(ccol, crow))
         self._last_cursor_col, self._last_cursor_row = ccol, crow
         self._ime = { col = ccol, row = crow }
     end
@@ -379,19 +392,38 @@ end
 -- critically, that the coords are integers (non-integer coords produce
 -- `\27[73.0;3.0H` CUP commands that real terminals silently reject — see
 -- test/test_cursor_integer_coords.lua).
+--
+-- Multi-cursor contention: if multiple TextInputs set _cursor_offset,
+-- prioritizes the one marked with _cursor_focused=true (the focused input).
 function Harness:cursor()
+    local first_candidate = nil
+    local focused_candidate = nil
+
     local function walk(e)
-        if not e then return nil end
+        if not e then return end
         if e.kind == "text" and e._cursor_offset ~= nil then
             local r = e.rect or { x = 0, y = 0 }
-            return r.x + e._cursor_offset + 1, r.y + 1
+            local col = r.x + e._cursor_offset + 1
+            local row = r.y + 1
+            local cand = { col = col, row = row }
+            if not first_candidate then
+                first_candidate = cand
+            end
+            if e._cursor_focused and not focused_candidate then
+                focused_candidate = cand
+            end
         end
         for _, c in ipairs(e.children or {}) do
-            local col, row = walk(c)
-            if col then return col, row end
+            walk(c)
         end
     end
-    return walk(self._tree)
+
+    walk(self._tree)
+    local chosen = focused_candidate or first_candidate
+    if chosen then
+        return chosen.col, chosen.row
+    end
+    return nil
 end
 
 --- Return the last IME position recorded by the fake terminal.

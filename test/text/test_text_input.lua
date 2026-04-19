@@ -1653,3 +1653,51 @@ function suite:test_cursor_integer_after_caret_clamp()
     lt.assertEquals(row, 1, "cursor row is integer after clamp to empty")
     h:unmount()
 end
+
+-- Multi-cursor contention: when multiple TextInputs exist, only the focused
+-- one's cursor should be reported by Harness:cursor(). This tests the
+-- single-writer model where _cursor_focused=true wins over other candidates.
+function suite:test_multi_input_focused_cursor_wins()
+    local value1, value2 = "hello", "world"
+    local function App()
+        return tui.Box {
+            width = 30, height = 3,
+            tui.Box {
+                height = 1,
+                tui.TextInput {
+                    focusId = "input1",
+                    autoFocus = true,  -- input1 gets focus
+                    value = value1,
+                    onChange = function(v) value1 = v end,
+                },
+            },
+            tui.Box {
+                height = 1,
+                tui.TextInput {
+                    focusId = "input2",
+                    value = value2,
+                    onChange = function(v) value2 = v end,
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 3 })
+
+    -- autoFocus effect triggers re-render; consume it before assertions.
+    h:rerender()
+
+    -- input1 is focused (autoFocus), caret after "hello" = col 6
+    local col, row = h:cursor()
+    lt.assertEquals(col, 6, "cursor should be at focused input1 (after 'hello')")
+    lt.assertEquals(row, 1, "cursor should be on first row")
+
+    -- Tab to input2
+    h:press("tab")
+
+    -- Now input2 is focused, caret after "world" = col 6 (on row 2)
+    col, row = h:cursor()
+    lt.assertEquals(col, 6, "cursor should be at focused input2 (after 'world')")
+    lt.assertEquals(row, 2, "cursor should be on second row")
+
+    h:unmount()
+end

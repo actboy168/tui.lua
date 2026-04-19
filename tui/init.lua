@@ -102,6 +102,7 @@ M.useWindowSize  = hooks.useWindowSize
 M.useApp         = hooks.useApp
 M.useFocus        = hooks.useFocus
 M.useFocusManager = hooks.useFocusManager
+M.useDeclaredCursor = cursor_mod.useDeclaredCursor
 M.useErrorBoundary = hooks.useErrorBoundary
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
@@ -113,28 +114,43 @@ M.clearTimer  = scheduler.clearTimer
 M.intrinsicSize = layout.intrinsic_size
 
 
--- Walk the laid-out tree and record the first Text node that requested a
--- cursor. 1-based (col, row) for use in ansi.cursorPosition().
--- Returned coords are integers: Yoga uses PointScaleFactor=1 and the binding
--- layer casts to int, so rect values are always whole numbers.
+-- Cursor position is set by the focused component via cursor.set(col, row)
+-- during render. We consume it here after layout (so coordinates are absolute).
+-- Single-writer model: only one component sets the cursor per frame.
+--
+-- Fallback: if no component calls cursor.set(), we scan the tree for Text
+-- elements with _cursor_offset (legacy TextInput behavior).
 local function find_cursor(tree)
+    local first_candidate = nil
+    local focused_candidate = nil
+
     local function walk(e)
-        if not e then return nil end
+        if not e then return end
         if e.kind == "text" and e._cursor_offset ~= nil then
             local r = e.rect or { x = 0, y = 0 }
             local col = r.x + e._cursor_offset + 1
             local row = r.y + 1
-            return col, row
+            local cand = { col = col, row = row }
+            if not first_candidate then
+                first_candidate = cand
+            end
+            if e._cursor_focused and not focused_candidate then
+                focused_candidate = cand
+            end
         end
         if e.children then
             for _, c in ipairs(e.children) do
-                local col, row = walk(c)
-                if col then return col, row end
+                walk(c)
             end
         end
-        return nil
     end
-    return walk(tree)
+
+    walk(tree)
+    local chosen = focused_candidate or first_candidate
+    if chosen then
+        return chosen.col, chosen.row
+    end
+    return nil
 end
 
 -- Produce + commit one frame. Called internally by render / rerender /
@@ -188,7 +204,7 @@ function M.render(root)
     terminal.windows_vt_enable()
     terminal.set_raw(true)
     if interactive then
-        terminal.write(ansi.cursorHide() .. ansi.clearScreen)
+        terminal.write(ansi.cursorHide())
     end
 
     local rec_state    = reconciler.new()
@@ -201,12 +217,6 @@ function M.render(root)
     local app_handle  = {
         exit = function() scheduler.stop() end,
     }
-
-    -- Cursor state persistence: track last known cursor position for
-    -- relative movement calculations. External writes (stderr, signal
-    -- handlers) may corrupt the terminal; we treat this as the source
-    -- of truth for computing deltas between frames.
-    local last_cursor_col, last_cursor_row = 1, 1
 
     local function paint(term)
         local w, h = terminal.get_size()
@@ -222,29 +232,22 @@ function M.render(root)
         renderer.paint(tree, screen_state)
         local diff = screen_mod.diff(screen_state)
 
-        -- Post-commit: cursor positioning. A focused TextInput tags its
-        -- Text element with _cursor_offset; we translate that to screen
-        -- coordinates and move the terminal's real cursor there.
-        -- Skip when non-interactive (no TTY or in CI).
+        -- Post-commit: cursor positioning.
+        -- Components declare cursor via useDeclaredCursor(); find_cursor()
+        -- resolves the declaration to absolute screen coordinates using
+        -- the element's Yoga rect. Skip when non-interactive.
         --
-        -- Uses relative cursor movement (CSI A/B/C/D) instead of absolute
-        -- CUP (CSI row;col H) to reduce byte count. Deltas are typically
-        -- shorter than absolute coordinates.
+        -- Uses absolute cursor positioning (CSI row;colH) for reliability.
+        -- Main-screen apps don't have a clean slate each frame; absolute
+        -- CUP anchors to known coordinates regardless of where the terminal
+        -- cursor was left.
         local cursor_seq = ""
         if interactive then
             local ccol, crow = find_cursor(tree)
             if ccol and crow then
-                -- Compute relative movement from last known position.
-                -- Ink uses this same pattern: track displayCursor and emit
-                -- cursorMove(dx, dy) on main screen.
-                local dx = ccol - last_cursor_col
-                local dy = crow - last_cursor_row
-                cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
-                last_cursor_col, last_cursor_row = ccol, crow
+                cursor_seq = ansi.cursorShow() .. ansi.cursorPosition(ccol, crow)
             else
                 cursor_seq = ansi.cursorHide()
-                -- Cursor hidden: don't update last position; next show
-                -- will compute delta from wherever we last left it.
             end
         end
 

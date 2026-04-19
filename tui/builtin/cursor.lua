@@ -1,28 +1,58 @@
--- tui/builtin/cursor.lua — post-paint cursor + IME positioning.
+-- tui/builtin/cursor.lua — Cursor declaration API (Ink-compatible single-writer model)
 --
--- A TextInput component (or any focusable element that wants a visible
--- cursor) calls cursor.set(col, row) during its render. tui/init.lua reads
--- this value AFTER writing the diff ANSI, then:
---   * if (col, row) is set: show cursor, move it to (col, row), call IME pos.
---   * if nil: hide cursor.
--- The value is cleared each paint so stale positions don't linger.
+-- Components declare cursor position via useDeclaredCursor({x, y, active}),
+-- which returns a tagger function. Apply the tagger to your Text element
+-- before returning it:
+--
+--   local tui = require "tui"
+--   function MyInput(props)
+--       local isFocused = tui.useFocus()
+--       local declareCursor = tui.useDeclaredCursor {
+--           x = props.caretColumn,
+--           y = 0,
+--           active = isFocused,
+--       }
+--       local el = tui.Text { "hello" }
+--       declareCursor(el)
+--       return el
+--   end
+--
+-- The tagger writes _cursor_offset and _cursor_focused metadata onto the
+-- element. After layout, find_cursor() in init.lua resolves these to
+-- absolute screen coordinates using the element's Yoga rect.
+--
+-- This matches Ink's useDeclaredCursor:
+--   https://github.com/vadimdemedes/ink/blob/master/src/hooks/use-declared-cursor.ts
+-- Ink uses a ref callback + CursorDeclarationContext; we use direct
+-- element tagging (simpler, no context or nodeCache needed).
 
 local M = {}
 
-local pending_col, pending_row = nil, nil
+--- useDeclaredCursor({x, y, active}) -> tagger function
+-- Declares a cursor position within the component's output element.
+--
+-- Parameters (table):
+--   x      - column offset within the element (0-based, display width)
+--   y      - row offset within the element (0-based; single-line inputs use 0)
+--   active - whether this declaration is currently active
+--
+-- Returns a function that tags a Text element with cursor metadata.
+-- Only call the tagger when active=true; inactive declarations leave
+-- the element untagged so a sibling can claim the cursor.
+function M.useDeclaredCursor(opts)
+    local x = opts.x or 0
+    local y = opts.y or 0
+    local active = opts.active
 
-function M.set(col, row)
-    pending_col, pending_row = col, row
-end
+    if active then
+        return function(el)
+            el._cursor_offset = x
+            el._cursor_focused = true
+        end
+    end
 
-function M.consume()
-    local c, r = pending_col, pending_row
-    pending_col, pending_row = nil, nil
-    return c, r
-end
-
-function M._peek()
-    return pending_col, pending_row
+    -- Inactive: no-op tagger
+    return function() end
 end
 
 return M
