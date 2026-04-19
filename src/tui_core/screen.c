@@ -118,6 +118,10 @@ typedef struct {
     int  virt_x, virt_y;   /* virtual cursor after cursor_restore (0-based) */
     int  display_x, display_y; /* declared TextInput cursor (0-based; -1 = none) */
     int  has_display;       /* 1 if display_x/y is valid */
+    /* Damage tracking: rightmost column written per row in next/prev buffers.
+     * -1 means the row was not touched this frame (skip in incremental diff). */
+    int *dirty_xmax;        /* next buffer: max x written per row */
+    int *prev_xmax;         /* prev buffer: max x written last diff */
 } screen_t;
 
 #define SCREEN_MT "tui_core.screen"
@@ -225,6 +229,13 @@ check_screen(lua_State *L, int idx) {
  * two packed bytes (fg_bg, attrs) directly; this module consumes them
  * unchanged. See ATTR_* macros above for the bit layout. */
 
+/* Initialize dirty_xmax array to -1 (all rows clean). */
+static void
+dirty_xmax_init(int *arr, int h) {
+    /* memset with 0xFF gives 0xFFFFFFFF = -1 for 32-bit int (two's complement). */
+    memset(arr, 0xFF, (size_t)h * sizeof(int));
+}
+
 /* ── Lua API: new / size / resize / invalidate / clear / __gc ── */
 
 static int
@@ -248,6 +259,17 @@ lnew(lua_State *L) {
     }
     fill_space(s->next, (int)ncells);
     fill_space(s->prev, (int)ncells);
+    s->dirty_xmax = (int *)malloc((size_t)s->h * sizeof(int));
+    s->prev_xmax  = (int *)malloc((size_t)s->h * sizeof(int));
+    if (!s->dirty_xmax || !s->prev_xmax) {
+        free(s->next); free(s->prev);
+        free(s->dirty_xmax); free(s->prev_xmax);
+        s->next = s->prev = NULL;
+        s->dirty_xmax = s->prev_xmax = NULL;
+        luaL_error(L, "screen.new: out of memory");
+    }
+    dirty_xmax_init(s->dirty_xmax, s->h);
+    dirty_xmax_init(s->prev_xmax, s->h);
     s->prev_valid = 0;
     s->mode = SCREEN_MODE_ALT;
     s->virt_x = 0; s->virt_y = 0;
@@ -283,6 +305,14 @@ lresize(lua_State *L) {
     s->prev = np;
     s->w = (int)w;
     s->h = (int)h;
+    /* Realloc damage tracking arrays (height may have changed). */
+    int *nd = (int *)realloc(s->dirty_xmax, (size_t)s->h * sizeof(int));
+    int *pd = (int *)realloc(s->prev_xmax,  (size_t)s->h * sizeof(int));
+    if (!nd || !pd) luaL_error(L, "screen.resize: out of memory");
+    s->dirty_xmax = nd;
+    s->prev_xmax  = pd;
+    dirty_xmax_init(s->dirty_xmax, s->h);
+    dirty_xmax_init(s->prev_xmax,  s->h);
     fill_space(s->next, (int)ncells);
     fill_space(s->prev, (int)ncells);
     slab_reset(&s->next_slab);
@@ -305,6 +335,7 @@ lclear(lua_State *L) {
     screen_t *s = check_screen(L, 1);
     fill_space(s->next, s->w * s->h);
     slab_reset(&s->next_slab);
+    dirty_xmax_init(s->dirty_xmax, s->h);
     return 0;
 }
 
@@ -343,6 +374,12 @@ put_cell(screen_t *s, int x, int y,
     c->width = (uint8_t)cw;
     c->fg_bg = fg_bg;
     c->attrs = attrs;
+
+    /* Track rightmost column written for damage-based row skipping in diff. */
+    {
+        int rx = x + cw - 1;
+        if (rx > s->dirty_xmax[y]) s->dirty_xmax[y] = rx;
+    }
 
     if (cw == 2) {
         cell_t *tail = cell_at(s->next, s->w, x + 1, y);
@@ -760,17 +797,19 @@ diff_alt(screen_t *s, bytes_t *out) {
              * style the last cell set — which is what the user intended. */
         }
     } else {
-        /* Per-row segment-merge. Scan each row left-to-right tracking a
-         * "run" of cells that belong to the current emitted segment. A new
-         * changed cell either extends the current run (possibly jumping
-         * over up to MERGE_GAP unchanged cells whose bytes we include to
-         * bridge the gap) or terminates the current run and starts a new
-         * one after emitting a fresh CUP. */
+        /* Per-row segment-merge. Only scan rows that have changes in either
+         * next (dirty_xmax >= 0) or prev (prev_xmax >= 0).  Within each
+         * dirty row, only scan up to the rightmost relevant column so that
+         * trailing unchanged blank cells are never compared. */
         for (int y = 0; y < s->h; y++) {
+            int dx = s->dirty_xmax[y];
+            int px = s->prev_xmax[y];
+            if (dx < 0 && px < 0) continue;  /* row untouched in both frames */
+            int x_end = (dx > px ? dx : px) + 1;
             int run_start = -1;      /* x of first changed cell in current run */
             int last_change = -1;    /* x of last changed cell emitted so far */
 
-            for (int x = 0; x < s->w; x++) {
+            for (int x = 0; x < x_end; x++) {
                 const cell_t *cn = cell_at(s->next, s->w, x, y);
                 const cell_t *cp = cell_at(s->prev, s->w, x, y);
                 int changed = !cell_eq(cn, &s->next_slab, cp, &s->prev_slab);
@@ -852,6 +891,13 @@ diff_alt(screen_t *s, bytes_t *out) {
      * produces the same state; doing it here lets `rows()` and repeated
      * `diff()` calls behave deterministically when paint isn't re-run. */
     fill_space(s->next, s->w * s->h);
+    /* Swap dirty tracking: prev_xmax = what was just rendered; reset dirty_xmax. */
+    {
+        int *tmp = s->prev_xmax;
+        s->prev_xmax  = s->dirty_xmax;
+        s->dirty_xmax = tmp;
+        dirty_xmax_init(s->dirty_xmax, s->h);
+    }
     s->prev_valid = 1;
 }
 
@@ -941,12 +987,18 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
             }
         }
     } else {
-        /* Segment-merge incremental diff with relative moves instead of CUP. */
+        /* Segment-merge incremental diff with relative moves instead of CUP.
+         * Skip rows untouched in both next and prev; within dirty rows only
+         * scan up to the rightmost relevant column. */
         for (int y = 0; y < s->h; y++) {
+            int dx = s->dirty_xmax[y];
+            int px = s->prev_xmax[y];
+            if (dx < 0 && px < 0) continue;
+            int x_end = (dx > px ? dx : px) + 1;
             int run_start = -1;
             int last_change = -1;
 
-            for (int x = 0; x < s->w; x++) {
+            for (int x = 0; x < x_end; x++) {
                 const cell_t *cn = cell_at(s->next, s->w, x, y);
                 const cell_t *cp = cell_at(s->prev, s->w, x, y);
                 int changed = !cell_eq(cn, &s->next_slab, cp, &s->prev_slab);
@@ -1024,6 +1076,13 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
     s->next_slab = tmp_slab;
     slab_reset(&s->next_slab);
     fill_space(s->next, s->w * s->h);
+    /* Swap dirty tracking arrays. */
+    {
+        int *tmp = s->prev_xmax;
+        s->prev_xmax  = s->dirty_xmax;
+        s->dirty_xmax = tmp;
+        dirty_xmax_init(s->dirty_xmax, s->h);
+    }
     s->prev_valid = 1;
 }
 
@@ -1186,6 +1245,8 @@ lgc(lua_State *L) {
     slab_free(&s->next_slab);
     slab_free(&s->prev_slab);
     row_pool_free(&s->rows);
+    free(s->dirty_xmax); s->dirty_xmax = NULL;
+    free(s->prev_xmax);  s->prev_xmax  = NULL;
     return 0;
 }
 

@@ -15,6 +15,21 @@ local M = {}
 
 -- Map our friendly Box prop names to yoga style keys.
 -- Most keys pass through unchanged; only a couple need translation.
+-- Hoisted to module level so the table is created once, not per-node per-frame.
+local PASSTHROUGH_KEYS = {
+    "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
+    "flexGrow", "flexShrink", "flexBasis", "flexDirection", "flexWrap",
+    "justifyContent", "alignItems", "alignContent", "alignSelf",
+    "margin", "marginTop", "marginBottom", "marginLeft", "marginRight",
+    "marginX", "marginY",
+    "padding", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight",
+    "paddingX", "paddingY",
+    "borderTop", "borderBottom", "borderLeft", "borderRight",
+    "gap", "rowGap", "columnGap",
+    "overflow", "boxSizing",
+    "display", "position", "top", "bottom", "left", "right",
+}
+
 local function apply_box_style(node, props)
     local style = {}
 
@@ -26,20 +41,7 @@ local function apply_box_style(node, props)
 
     -- pass-through keys that map 1:1 to luayoga style names
     -- Note: Yoga binding only accepts integers (not floats or percentages)
-    local passthrough = {
-        "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
-        "flexGrow", "flexShrink", "flexBasis", "flexDirection", "flexWrap",
-        "justifyContent", "alignItems", "alignContent", "alignSelf",
-        "margin", "marginTop", "marginBottom", "marginLeft", "marginRight",
-        "marginX", "marginY",
-        "padding", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight",
-        "paddingX", "paddingY",
-        "borderTop", "borderBottom", "borderLeft", "borderRight",
-        "gap", "rowGap", "columnGap",
-        "overflow", "boxSizing",
-        "display", "position", "top", "bottom", "left", "right",
-    }
-    for _, k in ipairs(passthrough) do
+    for _, k in ipairs(PASSTHROUGH_KEYS) do
         if props[k] ~= nil then
             -- arrays like {1,2} become "1 2" for luayoga multi-value syntax
             -- (e.g., margin = {1, 2} means top/bottom=1, left/right=2)
