@@ -1,3 +1,9 @@
+#if !defined(_WIN32) && !defined(__APPLE__)
+#    ifndef _POSIX_C_SOURCE
+#        define _POSIX_C_SOURCE 199309L
+#    endif
+#endif
+
 #include <lua.h>
 #include <lauxlib.h>
 #include <stdint.h>
