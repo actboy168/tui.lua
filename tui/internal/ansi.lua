@@ -431,6 +431,15 @@ M.enableFocusEvents  = ESC .. "[?1004h"
 M.disableFocusEvents = ESC .. "[?1004l"
 
 -- ---------------------------------------------------------------------------
+-- Terminal title (OSC 0/2)
+
+--- Set terminal window and tab title. Returns the OSC escape sequence.
+-- OSC 0 sets both the icon name and window title simultaneously.
+function M.setTitle(title)
+    return ESC .. "]0;" .. (title or "") .. _osc_term
+end
+
+-- ---------------------------------------------------------------------------
 -- SGR
 
 M.resetSgr = ESC .. "[0m"

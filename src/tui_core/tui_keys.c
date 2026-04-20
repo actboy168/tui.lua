@@ -101,6 +101,8 @@ static const char* csi_final_name(char c) {
         case 'H': return "home";
         case 'F': return "end";
         case 'Z': return "backtab"; /* shift-tab in many terminals */
+        case 'I': return "focus_in";  /* DEC 1004: terminal gained focus */
+        case 'O': return "focus_out"; /* DEC 1004: terminal lost focus */
         default:  return NULL;
     }
 }

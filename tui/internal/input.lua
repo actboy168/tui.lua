@@ -30,6 +30,10 @@ local _broadcast = bus_mod.new()
 -- Paste channel (usePaste subscribers).
 local _paste_bus = bus_mod.new()
 
+-- Focus-event channel (useTerminalFocus subscribers).
+-- Receives the event name: "focus_in" or "focus_out".
+local _focus_bus = bus_mod.new()
+
 -- Bracketed-paste accumulator state (persists across dispatch() calls so
 -- multi-chunk pastes — rare but possible — are assembled correctly).
 local _pasting    = false
@@ -86,6 +90,11 @@ M.subscribe = _broadcast.subscribe
 -- Registers a paste handler. `fn(text)` is called with the full pasted text
 -- once a complete bracketed-paste sequence has been received.
 M.subscribe_paste = _paste_bus.subscribe
+
+--- subscribe_focus(fn) -> unsubscribe
+-- Registers a terminal-focus handler. `fn(event_name)` is called with
+-- "focus_in" or "focus_out" when the terminal gains/loses focus (DEC 1004).
+M.subscribe_focus = _focus_bus.subscribe
 
 --- debug_log: when non-nil, each dispatch() call appends a line to this file.
 -- Enable from Lua before tui.render:  require("tui.internal.input")._debug_log = "input_debug.txt"
@@ -174,6 +183,11 @@ function M.dispatch(bytes)
             end
             goto continue
         end
+        -- ── Terminal focus events (DEC 1004) ─────────────────────────────────
+        if ev.name == "focus_in" or ev.name == "focus_out" then
+            _focus_bus.dispatch(ev.name)
+            goto continue
+        end
         -- ── Normal key routing ───────────────────────────────────────────────
         if ev.ctrl and ev.name == "char"
             and (ev.input == "c" or ev.input == "d") then
@@ -205,6 +219,7 @@ end
 -- Introspection for tests.
 function M._handlers() return _broadcast._handlers() end
 function M._paste_handlers() return _paste_bus._handlers() end
+function M._focus_handlers() return _focus_bus._handlers() end
 
 --- Dispatch a single pre-built event table (for testing IME composing, etc.).
 -- Routes through the same pipeline as dispatch(), but skips key parsing.
@@ -238,6 +253,7 @@ end
 function M._reset()
     _broadcast._reset()
     _paste_bus._reset()
+    _focus_bus._reset()
     _pasting      = false
     _paste_buf    = {}
     _pending_bytes = ""

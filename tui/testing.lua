@@ -36,6 +36,7 @@ local resize_mod = require "tui.internal.resize"
 local focus_mod  = require "tui.internal.focus"
 local ansi_mod   = require "tui.internal.ansi"
 local hooks      = require "tui.internal.hooks"
+local tui_core   = require "tui_core"
 
 local M = {}
 
@@ -1015,6 +1016,33 @@ function M.capture_stderr(fn)
     capture_buffer = prev
     if not ok then error(err, 2) end
     return s
+end
+
+--- Capture raw bytes written to tui_core.terminal.write() during `fn`.
+--
+-- Some hooks (e.g. useTerminalTitle) write OSC / raw escape sequences
+-- directly via tui_core.terminal.write, which bypasses the harness fake
+-- terminal and therefore does not appear in h:ansi(). Wrap the relevant
+-- work in this helper to capture those writes for assertion.
+--
+-- Returns the concatenation of all bytes written during `fn`.
+-- The original write function is restored even if `fn` raises an error.
+-- Nested calls are supported; each level captures independently.
+--
+-- Example:
+--   local raw = testing.capture_writes(function()
+--       local h = testing.render(App, { cols = 20, rows = 1 })
+--       h:unmount()
+--   end)
+--   lt.assertTrue(raw:find("\x1b]0;MyTitle", 1, true) ~= nil)
+function M.capture_writes(fn)
+    local buf = {}
+    local orig = tui_core.terminal.write
+    tui_core.terminal.write = function(s) buf[#buf + 1] = s end
+    local ok, err = pcall(fn)
+    tui_core.terminal.write = orig
+    if not ok then error(err, 2) end
+    return table.concat(buf)
 end
 
 -- ---------------------------------------------------------------------------

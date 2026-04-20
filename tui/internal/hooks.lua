@@ -921,4 +921,54 @@ function M.useMeasure()
     return ref, size
 end
 
+-- ---------------------------------------------------------------------------
+-- useTerminalFocus() -> { focused: bool }
+--
+-- Subscribes to DEC 1004 terminal focus/blur events for the component's
+-- lifetime. Returns a state table with a single `focused` boolean field.
+-- Assumes focused = true on mount (the terminal window is usually in
+-- focus when the app starts).
+--
+-- Note: requires DEC 1004 to be enabled by the render loop (tui.render
+-- enables it automatically alongside bracketed-paste).
+
+local _terminal_focus_input_mod
+
+function M.useTerminalFocus()
+    if not _terminal_focus_input_mod then
+        _terminal_focus_input_mod = require "tui.internal.input"
+    end
+    assert(current, "useTerminalFocus called outside of a component render")
+    local state, setState = M.useState({ focused = true })
+    M.useEffect(function()
+        return _terminal_focus_input_mod.subscribe_focus(function(event_name)
+            setState({ focused = event_name == "focus_in" })
+        end)
+    end, {})
+    return state
+end
+
+-- ---------------------------------------------------------------------------
+-- useTerminalTitle(title)
+--
+-- Sets the terminal window/tab title (OSC 0) for the component's lifetime.
+-- Title is updated whenever `title` changes. On unmount the title is cleared
+-- to an empty string so the terminal reverts to its default.
+
+local _ansi_mod_for_title
+
+function M.useTerminalTitle(title)
+    assert(current, "useTerminalTitle called outside of a component render")
+    if not _ansi_mod_for_title then
+        _ansi_mod_for_title = require "tui.internal.ansi"
+    end
+    if not tui_core_mod then tui_core_mod = require "tui_core" end
+    M.useEffect(function()
+        tui_core_mod.terminal.write(_ansi_mod_for_title.setTitle(title or ""))
+        return function()
+            tui_core_mod.terminal.write(_ansi_mod_for_title.setTitle(""))
+        end
+    end, { title })
+end
+
 return M

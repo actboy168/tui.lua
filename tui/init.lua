@@ -104,6 +104,8 @@ M.useFocusManager = hooks.useFocusManager
 M.useDeclaredCursor = cursor_mod.useDeclaredCursor
 M.useMeasure     = hooks.useMeasure
 M.useErrorBoundary = hooks.useErrorBoundary
+M.useTerminalFocus = hooks.useTerminalFocus
+M.useTerminalTitle = hooks.useTerminalTitle
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
 M.setInterval = scheduler.setInterval
@@ -239,7 +241,7 @@ function M.render(root, opts)
     terminal.windows_vt_enable()
     terminal.set_raw(true)
     if interactive then
-        terminal.write(ansi.cursorHide() .. ansi.enableBracketedPaste)
+        terminal.write(ansi.cursorHide() .. ansi.enableBracketedPaste .. ansi.enableFocusEvents)
     end
 
     local rec_state    = reconciler.new()
@@ -377,7 +379,7 @@ function M.render(root, opts)
                 move_seq = ansi.cursorDown(dy) .. "\r"
             end
         end
-        terminal.write(ansi.disableBracketedPaste .. move_seq .. ansi.cursorShow() .. "\n")
+        terminal.write(ansi.disableBracketedPaste .. ansi.disableFocusEvents .. move_seq .. ansi.cursorShow() .. "\n")
     end
     terminal.set_raw(false)
 
