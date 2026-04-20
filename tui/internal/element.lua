@@ -86,7 +86,9 @@ end
 --   * element  — static tree rendered verbatim
 --   * function — invoked as `fallback(err, reset)` each time the boundary
 --                renders its fallback branch; must return an element (or
---                nil to render an empty box). `reset` is a stable closure
+--                nil to render an empty box). `err` is a table with fields
+--                `message` (the error value) and `trace` (debug.traceback
+--                string captured at throw time). `reset` is a stable closure
 --                that clears `caught_error` and schedules a redraw, letting
 --                children re-attempt. Throwing inside `fallback` falls back
 --                to an empty box (fatal prefix still propagates).

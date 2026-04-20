@@ -35,7 +35,6 @@ _暂无_
 
 ### 开发者体验
 
-- ErrorBoundary fallback 接收 `{message, trace}` 而不只是字符串（保留 `debug.traceback(err, 2)`）
 - `tui._VERSION` 字符串常量
 - `make.lua` 加 `lm:conf_debug` / `lm:conf_release` 区分（asan / NDEBUG 开关）
 - `testing.lua` `io.stderr` 全局替换改为生命周期受限的拦截（`render` 到 `unmount` 之间），避免并行测试风险
@@ -46,7 +45,6 @@ _暂无_
 - 并发 setState 稳定化循环边界（MAX_STABILIZE_PASSES）
 - 核心模块入门测试：`init.lua`、`renderer.lua`、`input.dispatch` 中间件链（pre → focus → broadcast）
 - 集成测试：实时监控仪表盘（useInterval + ProgressBar + Spinner）、终端缩放（useWindowSize + Box 动态 resize）
-- 测试 helpers 扩展：`make_form_app`、`make_async_app`、`with_dev_mode`、`assert_no_warnings`
 
 ### 架构改进
 

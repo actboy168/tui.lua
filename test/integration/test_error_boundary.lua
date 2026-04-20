@@ -415,8 +415,11 @@ function suite:test_fallback_function_receives_err_and_reset()
     local h = testing.render(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:frame(), "FN!!")
     lt.assertEquals(seen_reset_type, "function")
-    lt.assertEquals(type(seen_err) == "string" and seen_err:find("bang", 1, true) ~= nil, true,
-        "fallback should receive the original err, got: " .. tostring(seen_err))
+    lt.assertEquals(type(seen_err), "table",
+        "fallback should receive error table, got: " .. tostring(seen_err))
+    lt.assertNotEquals(seen_err.message:find("bang", 1, true), nil,
+        "error message should contain 'bang', got: " .. tostring(seen_err.message))
+    lt.assertNotNil(seen_err.trace, "error table should have a trace field")
     h:unmount()
 end
 
@@ -482,8 +485,10 @@ function suite:test_reset_then_rethrow_catches_new_error()
     -- Two error values delivered to fallback across the two trips.
     lt.assertEquals(#got_errs >= 2, true, "expected at least 2 fallback invocations, got " .. #got_errs)
     local last = got_errs[#got_errs]
-    lt.assertEquals(type(last) == "string" and last:find("second", 1, true) ~= nil, true,
-        "most recent err should be 'second', got: " .. tostring(last))
+    lt.assertEquals(type(last), "table",
+        "most recent err should be a table, got: " .. tostring(last))
+    lt.assertNotEquals(last.message:find("second", 1, true), nil,
+        "most recent err.message should be 'second', got: " .. tostring(last.message))
     h:unmount()
 end
 
@@ -576,8 +581,10 @@ function suite:test_useerrorboundary_sees_caught_error()
 
     local h = testing.render(App, { cols = 2, rows = 1 })
     lt.assertEquals(h:frame(), "fb")
-    lt.assertEquals(type(seen_err_in_fb) == "string" and seen_err_in_fb:find("observed", 1, true) ~= nil, true,
-        "useErrorBoundary should expose caught_error inside fallback subtree, got: " .. tostring(seen_err_in_fb))
+    lt.assertEquals(type(seen_err_in_fb), "table",
+        "useErrorBoundary should expose caught_error as table, got: " .. tostring(seen_err_in_fb))
+    lt.assertNotEquals(seen_err_in_fb.message:find("observed", 1, true), nil,
+        "caught_error.message should contain 'observed', got: " .. tostring(seen_err_in_fb.message))
     h:unmount()
 end
 

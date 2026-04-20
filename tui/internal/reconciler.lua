@@ -39,6 +39,17 @@ function M.is_fatal(err)
     return type(err) == "string" and err:sub(1, #FATAL_PREFIX) == FATAL_PREFIX
 end
 
+-- Message handler for xpcall: wraps the error string into a structured
+-- {message, trace} table so ErrorBoundary fallback receives both.
+-- Idempotent: already-wrapped tables are passed through unchanged so
+-- re-throws across nested boundaries don't double-wrap.
+-- Fatal errors are NOT wrapped — they bypass boundaries entirely.
+local function wrap_err(e)
+    if type(e) == "table" and e.message ~= nil then return e end
+    if type(e) == "string" and e:sub(1, #FATAL_PREFIX) == FATAL_PREFIX then return e end
+    return { message = e, trace = debug.traceback(e, 2) }
+end
+
 -- Pre-built numeric path suffixes to avoid tostring(i) + concat per child.
 local _NUM_SUFFIX = {}
 for _i = 1, 64 do _NUM_SUFFIX[_i] = "/" .. _i end
@@ -233,7 +244,7 @@ local function expand(state, element, path)
         state.boundary_stack[#state.boundary_stack + 1] = inst
 
         local out = { kind = "box", props = {}, children = {} }
-        local ok, err = pcall(function()
+        local ok, err = xpcall(function()
             dev_check_keys(state, path, element.children)
             local seen_keys = {}
             for i, c in ipairs(element.children or {}) do
@@ -243,7 +254,7 @@ local function expand(state, element, path)
                     out.children[#out.children + 1] = expanded
                 end
             end
-        end)
+        end, wrap_err)
 
         -- Always pop, even on error, to keep the stack balanced.
         state.boundary_stack[#state.boundary_stack] = nil
@@ -362,9 +373,10 @@ end
 --
 -- Fallback shapes handled here:
 --   * nil      -> empty box
---   * function -> called as fallback(err, reset); return value treated as
---                 an element (expanded recursively). Throwing is caught;
---                 fatal prefix rethrows.
+--   * function -> called as fallback(err, reset) where err is a table
+--                 {message, trace}; return value treated as an element
+--                 (expanded recursively). Throwing is caught; fatal prefix
+--                 rethrows.
 --   * element  -> expanded directly
 function render_boundary_fallback(state, element, path, err)
     local fb = element.fallback

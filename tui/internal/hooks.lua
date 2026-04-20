@@ -17,6 +17,17 @@ local scheduler = require "tui.internal.scheduler"
 
 local _SOURCE = debug.getinfo(1, "S").source
 
+-- Message handler for xpcall: wraps error into {message, trace} so
+-- boundaries receive a structured object rather than a bare string.
+-- Idempotent so re-throws across nested boundaries don't double-wrap.
+-- Fatal errors (with the [tui:fatal] prefix) are NOT wrapped — they bypass
+-- boundaries entirely, so wrapping adds no value and complicates callers.
+local function wrap_err(e)
+    if type(e) == "table" and e.message ~= nil then return e end
+    if type(e) == "string" and e:sub(1, 12) == "[tui:fatal] " then return e end
+    return { message = e, trace = debug.traceback(e, 2) }
+end
+
 local M = {}
 
 -- ---------------------------------------------------------------------------
@@ -173,8 +184,9 @@ local function route_effect_error(instance, err)
         scheduler.requestRedraw()
         return
     end
-    -- No boundary in scope: let it propagate to the framework pcall.
-    error(err, 0)
+    -- No boundary: unwrap to the original message string so that callers
+    -- above (framework pcall, test pcall) see a plain error, not a table.
+    error(type(err) == "table" and err.message or err, 0)
 end
 
 -- Wrap a user-supplied event handler (useInput, useFocus on_input) so any
@@ -188,7 +200,7 @@ end
 -- input handlers are fire-and-forget — we just preserve nil.
 local function wrap_handler_for_boundary(instance, fn)
     return function(...)
-        local ok, err = pcall(fn, ...)
+        local ok, err = xpcall(fn, wrap_err, ...)
         if not ok then route_effect_error(instance, err) end
     end
 end
@@ -217,10 +229,10 @@ function M._flush_effects(instance)
             if slot.cleanup then
                 local old = slot.cleanup
                 slot.cleanup = nil
-                local ok, err = pcall(old)
+                local ok, err = xpcall(old, wrap_err)
                 if not ok then route_effect_error(instance, err) end
             end
-            local ok, result = pcall(fx.fn)
+            local ok, result = xpcall(fx.fn, wrap_err)
             if ok then
                 slot.cleanup = result or nil
             else
@@ -247,7 +259,7 @@ function M._unmount(instance)
         if slot and slot.cleanup then
             local fn = slot.cleanup
             slot.cleanup = nil
-            local ok, err = pcall(fn)
+            local ok, err = xpcall(fn, wrap_err)
             if not ok then
                 local rec = ensure_reconciler()
                 if rec.is_fatal(err) then error(err, 0) end
