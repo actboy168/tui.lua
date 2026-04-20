@@ -41,6 +41,9 @@ lm:lua_dll "tui_core" {
     sources = {
         "src/tui_core/*.c",
     },
+    windows = {
+        links = { "ntdll" },
+    },
 }
 
 lm:default { "yoga", "tui_core" }

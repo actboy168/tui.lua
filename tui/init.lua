@@ -27,24 +27,8 @@ local cursor_mod = require "tui.internal.cursor"
 local ansi       = require "tui.internal.ansi"
 local text_mod   = require "tui.internal.text"
 local tui_core   = require "tui_core"
-local platform   = require "tui.platform"
 
 local terminal = tui_core.terminal
-
--- ---------------------------------------------------------------------------
--- Default scheduler backend (platform-agnostic).
---
--- The scheduler itself is platform-agnostic; here we install sensible defaults
--- so out-of-the-box `tui.render(App)` just works. Production integrators may
--- call `tui.configureScheduler{ now=..., sleep=... }` before `tui.render` to
--- plug in ltask / libuv / their own event loop.
-local function install_default_backend()
-    scheduler.configure {
-        now   = function() return platform.monotonic() end,
-        sleep = function(ms) platform.sleep(ms) end,
-    }
-end
-install_default_backend()
 
 local M = {}
 

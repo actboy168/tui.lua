@@ -24,8 +24,7 @@ local M = {}
 local <const> ESC = "\x1b"
 local <const> BEL = "\007"
 local <const> ST  = ESC .. "\\"
-local platform = require "tui.platform"
-local <const> IS_WINDOWS = platform.os() == "windows"
+local <const> IS_WINDOWS = package.config:sub(1,1) == "\\"
 
 -- ---------------------------------------------------------------------------
 -- Terminal type detection

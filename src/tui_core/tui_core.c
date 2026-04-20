@@ -40,11 +40,12 @@ int tui_open_wcwidth(lua_State *L);
 int tui_open_screen(lua_State *L);
 int tui_open_text(lua_State *L);
 int tui_open_text_extra(lua_State *L);
+int tui_open_time(lua_State *L);
 
 DLL_EXPORT LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
     luaL_checkversion(L);
-    lua_createtable(L, 0, 5);
+    lua_createtable(L, 0, 6);
 
     /* terminal sub-table */
     tui_open_terminal(L);
@@ -66,6 +67,10 @@ luaopen_tui_core(lua_State *L) {
     tui_open_text(L);
     tui_open_text_extra(L);
     lua_setfield(L, -2, "text");
+
+    /* time sub-table (monotonic clock + sleep) */
+    tui_open_time(L);
+    lua_setfield(L, -2, "time");
 
     return 1;
 }

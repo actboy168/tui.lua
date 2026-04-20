@@ -7,30 +7,27 @@
 --
 -- PLATFORM INDEPENDENCE
 -- ---------------------
--- This module does **not** require any platform/runtime library directly.
--- All time/sleep primitives go through an injectable backend:
+-- This module ships with built-in defaults from tui_core.time so it
+-- works out of the box.  The backend can still be overridden via configure():
 --
 --   scheduler.configure {
 --       now   = function() return <monotonic time in milliseconds (number)> end,
 --       sleep = function(ms) ... end,   -- yield/block for ms milliseconds
 --   }
 --
--- `tui/init.lua` installs a default backend built on bee.* for out-of-the-box
--- use. Production integrators (ltask / libuv / custom event loop) should call
--- `configure` with their own implementations before `tui.render`.
---
--- Rationale: the framework targets multiple host runtimes. Hard-coding
--- bee.thread.sleep would prevent integration with other schedulers that have
--- their own yielding semantics. Keep this file bee-free.
+-- Production integrators (ltask / libuv / custom event loop) should call
+-- configure() with their own implementations before tui.render.
+
+local tui_core = require "tui_core"
 
 local M = {}
 
 -- ---------------------------------------------------------------------------
--- Backend (injectable)
+-- Backend (injectable; defaults to tui_core.time)
 
 local backend = {
-    now   = nil,  -- function() -> ms
-    sleep = nil,  -- function(ms)
+    now   = tui_core.time.now,
+    sleep = tui_core.time.sleep,
 }
 
 function M.configure(opts)
@@ -40,12 +37,10 @@ function M.configure(opts)
 end
 
 local function now_ms()
-    assert(backend.now, "scheduler.configure{now=...} not set")
     return backend.now()
 end
 
 local function sleep_ms(ms)
-    assert(backend.sleep, "scheduler.configure{sleep=...} not set")
     backend.sleep(ms)
 end
 
