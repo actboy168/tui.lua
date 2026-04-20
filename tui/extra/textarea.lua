@@ -19,7 +19,7 @@
 -- Key bindings:
 --   Printable chars / paste  — insert at caret
 --   Enter / Ctrl+Enter       — call onSubmit (does not insert newline)
---   Shift+Enter              — insert newline
+--   Shift+Enter              — insert newline (requires Kitty Keyboard Protocol; no-op on other terminals)
 --   Backspace / Delete       — delete char; merges lines when at boundary
 --   Left / Right             — move within and across lines
 --   Up / Down                — move to the same visual column on prev/next line

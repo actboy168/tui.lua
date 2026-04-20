@@ -1,15 +1,18 @@
--- examples/chat_mock.lua — simulated AI chat UI.
+-- examples/chat.lua — simulated AI chat UI.
 --
 -- Demonstrates:
 --   * <Static> for append-only message history (rows don't redraw once set)
 --   * <Textarea> with bracketed-paste multi-line support
 --   * useInterval to stream bot reply character-by-character
 --
--- Keys: Ctrl+Enter or Shift+Enter to submit, Enter for newline, Ctrl+C / Ctrl+D to quit.
+-- Keys: Enter or Ctrl+Enter to submit, Shift+Enter for newline (KKP terminals only), Ctrl+C / Ctrl+D to quit.
 
 local tui = require "tui"
 
--- Uncomment the next two lines to capture raw input bytes for debugging:
+-- Debug helpers (uncomment to diagnose KKP / input issues):
+-- local ansi = require "tui.internal.ansi"
+-- io.stderr:write("terminal_type=" .. ansi.terminal_type
+--     .. " kkp=" .. tostring(ansi.supports_kitty_keyboard) .. "\n")
 -- require("tui.internal.input")._debug_log = "input_debug.txt"
 -- io.open("input_debug.txt", "w"):close()  -- truncate on start
 
@@ -103,7 +106,7 @@ local function App()
                 value    = input,
                 onChange = setInput,
                 onSubmit = submit,
-                placeholder = "type a message — Enter for newline, Ctrl+Enter or Shift+Enter to send",
+                placeholder = "type a message — Enter to send, Shift+Enter for newline (kitty/wezterm/…)",
             },
         },
     }

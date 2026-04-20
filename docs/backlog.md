@@ -84,6 +84,17 @@ _暂无_
 - `P2` **Windows 终端兼容**：检测并规避 conhost cursor-up viewport yank bug；其他 Windows Terminal 特定缺陷处理（C + Lua）
 - `P2` **tmux/screen 穿透**：DCS 封装，使 OSC/DCS 序列在 tmux multiplexer 下正确透传（C + Lua）
 
+### Kitty Keyboard Protocol 扩展（基础 KKP 已实现）
+
+基础 KKP（flags=3：disambiguate + event types）已完成，以下是后续可选增强：
+
+- `P3` **KKP flag 4 — Alternate keys**：上报"shifted key"与"base layout key"子字段，用于国际键盘布局的快捷键匹配（如 Cyrillic Ctrl+С → Ctrl+c）；需要扩展 `CSI u` 解析和事件表
+- `P3` **KKP flag 8 — Report all keys as escape codes**：所有键（含普通字符）均以 `CSI u` 上报；解锁 press/repeat/release 对文本键的完整支持，是游戏类 TUI（WASD 移动）的基础；与现有 `name="char"` 路径冲突，需设计 API 兼容策略
+- `P3` **KKP flag 16 — Associated text**：随 `CSI u` 附带关联文本码点；依赖 flag 8，单独无意义
+- `P3` **tmux KKP 穿透**：tmux ≥ 3.5 支持 KKP，但需在 `tmux.conf` 中设置 `allow-passthrough on` 并使用 DCS 封装；检测并自动透传（C + Lua）
+- `P3` **`useInput` 订阅 release/repeat 事件**：当前 `subscribe` 回调接收全部事件，应用需自行过滤 `event_type`；可扩展为 `useKeyDown` / `useKeyUp` / `useKeyRepeat` 等语义化 hook
+- `P3` **`request_keyboard_flags(flags)` 引用计数**：类比 `request_mouse_level`，允许组件按需 push/pop KKP flags，而非 session 级全局设置
+
 ### 示例扩充
 
 - `P2` `error.lua`：ErrorBoundary 错误捕获与恢复流程展示

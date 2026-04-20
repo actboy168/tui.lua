@@ -322,3 +322,70 @@ function suite:test_dispatch_event_with_focus()
     focus._reset()
 end
 
+-- ============================================================================
+-- Kitty Keyboard Protocol: release event filtering
+-- ============================================================================
+
+function suite:test_kkp_release_events_are_suppressed()
+    -- With KKP flags=3, terminal sends press+repeat+release for every key.
+    -- Release events must NOT reach components (would cause double-triggers).
+    local events = {}
+    input.subscribe(function(str, key)
+        events[#events + 1] = key
+    end)
+
+    -- Simulate a KKP sequence for 'a': press, repeat, release
+    -- \x1b[97;1:1u = press, \x1b[97;1:2u = repeat, \x1b[97;1:3u = release
+    input.dispatch("\x1b[97;1:1u\x1b[97;1:2u\x1b[97;1:3u")
+
+    -- Only press and repeat should arrive; release is filtered
+    lt.assertEquals(#events, 2)
+    lt.assertEquals(events[1].event_type, "press")
+    lt.assertEquals(events[2].event_type, "repeat")
+end
+
+function suite:test_kkp_enter_release_not_dispatched()
+    -- Regression: Enter release must not trigger a second "submit-like" action.
+    local count = 0
+    input.subscribe(function(str, key)
+        if key.name == "enter" then count = count + 1 end
+    end)
+
+    -- press + release of Enter via KKP
+    input.dispatch("\x1b[13;1:1u\x1b[13;1:3u")
+
+    lt.assertEquals(count, 1)  -- only one enter event (press)
+end
+
+function suite:test_kkp_shift_enter_release_not_dispatched()
+    -- Regression: Shift+Enter release must not insert a second newline.
+    local count = 0
+    input.subscribe(function(str, key)
+        if key.name == "enter" and key.shift then count = count + 1 end
+    end)
+
+    -- Shift+Enter press + release  (mod=2 = shift)
+    input.dispatch("\x1b[13;2:1u\x1b[13;2:3u")
+
+    lt.assertEquals(count, 1)  -- only the press
+end
+
+function suite:test_kkp_release_suppressed_after_middleware()
+    -- Middleware still sees release events; suppression happens AFTER middleware.
+    local mw_saw_release = false
+    input.use_middleware(function(ev)
+        if ev.event_type == "release" then mw_saw_release = true end
+        return false  -- don't consume
+    end)
+
+    local subscriber_saw_release = false
+    input.subscribe(function(str, key)
+        if key.event_type == "release" then subscriber_saw_release = true end
+    end)
+
+    input.dispatch("\x1b[97;1:3u")  -- release of 'a'
+
+    lt.assertEquals(mw_saw_release,         true)   -- middleware saw it
+    lt.assertEquals(subscriber_saw_release, false)  -- subscriber did NOT
+end
+

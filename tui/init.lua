@@ -241,10 +241,24 @@ function M.render(root, opts)
     opts = opts or {}
     local interactive = ansi.interactive()
 
+    -- Resolve whether Kitty Keyboard Protocol should be used.
+    -- opts.kitty_keyboard = true  → force-enable (overrides detection)
+    -- opts.kitty_keyboard = false → force-disable
+    -- opts.kitty_keyboard = nil   → use auto-detected value
+    local use_kkp
+    if opts.kitty_keyboard ~= nil then
+        use_kkp = opts.kitty_keyboard
+    else
+        use_kkp = ansi.supports_kitty_keyboard
+    end
+
     terminal.windows_vt_enable()
     terminal.set_raw(true)
     if interactive then
         terminal.write(ansi.cursorHide() .. ansi.enableBracketedPaste .. ansi.enableFocusEvents)
+        if use_kkp then
+            terminal.write(ansi.kittyKeyboard.push)
+        end
         -- Wire terminal.write as the mouse mode sequence emitter.
         -- Mouse modes are enabled on demand (ref-counted via request_mouse_level).
         input_mod.set_mouse_mode_writer(terminal.write)
@@ -390,6 +404,9 @@ function M.render(root, opts)
             end
         end
         terminal.write(ansi.disableBracketedPaste .. ansi.disableFocusEvents .. move_seq .. ansi.cursorShow() .. "\n")
+        if use_kkp then
+            terminal.write(ansi.kittyKeyboard.pop)
+        end
         -- Detach the mouse mode writer; mouse level is already 0 after releases above.
         input_mod.set_mouse_mode_writer(nil)
     end

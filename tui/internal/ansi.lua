@@ -55,10 +55,13 @@ local function detect()
         return "mintty"
     end
 
-    if IS_WINDOWS and os.getenv("WT_SESSION") then
+    -- WT_SESSION is set by Windows Terminal in both native Windows processes
+    -- and WSL shells (where IS_WINDOWS is false), so check it unconditionally.
+    if os.getenv("WT_SESSION") then
         return "windows_terminal"
     end
 
+    -- WEZTERM_EXECUTABLE is Windows-only; in WSL, TERM_PROGRAM="WezTerm" fires first.
     if IS_WINDOWS and (os.getenv("WEZTERM_EXECUTABLE") or "") ~= "" then
         return "wezterm"
     end
@@ -143,6 +146,17 @@ M.color_level = detect_color_level()
 local CAPABILITIES = {
     iterm2  = { ime_osc1337 = true },
     kitty   = { osc_st      = true },
+}
+
+-- Terminals known to support the Kitty Keyboard Protocol.
+local KITTY_KBD_TERMS = {
+    kitty            = true,
+    wezterm          = true,
+    ghostty          = true,
+    foot             = true,
+    alacritty        = true,
+    iterm2           = true,
+    windows_terminal = true,
 }
 
 local function check_sync_output(term_type)
@@ -230,6 +244,11 @@ do
         _sync_begin = ""
         _sync_end   = ""
     end
+
+    -- Kitty Keyboard Protocol support flag (read-only after module load).
+    M.supports_kitty_keyboard = KITTY_KBD_TERMS[term_type] or false
+    -- Detected terminal type (read-only, useful for debugging).
+    M.terminal_type = term_type
 end
 
 -- ---------------------------------------------------------------------------
@@ -447,6 +466,15 @@ M.mouseMode = {
     drag_off  = ESC .. "[?1002l",
     any_on    = ESC .. "[?1003h",
     any_off   = ESC .. "[?1003l",
+}
+
+-- Kitty Keyboard Protocol sequences.
+-- Push flags=3 (disambiguate + event-types) onto the terminal's kbd-mode stack.
+-- Pop restores whatever mode was active before the push.
+-- Only send these when ansi.supports_kitty_keyboard is true.
+M.kittyKeyboard = {
+    push = ESC .. "[>3u",
+    pop  = ESC .. "[<u",
 }
 
 -- ---------------------------------------------------------------------------

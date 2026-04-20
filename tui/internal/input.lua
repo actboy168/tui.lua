@@ -236,6 +236,12 @@ local function _process_event(ev)
     for _, mw in ipairs(_middlewares) do
         if mw(ev) then return false end
     end
+    -- ── Kitty Keyboard Protocol: suppress release events ──────────────────
+    -- With flags=3 (event types enabled), the terminal sends press, repeat,
+    -- *and* release events.  Most TUI components only care about press/repeat.
+    -- Filter releases here so no component receives accidental double-triggers.
+    -- Middlewares registered above still see all events (advanced use).
+    if ev.event_type == "release" then return false end
     -- ── Terminal focus events (DEC 1004) ─────────────────────────────────
     if ev.name == "focus_in" or ev.name == "focus_out" then
         _focus_bus.dispatch(ev.name)

@@ -157,7 +157,238 @@ static void push_mouse_event(lua_State *L, int out_idx, int *emitted,
     lua_rawseti(L, out_idx, ++(*emitted));
 }
 
-/* Map CSI final byte (after optional "1;mod") to a key name. */
+/* ── Kitty Keyboard Protocol (KKP) ───────────────────────────── */
+
+/*
+ * Map a Kitty keyboard protocol Unicode codepoint to a key name string.
+ * Returns NULL for printable ASCII (32-126) — caller should use the
+ * character itself as the "input" field rather than a named key.
+ * Returns "kitty_key" for unknown private-use codepoints.
+ */
+static const char *kitty_key_name(int cp) {
+    switch (cp) {
+        /* C0 / DEL — retained as named keys even in KKP mode */
+        case 27:    return "escape";
+        case 13:    return "enter";
+        case 9:     return "tab";
+        case 127:   return "backspace";
+        /* Lock / system keys */
+        case 57358: return "caps_lock";
+        case 57359: return "scroll_lock";
+        case 57360: return "num_lock";
+        case 57361: return "print_screen";
+        case 57362: return "pause";
+        case 57363: return "menu";
+        /* F13–F35 */
+        case 57376: return "f13";
+        case 57377: return "f14";
+        case 57378: return "f15";
+        case 57379: return "f16";
+        case 57380: return "f17";
+        case 57381: return "f18";
+        case 57382: return "f19";
+        case 57383: return "f20";
+        case 57384: return "f21";
+        case 57385: return "f22";
+        case 57386: return "f23";
+        case 57387: return "f24";
+        case 57388: return "f25";
+        case 57389: return "f26";
+        case 57390: return "f27";
+        case 57391: return "f28";
+        case 57392: return "f29";
+        case 57393: return "f30";
+        case 57394: return "f31";
+        case 57395: return "f32";
+        case 57396: return "f33";
+        case 57397: return "f34";
+        case 57398: return "f35";
+        /* Keypad keys */
+        case 57399: return "kp_0";
+        case 57400: return "kp_1";
+        case 57401: return "kp_2";
+        case 57402: return "kp_3";
+        case 57403: return "kp_4";
+        case 57404: return "kp_5";
+        case 57405: return "kp_6";
+        case 57406: return "kp_7";
+        case 57407: return "kp_8";
+        case 57408: return "kp_9";
+        case 57409: return "kp_decimal";
+        case 57410: return "kp_divide";
+        case 57411: return "kp_multiply";
+        case 57412: return "kp_subtract";
+        case 57413: return "kp_add";
+        case 57414: return "kp_enter";
+        case 57415: return "kp_equal";
+        case 57416: return "kp_separator";
+        case 57417: return "kp_left";
+        case 57418: return "kp_right";
+        case 57419: return "kp_up";
+        case 57420: return "kp_down";
+        case 57421: return "kp_page_up";
+        case 57422: return "kp_page_down";
+        case 57423: return "kp_home";
+        case 57424: return "kp_end";
+        case 57425: return "kp_insert";
+        case 57426: return "kp_delete";
+        case 57427: return "kp_begin";
+        /* Media keys */
+        case 57428: return "media_play";
+        case 57429: return "media_pause";
+        case 57430: return "media_play_pause";
+        case 57431: return "media_reverse";
+        case 57432: return "media_stop";
+        case 57433: return "media_fast_forward";
+        case 57434: return "media_rewind";
+        case 57435: return "media_track_next";
+        case 57436: return "media_track_previous";
+        case 57437: return "media_record";
+        case 57438: return "lower_volume";
+        case 57439: return "raise_volume";
+        case 57440: return "mute_volume";
+        /* Modifier keys */
+        case 57441: return "left_shift";
+        case 57442: return "left_ctrl";
+        case 57443: return "left_alt";
+        case 57444: return "left_super";
+        case 57445: return "left_hyper";
+        case 57446: return "left_meta";
+        case 57447: return "right_shift";
+        case 57448: return "right_ctrl";
+        case 57449: return "right_alt";
+        case 57450: return "right_super";
+        case 57451: return "right_hyper";
+        case 57452: return "right_meta";
+        case 57453: return "iso_level3_shift";
+        case 57454: return "iso_level5_shift";
+        default:    return NULL;
+    }
+}
+
+/*
+ * Parse a Kitty Keyboard Protocol "CSI u" sequence.
+ *
+ * Full format (spaces for clarity only):
+ *   <key> [: alt [: base]] [; mod [: event_type]] [; text] u
+ *
+ * `s` points to the first byte after "ESC [" (i.e. the key digit or a
+ * parameter prefix byte).  `n` is the remaining buffer length.
+ *
+ * On success:
+ *   *out_key        — Unicode key codepoint
+ *   *out_mod        — raw modifier value (1 = no modifiers)
+ *   *out_event_type — 1=press, 2=repeat, 3=release
+ *   returns number of bytes consumed (including the trailing 'u')
+ *
+ * On failure (not a valid CSI u): returns -1.
+ */
+static int parse_kitty_csi(const char *s, size_t n,
+                            int *out_key, int *out_mod, int *out_event_type) {
+    *out_key        = 0;
+    *out_mod        = 1;
+    *out_event_type = 1;
+
+    size_t i = 0;
+
+    /* Parse key codepoint (mandatory). */
+    if (i >= n || s[i] < '0' || s[i] > '9') return -1;
+    int key = 0;
+    while (i < n && s[i] >= '0' && s[i] <= '9')
+        key = key * 10 + (s[i++] - '0');
+
+    /* Skip optional alt-key / base-layout-key sub-fields (colon separated). */
+    while (i < n && s[i] == ':') {
+        i++; /* skip ':' */
+        while (i < n && s[i] >= '0' && s[i] <= '9') i++;
+    }
+
+    /* Optional first semi-colon group: modifier [: event_type]. */
+    int mod = 1, event_type = 1;
+    if (i < n && s[i] == ';') {
+        i++; /* skip ';' */
+        /* modifier value */
+        int m = 0;
+        bool have_m = false;
+        while (i < n && s[i] >= '0' && s[i] <= '9') {
+            m = m * 10 + (s[i++] - '0');
+            have_m = true;
+        }
+        if (have_m && m > 0) mod = m;
+        /* optional event_type sub-field */
+        if (i < n && s[i] == ':') {
+            i++; /* skip ':' */
+            int et = 0;
+            bool have_et = false;
+            while (i < n && s[i] >= '0' && s[i] <= '9') {
+                et = et * 10 + (s[i++] - '0');
+                have_et = true;
+            }
+            if (have_et && et > 0) event_type = et;
+        }
+    }
+
+    /* Optional second semi-colon group: associated text (skip entirely). */
+    if (i < n && s[i] == ';') {
+        i++; /* skip ';' */
+        while (i < n && s[i] != 'u') i++;
+    }
+
+    /* Must end with 'u'. */
+    if (i >= n || s[i] != 'u') return -1;
+    i++; /* consume 'u' */
+
+    *out_key        = key;
+    *out_mod        = mod;
+    *out_event_type = event_type;
+    return (int)i;
+}
+
+/*
+ * Apply KKP modifiers to the event table at tbl_idx.
+ * KKP mod = 1 + bitmask where:
+ *   shift=1, alt=2, ctrl=4, super=8, hyper=16, meta=32,
+ *   caps_lock=64, num_lock=128
+ */
+static void apply_kitty_mod(lua_State *L, int tbl_idx, int mod) {
+    if (mod < 2) return;
+    int bits = mod - 1;
+    if (bits & 0x01) { lua_pushboolean(L, 1); lua_setfield(L, tbl_idx, "shift"); }
+    if (bits & 0x02) { lua_pushboolean(L, 1); lua_setfield(L, tbl_idx, "meta");  }
+    if (bits & 0x04) { lua_pushboolean(L, 1); lua_setfield(L, tbl_idx, "ctrl");  }
+    if (bits & 0x08) { lua_pushboolean(L, 1); lua_setfield(L, tbl_idx, "super"); }
+}
+
+/* Encode a Unicode codepoint (≤ U+10FFFF) as UTF-8 into buf (≥ 5 bytes).
+ * Returns the number of bytes written (1–4), or 0 for invalid codepoints. */
+static int cp_to_utf8(int cp, char *buf) {
+    if (cp < 0) return 0;
+    if (cp < 0x80) {
+        buf[0] = (char)cp;
+        return 1;
+    }
+    if (cp < 0x800) {
+        buf[0] = (char)(0xC0 | (cp >> 6));
+        buf[1] = (char)(0x80 | (cp & 0x3F));
+        return 2;
+    }
+    if (cp < 0x10000) {
+        buf[0] = (char)(0xE0 | (cp >> 12));
+        buf[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        buf[2] = (char)(0x80 | (cp & 0x3F));
+        return 3;
+    }
+    if (cp <= 0x10FFFF) {
+        buf[0] = (char)(0xF0 | (cp >> 18));
+        buf[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+        buf[2] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        buf[3] = (char)(0x80 | (cp & 0x3F));
+        return 4;
+    }
+    return 0;
+}
+
+
 static const char* csi_final_name(char c) {
     switch (c) {
         case 'A': return "up";
@@ -342,27 +573,83 @@ static int l_parse(lua_State *L) {
                         }
                     }
                 }
-                /* CSI */
+                /* CSI — quick-scan to find the final byte (0x40-0x7E).
+                 * CSI parameter bytes (0x30-0x3F) and intermediate bytes
+                 * (0x20-0x2F) are all < 0x40, so we scan forward until we
+                 * hit a byte >= 0x40.  If the final byte is 'u' this is a
+                 * Kitty Keyboard Protocol sequence. */
+                {
+                    size_t j = i + 2;
+                    while (j < n && (unsigned char)s[j] < 0x40) j++;
+                    char csi_final = (j < n) ? s[j] : 0;
+
+                    if (csi_final == 'u') {
+                        /* ── Kitty Keyboard Protocol CSI u ──────────────── */
+                        int key = 0, mod = 1, event_type = 1;
+                        int kconsumed = parse_kitty_csi(s + i + 2, n - i - 2,
+                                                        &key, &mod, &event_type);
+                        if (kconsumed < 0) {
+                            /* Malformed — emit raw csi and advance past the final byte. */
+                            size_t total2 = (j + 1) - i;
+                            begin_event(L, s + i, total2);
+                            set_cstr(L, "name", "csi");
+                            lua_rawseti(L, out_idx, ++emitted);
+                            i = j + 1;
+                            continue;
+                        }
+                        size_t total2 = 2 + (size_t)kconsumed;
+                        const char *kname = kitty_key_name(key);
+
+                        begin_event(L, s + i, total2);
+
+                        if (kname != NULL) {
+                            /* Named functional key or C0 key. */
+                            set_cstr(L, "name", kname);
+                        } else if (key >= 32 && key <= 126) {
+                            /* Printable ASCII codepoint with modifiers. */
+                            char ch = (char)key;
+                            set_cstr(L, "name", "char");
+                            set_str(L, "input", &ch, 1);
+                        } else if (key > 126) {
+                            /* Non-ASCII Unicode codepoint (e.g. accented char). */
+                            char utf8buf[5];
+                            int ulen = cp_to_utf8(key, utf8buf);
+                            set_cstr(L, "name", "char");
+                            if (ulen > 0)
+                                set_str(L, "input", utf8buf, (size_t)ulen);
+                        } else {
+                            /* Unknown private-use or control codepoint. */
+                            set_cstr(L, "name", "kitty_key");
+                            lua_pushinteger(L, (lua_Integer)key);
+                            lua_setfield(L, -2, "keycode");
+                        }
+                        apply_kitty_mod(L, lua_gettop(L), mod);
+                        /* event_type: 1=press (default, omit), 2=repeat, 3=release */
+                        if (event_type == 2) {
+                            lua_pushstring(L, "repeat");
+                            lua_setfield(L, -2, "event_type");
+                        } else if (event_type == 3) {
+                            lua_pushstring(L, "release");
+                            lua_setfield(L, -2, "event_type");
+                        } else {
+                            lua_pushstring(L, "press");
+                            lua_setfield(L, -2, "event_type");
+                        }
+                        lua_rawseti(L, out_idx, ++emitted);
+                        i += total2;
+                        continue;
+                    }
+                }
+                /* Legacy CSI */
                 const char *name = NULL;
                 int mod = 1, num = 0;
                 int consumed = parse_csi(s, n, i + 2, &name, &mod, &num);
                 size_t total = 2 + (size_t)consumed;
                 if (name == NULL) {
-                    /* Check for kitty-style "CSI <keycode> ; <mod> u" sequences.
-                     * The final byte is the last byte of the consumed CSI body. */
-                    char final_byte = (consumed > 0) ? s[i + 2 + consumed - 1] : 0;
-                    if (final_byte == 'u' && num == 13) {
-                        /* Enter with modifier: ESC[13;5u = Ctrl+Enter, ESC[13;2u = Shift+Enter */
-                        begin_event(L, s + i, total);
-                        set_cstr(L, "name", "enter");
-                        apply_mod(L, lua_gettop(L), mod);
-                        lua_rawseti(L, out_idx, ++emitted);
-                    } else {
-                        /* Unknown CSI: emit a generic "csi" event carrying raw. */
-                        begin_event(L, s + i, total);
-                        set_cstr(L, "name", "csi");
-                        lua_rawseti(L, out_idx, ++emitted);
-                    }
+                    /* Unknown CSI: emit a generic "csi" event carrying raw. */
+                    begin_event(L, s + i, total);
+                    set_cstr(L, "name", "csi");
+                    lua_rawseti(L, out_idx, ++emitted);
                 } else {
                     begin_event(L, s + i, total);
                     set_cstr(L, "name", name);
