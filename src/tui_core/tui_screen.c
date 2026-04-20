@@ -823,13 +823,15 @@ diff_alt(screen_t *s, bytes_t *out) {
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
             }
-            /* No row-end reset: SGR state carries across CUP per ECMA-48,
-             * and the next row's first changed cell will emit the exact
-             * delta. Trailing spaces on a full-redraw row inherit whatever
-             * style the last cell set — which is what the user intended. */
+            /* Row-end reset: a full-redraw may end a row on a non-default
+             * SGR (e.g. a wide-char head at col w-2 whose tail is skipped).
+             * The next row begins with CUP; if we carry styled state across
+             * that cursor jump some terminals render subsequent spaces with
+             * the stale colour.  reset_sgr is a no-op when already default. */
+            reset_sgr(out, &cur_fg_bg, &cur_attrs);
         }
     } else {
-        /* Per-row segment-merge. Only scan rows that have changes in either
+        /* Per-row segment-merge.Only scan rows that have changes in either
          * next (dirty_xmax >= 0) or prev (prev_xmax >= 0).  Within each
          * dirty row, only scan up to the rightmost relevant column so that
          * trailing unchanged blank cells are never compared. */
@@ -1013,6 +1015,10 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                 bytes_append(out, p, n);
                 virt_x += c->width;
             }
+            /* Row-end reset: \r\n carries cursor to next line while SGR
+             * state persists; spaces skipped with CUF may leave a styled
+             * state that bleeds into the next row's implicit blank prefix. */
+            reset_sgr(out, &cur_fg_bg, &cur_attrs);
         }
         virt_y = effective_h - 1;
     } else if (!s->prev_valid) {
@@ -1031,6 +1037,10 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                 bytes_append(out, p, n);
                 virt_x += c->width;
             }
+            /* Row-end reset: relative moves navigate to the next row while
+             * SGR state persists; the last styled cell's attributes would
+             * otherwise bleed across the inter-row cursor jump. */
+            reset_sgr(out, &cur_fg_bg, &cur_attrs);
         }
     } else {
         /* Segment-merge incremental diff with relative moves instead of CUP.

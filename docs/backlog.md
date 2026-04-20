@@ -36,7 +36,6 @@ _暂无_
 ### 开发者体验
 
 - ErrorBoundary fallback 接收 `{message, trace}` 而不只是字符串（保留 `debug.traceback(err, 2)`）
-- `screen.c` full-redraw 模式下行末加 `reset_sgr`，避免 SGR 状态跨行继承导致视觉 bug
 - `tui._VERSION` 字符串常量
 - `make.lua` 加 `lm:conf_debug` / `lm:conf_release` 区分（asan / NDEBUG 开关）
 - `testing.lua` `io.stderr` 全局替换改为生命周期受限的拦截（`render` 到 `unmount` 之间），避免并行测试风险
