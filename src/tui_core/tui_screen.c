@@ -1285,6 +1285,71 @@ l_gc(lua_State *L) {
     return 0;
 }
 
+/* ── Lua API: cells ──────────────────────────────────────────────
+ * cells(ud, row) -> array of {char, width, bold, dim, underline,
+ *                              inverse, italic, strikethrough, fg, bg}
+ * row is 1-based.  Wide-tail slots are skipped so the output array has
+ * one entry per visible column position (head cells only).
+ * fg/bg are 0..15 when set, nil when the cell uses the terminal default. */
+static int
+l_cells(lua_State *L) {
+    screen_t *s = check_screen(L, 1);
+    int row = (int)luaL_checkinteger(L, 2);
+    if (row < 1 || row > s->h)
+        return luaL_error(L, "screen.cells: row %d out of range [1,%d]", row, s->h);
+
+    /* Use the committed prev buffer; fall back to next if no diff yet. */
+    const cell_t *cells = s->prev_valid ? s->prev : s->next;
+    const slab_t *slab  = s->prev_valid ? &s->prev_slab : &s->next_slab;
+    int y = row - 1;
+
+    lua_createtable(L, s->w, 0);
+    int col = 1;
+    for (int x = 0; x < s->w; x++) {
+        const cell_t *c = cell_at((cell_t *)cells, s->w, x, y);
+        if (c->len == 0) continue;  /* WIDE_TAIL: skip */
+
+        lua_createtable(L, 0, 10);
+
+        const uint8_t *p; size_t n;
+        cell_bytes(c, slab, &p, &n);
+        lua_pushlstring(L, (const char *)p, n);
+        lua_setfield(L, -2, "char");
+
+        lua_pushinteger(L, c->width);
+        lua_setfield(L, -2, "width");
+
+        lua_pushboolean(L, (c->attrs & ATTR_BOLD)          != 0);
+        lua_setfield(L, -2, "bold");
+        lua_pushboolean(L, (c->attrs & ATTR_DIM)           != 0);
+        lua_setfield(L, -2, "dim");
+        lua_pushboolean(L, (c->attrs & ATTR_UNDERLINE)     != 0);
+        lua_setfield(L, -2, "underline");
+        lua_pushboolean(L, (c->attrs & ATTR_INVERSE)       != 0);
+        lua_setfield(L, -2, "inverse");
+        lua_pushboolean(L, (c->attrs & ATTR_ITALIC)        != 0);
+        lua_setfield(L, -2, "italic");
+        lua_pushboolean(L, (c->attrs & ATTR_STRIKETHROUGH) != 0);
+        lua_setfield(L, -2, "strikethrough");
+
+        if (c->attrs & ATTR_FG_DEFAULT)
+            lua_pushnil(L);
+        else
+            lua_pushinteger(L, (c->fg_bg >> 4) & 0x0F);
+        lua_setfield(L, -2, "fg");
+
+        if (c->attrs & ATTR_BG_DEFAULT)
+            lua_pushnil(L);
+        else
+            lua_pushinteger(L, c->fg_bg & 0x0F);
+        lua_setfield(L, -2, "bg");
+
+        lua_rawseti(L, -2, col);
+        col++;
+    }
+    return 1;
+}
+
 /* ── registration ─────────────────────────────────────────────── */
 
 static const luaL_Reg screen_lib[] = {
@@ -1298,6 +1363,7 @@ static const luaL_Reg screen_lib[] = {
     {"draw_line",  l_draw_line},
     {"diff",       l_diff},
     {"rows",       l_rows},
+    {"cells",      l_cells},
     {"set_mode",          l_set_mode},
     {"cursor_pos",        l_cursor_pos},
     {"set_display_cursor", l_set_display_cursor},

@@ -466,6 +466,86 @@ function M.interactive()
     return is_tty() and not is_ci()
 end
 
+--- Override terminal capabilities for testing or custom integrations.
+-- opts: either a recognised term_type string (e.g. "iterm2", "kitty",
+-- "windows_terminal") or an explicit table with boolean fields:
+--   sync_output, cursor_shape, alt_screen, osc_st, ime_osc1337, legacy_windows
+-- Any field absent from the table defaults to false (full override — all
+-- unspecified features are disabled). Unrecognised term_type strings have
+-- all capabilities resolved through the same check_* functions as normal
+-- detection.
+-- Returns a zero-argument restore function that reverts all changes.
+function M.override(opts)
+    local saved = {
+        osc1337_suffix   = _osc1337_suffix,
+        clearScreenFull  = _clearScreenFull,
+        cursor_shape_on  = _cursor_shape_on,
+        alt_screen_enter = _alt_screen_enter,
+        alt_screen_exit  = _alt_screen_exit,
+        sync_begin       = _sync_begin,
+        sync_end         = _sync_end,
+    }
+
+    local caps
+    if type(opts) == "string" then
+        local tt   = opts
+        local base = CAPABILITIES[tt] or {}
+        caps = {
+            sync_output    = check_sync_output(tt),
+            cursor_shape   = check_cursor_shape(tt),
+            alt_screen     = check_alt_screen(tt),
+            osc_st         = base.osc_st      and true or false,
+            ime_osc1337    = base.ime_osc1337  and true or false,
+            legacy_windows = tt == "windows_legacy",
+        }
+    else
+        caps = opts or {}
+    end
+
+    local osc_st  = caps.osc_st  and true or false
+    local osc_str = osc_st and ST or BEL
+
+    if caps.ime_osc1337 then
+        _osc1337_suffix = ESC .. "]1337;SetMark" .. osc_str
+    else
+        _osc1337_suffix = ""
+    end
+
+    if caps.legacy_windows then
+        _clearScreenFull = ESC .. "[2J" .. ESC .. "[0f"
+    else
+        _clearScreenFull = ESC .. "[H" .. ESC .. "[2J" .. ESC .. "[3J"
+    end
+
+    _cursor_shape_on = caps.cursor_shape and true or false
+
+    if caps.alt_screen then
+        _alt_screen_enter = ESC .. "[?1049h"
+        _alt_screen_exit  = ESC .. "[?1049l"
+    else
+        _alt_screen_enter = ""
+        _alt_screen_exit  = ""
+    end
+
+    if caps.sync_output then
+        _sync_begin = ESC .. "[?2026h"
+        _sync_end   = ESC .. "[?2026l"
+    else
+        _sync_begin = ""
+        _sync_end   = ""
+    end
+
+    return function()
+        _osc1337_suffix   = saved.osc1337_suffix
+        _clearScreenFull  = saved.clearScreenFull
+        _cursor_shape_on  = saved.cursor_shape_on
+        _alt_screen_enter = saved.alt_screen_enter
+        _alt_screen_exit  = saved.alt_screen_exit
+        _sync_begin       = saved.sync_begin
+        _sync_end         = saved.sync_end
+    end
+end
+
 --- Force re-detection (useful if environment changes in tests).
 function M._reset_tty()
     is_tty_cache = nil

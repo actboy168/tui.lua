@@ -387,6 +387,14 @@ function Harness:frame()
 end
 function Harness:tree()   return self._tree end
 
+--- Return a styled-cell array for the given 1-based screen row.
+-- Each entry: {char, width, bold, dim, underline, inverse, italic,
+--              strikethrough, fg, bg}.  Wide-tail slots are omitted.
+-- fg/bg are 0..15 when explicitly colored, nil for terminal default.
+function Harness:cells(row)
+    return screen_mod.cells(self._screen, row)
+end
+
 -- Performance testing: render count tracking.
 -- Returns the total number of reconciler.render() calls since mount.
 function Harness:render_count()
@@ -519,6 +527,19 @@ function Harness:dispatch(bytes)
     return self
 end
 
+--- Simulate a bracketed paste event.
+-- Wraps text with the standard bracketed-paste sequences (\x1b[200~ ... \x1b[201~)
+-- and dispatches them in a single shot (real terminals send paste as one burst,
+-- not individual characters).
+function Harness:paste(text)
+    if type(text) ~= "string" then
+        error("paste: expected string, got " .. type(text), 2)
+    end
+    input_mod.dispatch("\x1b[200~" .. text .. "\x1b[201~")
+    self:_paint()
+    return self
+end
+
 function Harness:type(str)
     if type(str) ~= "string" then
         error("type: expected string, got " .. type(str), 2)
@@ -616,6 +637,10 @@ function Harness:unmount()
     focus_mod._reset()
     scheduler._reset()
     hooks._set_dev_mode(false)
+    if self._ansi_restore then
+        self._ansi_restore()
+        self._ansi_restore = nil
+    end
     drain_and_fatal_if_any()
 end
 
@@ -759,11 +784,20 @@ end
 -- opts:
 --   cols (default 80), rows (default 24)
 --   now  (default 0) — virtual start time in milliseconds
+--   term_type (optional) — string or caps table passed to ansi.override();
+--     overrides terminal capability detection for the lifetime of this harness.
 function M.render(App, opts)
     opts = opts or {}
     local W    = opts.cols or 80
     local H    = opts.rows or 24
     local now0 = opts.now  or 0
+
+    -- Optional terminal capability override. Must be applied before the first
+    -- render so that init sequences use the overridden values.
+    local ansi_restore = nil
+    if opts.term_type ~= nil then
+        ansi_restore = ansi_mod.override(opts.term_type)
+    end
 
     -- Isolated globals. Any leftover state from a previous (possibly
     -- unclean) harness is wiped.
@@ -789,6 +823,8 @@ function M.render(App, opts)
         -- Cursor state persistence (mirrors tui/init.lua).
         _last_cursor_col = 1,
         _last_cursor_row = 1,
+        -- Restore function for ansi.override(), or nil if none.
+        _ansi_restore = ansi_restore,
     }, Harness)
     h._app_handle = { exit = function() h._dead = true end }
 
@@ -806,6 +842,7 @@ function M.render(App, opts)
     -- Initial paint — installs subscriptions, runs mount-effects.
     local ok, err = pcall(function() h:_paint() end)
     if not ok then
+        if ansi_restore then ansi_restore() end
         input_mod._reset()
         resize_mod._reset()
         focus_mod._reset()

@@ -58,13 +58,30 @@ function suite:test_login_form_submit()
 
     local h = testing.render(App, { cols = 45, rows = 15 })
 
+    -- Initial state: focus should be on username field (autoFocus default)
+    h:rerender()
+    lt.assertNotEquals(h:focus_id(), nil)
+    local initial_focus = h:focus_id()
+
+    -- Cursor must be visible (row 1 area, some column)
+    local col0, row0 = h:cursor()
+    lt.assertNotEquals(col0, nil, "cursor should be set on initial focused TextInput")
+
     -- Type in username field and submit
     h:type("admin")
+
+    -- Cursor advanced by 5 chars
+    local col_after, _ = h:cursor()
+    lt.assertEquals(col_after, col0 + 5)
+
     h:press("enter")
 
     lt.assertNotEquals(submitted, nil)
     lt.assertEquals(submitted.username, "admin")
     lt.assertEquals(submitted.password, "")
+
+    -- Focus should not have changed on submit (stays in same field)
+    lt.assertEquals(h:focus_id(), initial_focus)
 
     h:unmount()
 end
@@ -113,11 +130,27 @@ function suite:test_login_form_full_flow()
 
     local h = testing.render(App, { cols = 45, rows = 15 })
 
+    -- Focus starts on username
+    h:rerender()
+    local focus_before_tab = h:focus_id()
+    lt.assertNotEquals(focus_before_tab, nil)
+
     -- Fill username
     h:type("john")
 
     -- Use Tab to move to password field
     h:press("tab")
+
+    -- Focus must have moved to a different field
+    local focus_after_tab = h:focus_id()
+    lt.assertNotEquals(focus_after_tab, focus_before_tab,
+        "Tab should move focus to next field")
+
+    -- Cursor row must increase (password field is below username field)
+    h:rerender()
+    local _, row_pass = h:cursor()
+    lt.assertNotEquals(row_pass, nil)
+    lt.assertTrue(row_pass >= 1)
 
     -- Fill password and submit
     h:type("secret123")
@@ -310,13 +343,54 @@ function suite:test_form_with_select()
     local h = testing.render(App, { cols = 35, rows = 12 })
 
     -- Select an item
-    -- Note: Select navigation depends on focus/input handling
     h:press("down")
     h:press("down")
     h:press("return")
 
-    -- Value should be set (if selection mechanism works)
-    -- This test documents expected behavior
+    lt.assertEquals(selectedValue, "opt3")
 
+    h:unmount()
+end
+
+-- ============================================================================
+-- Snapshot — login form initial state
+-- ============================================================================
+
+function suite:test_snapshot_login_initial()
+    local App = function()
+        return tui.Box {
+            flexDirection = "column",
+            width = 40, height = 12,
+            tui.Text { key = "title", "Login Form" },
+            extra.Newline { key = "nl1" },
+            tui.Box {
+                key = "user_row",
+                flexDirection = "row",
+                tui.Text { key = "user_label", "Username: " },
+                extra.TextInput {
+                    key = "user_input",
+                    value = "",
+                    onChange = function() end,
+                    width = 20,
+                },
+            },
+            tui.Box {
+                key = "pass_row",
+                flexDirection = "row",
+                tui.Text { key = "pass_label", "Password: " },
+                extra.TextInput {
+                    key = "pass_input",
+                    value = "",
+                    onChange = function() end,
+                    width = 20,
+                },
+            },
+            extra.Newline { key = "nl2" },
+            tui.Text { key = "hint", "Press Enter to submit" },
+        }
+    end
+
+    local h = testing.render(App, { cols = 45, rows = 15 })
+    h:match_snapshot("forms_login_initial_45x15")
     h:unmount()
 end

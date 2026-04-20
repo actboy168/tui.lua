@@ -70,4 +70,12 @@ function M.set_display_cursor(ud, x, y)
     screen_c.set_display_cursor(ud, x, y)
 end
 
+--- Return an array of styled cell tables for the given 1-based row.
+-- Each entry: {char, width, bold, dim, underline, inverse, italic,
+--              strikethrough, fg, bg}.  Wide-tail slots are omitted.
+-- fg/bg are 0..15 when explicitly set, nil for terminal default.
+function M.cells(ud, row)
+    return screen_c.cells(ud, row)
+end
+
 return M
