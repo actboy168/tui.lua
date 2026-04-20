@@ -25,11 +25,8 @@
 -- offset. Conversions to display columns go through wcwidth.
 
 local element  = require "tui.element"
-local tui_core = require "tui_core"
 local cursor   = require "tui.builtin.cursor"
 local text_mod = require "tui.text"
-
-local wcwidth = tui_core.wcwidth
 
 local M = {}
 
@@ -40,12 +37,8 @@ local M = {}
 local function to_chars(s)
     local chars = {}
     if not s or s == "" then return chars end
-    local n, i = #s, 1
-    while i <= n do
-        local ch, _, ni = wcwidth.grapheme_next(s, i)
-        if ch == "" then break end
+    for ch, _ in text_mod.iter(s) do
         chars[#chars + 1] = ch
-        i = ni
     end
     return chars
 end

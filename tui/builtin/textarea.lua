@@ -27,11 +27,8 @@
 --   Ctrl+Home / Ctrl+End     — top / bottom of document
 
 local element  = require "tui.element"
-local tui_core = require "tui_core"
 local cursor   = require "tui.builtin.cursor"
 local text_mod = require "tui.text"
-
-local wcwidth = tui_core.wcwidth
 
 local M = {}
 
@@ -42,12 +39,8 @@ local M = {}
 local function to_chars(s)
     local chars = {}
     if not s or s == "" then return chars end
-    local n, i = #s, 1
-    while i <= n do
-        local ch, _, ni = wcwidth.grapheme_next(s, i)
-        if ch == "" then break end
+    for ch, _ in text_mod.iter(s) do
         chars[#chars + 1] = ch
-        i = ni
     end
     return chars
 end
@@ -73,17 +66,13 @@ local function parse_lines(value)
     if not value or value == "" then
         return { {} }
     end
-    local n, i = #value, 1
-    while i <= n do
-        local ch, _, ni = wcwidth.grapheme_next(value, i)
-        if ch == "" then break end
+    for ch, _ in text_mod.iter(value) do
         if ch == "\n" then
             lines[#lines + 1] = cur
             cur = {}
         else
             cur[#cur + 1] = ch
         end
-        i = ni
     end
     lines[#lines + 1] = cur
     return lines
@@ -284,16 +273,12 @@ local function TextareaImpl(props)
 
                 -- Split `text` into graphemes, handling embedded newlines.
                 local to_insert = {}  -- list of {type="char",ch=...} or {type="nl"}
-                local n, i = #text, 1
-                while i <= n do
-                    local ch, _, ni = wcwidth.grapheme_next(text, i)
-                    if ch == "" then break end
+                for ch, _ in text_mod.iter(text) do
                     if ch == "\n" then
                         to_insert[#to_insert + 1] = { t = "nl" }
                     else
                         to_insert[#to_insert + 1] = { t = "ch", ch = ch }
                     end
-                    i = ni
                 end
                 if #to_insert == 0 then return end
 
