@@ -31,6 +31,7 @@
 #include <string.h>
 
 #include "wcwidth.h"
+#include "tui_fatal.h"
 
 /* Growable byte buffer for building the "current line" before flushing it
  * to the result table. Reused across lines so we only allocate on outliers. */
@@ -192,7 +193,7 @@ l_wrap(lua_State *L) {
 
         if (!buf_append(&cur, s + cstart, clen)) {
             free(cur.data);
-            return luaL_error(L, "tui_core.text.wrap: out of memory");
+            return TUI_FATAL(L, "tui_core.text.wrap: out of memory");
         }
         col += cw;
     }

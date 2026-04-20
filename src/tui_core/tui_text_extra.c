@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "wcwidth.h"
+#include "tui_fatal.h"
 
 /* Local growable buffer — same layout as text.c's buf_t; separate static
  * copies are intentional so each TU can be optimised independently. */
@@ -118,7 +119,7 @@ l_wrap_hard(lua_State *L) {
 
         if (!buf_append(&cur, s + cstart, clen)) {
             free(cur.data);
-            return luaL_error(L, "tui_core.text.wrap_hard: out of memory");
+            return TUI_FATAL(L, "tui_core.text.wrap_hard: out of memory");
         }
         col += cw;
     }

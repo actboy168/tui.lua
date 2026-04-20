@@ -52,7 +52,6 @@ _暂无_
 ### 架构改进
 
 - **`input.dispatch` 中间件链**：当前用 `handled_by_focus_nav` bool 手动串 `pre → focus → broadcast`，改为可插拔中间件链，方便插入 mouse / 日志等中间件
-- **C 层 assert 走 `[tui:fatal]` 前缀**：当前 C 层 `luaL_error` 会被 ErrorBoundary 吞掉，不变式违反应 bypass
 - **`put_cell` OOM 检测**：当前 OOM 时静默丢弃 grapheme cluster，dev-mode 下应报错或记录标志位
 
 ### 输入扩展

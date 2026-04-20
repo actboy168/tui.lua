@@ -200,6 +200,7 @@ l_read_raw(lua_State *L) {
 #include <sys/select.h>
 #include <unistd.h>
 #include <string.h>
+#include "tui_fatal.h"
 
 static struct termios s_orig_termios;
 static int            s_raw_saved = 0;
@@ -213,7 +214,7 @@ l_set_raw(lua_State *L) {
         struct termios raw;
         if (!s_raw_saved) {
             if (tcgetattr(STDIN_FILENO, &s_orig_termios) < 0)
-                return luaL_error(L, "tcgetattr failed");
+                return TUI_FATAL(L, "tcgetattr failed");
             s_raw_saved = 1;
         }
         raw = s_orig_termios;
@@ -224,7 +225,7 @@ l_set_raw(lua_State *L) {
         raw.c_cc[VMIN]  = 0;
         raw.c_cc[VTIME] = 0;
         if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) < 0)
-            return luaL_error(L, "tcsetattr failed");
+            return TUI_FATAL(L, "tcsetattr failed");
     } else {
         if (s_raw_saved) {
             tcsetattr(STDIN_FILENO, TCSAFLUSH, &s_orig_termios);

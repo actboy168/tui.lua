@@ -38,6 +38,7 @@
 #include <assert.h>
 
 #include "wcwidth.h"
+#include "tui_fatal.h"
 
 /* ── cell / slab / screen structs ─────────────────────────────── */
 
@@ -267,7 +268,7 @@ l_new(lua_State *L) {
     if (!s->next || !s->prev) {
         free(s->next); free(s->prev);
         s->next = s->prev = NULL;
-        luaL_error(L, "screen.new: out of memory");
+        TUI_FATAL(L, "screen.new: out of memory");
     }
     fill_space(s->next, (int)ncells);
     fill_space(s->prev, (int)ncells);
@@ -278,7 +279,7 @@ l_new(lua_State *L) {
         free(s->dirty_xmax); free(s->prev_xmax);
         s->next = s->prev = NULL;
         s->dirty_xmax = s->prev_xmax = NULL;
-        luaL_error(L, "screen.new: out of memory");
+        TUI_FATAL(L, "screen.new: out of memory");
     }
     dirty_xmax_init(s->dirty_xmax, s->h);
     dirty_xmax_init(s->prev_xmax, s->h);
@@ -313,7 +314,7 @@ l_resize(lua_State *L) {
     size_t ncells = (size_t)w * (size_t)h;
     cell_t *nn = (cell_t *)realloc(s->next, ncells * sizeof(cell_t));
     cell_t *np = (cell_t *)realloc(s->prev, ncells * sizeof(cell_t));
-    if (!nn || !np) luaL_error(L, "screen.resize: out of memory");
+    if (!nn || !np) TUI_FATAL(L, "screen.resize: out of memory");
     s->next = nn;
     s->prev = np;
     s->w = (int)w;
@@ -321,7 +322,7 @@ l_resize(lua_State *L) {
     /* Realloc damage tracking arrays (height may have changed). */
     int *nd = (int *)realloc(s->dirty_xmax, (size_t)s->h * sizeof(int));
     int *pd = (int *)realloc(s->prev_xmax,  (size_t)s->h * sizeof(int));
-    if (!nd || !pd) luaL_error(L, "screen.resize: out of memory");
+    if (!nd || !pd) TUI_FATAL(L, "screen.resize: out of memory");
     s->dirty_xmax = nd;
     s->prev_xmax  = pd;
     dirty_xmax_init(s->dirty_xmax, s->h);
@@ -422,7 +423,7 @@ l_put(lua_State *L) {
     const char *str = luaL_checklstring(L, 4, &slen);
     int cw = (int)luaL_checkinteger(L, 5);
 
-    if (cw != 1 && cw != 2) luaL_error(L, "screen.put: width must be 1 or 2");
+    if (cw != 1 && cw != 2) TUI_FATAL(L, "screen.put: width must be 1 or 2");
 
     uint8_t fg_bg = (uint8_t)luaL_optinteger(L, 6, 0);
     uint8_t attrs = (uint8_t)luaL_optinteger(L, 7, ATTR_DEFAULT);
@@ -1201,7 +1202,7 @@ l_rows(lua_State *L) {
         size_t ncap = rb->cap ? rb->cap * 2 : 256;
         while (ncap < need) ncap *= 2;
         uint8_t *nb = (uint8_t *)realloc(rb->buf, ncap);
-        if (!nb) luaL_error(L, "screen.rows: out of memory");
+        if (!nb) TUI_FATAL(L, "screen.rows: out of memory");
         rb->buf = nb;
         rb->cap = (uint32_t)ncap;
     }
@@ -1247,7 +1248,7 @@ l_set_mode(lua_State *L) {
     } else if (strcmp(mode, "alt") == 0) {
         s->mode = SCREEN_MODE_ALT;
     } else {
-        return luaL_error(L, "screen.set_mode: unknown mode '%s'", mode);
+        return TUI_FATAL(L, "screen.set_mode: unknown mode '%s'", mode);
     }
     /* Reset virtual cursor state when switching modes. */
     s->virt_x = 0; s->virt_y = 0;
