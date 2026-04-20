@@ -20,6 +20,12 @@ _暂无_
 - `P2` **Span 文本的 `wrap="hard"` / truncate 模式**：`element.runs` 目前仅在 `wrap="wrap"` 时走 `wrap_runs` 路径；其余模式 `element.line_runs = nil` 退回纯文本渲染，span 样式静默丢失
 - `P2` **`wrap_runs` 不处理 span 内的 `\n`**：原始 `text.wrap` 会拆显式换行，`wrap_runs` 只在空格断行，span 中含 `\n` 时行为与纯文本不一致
 
+### 鼠标交互扩展
+
+- `P1` **命中测试 / `onClick` prop**：Box 持有 layout 坐标，框架层做 hit-test；在 Box 上暴露 `onClick` / `onMouseEnter` / `onMouseLeave` prop，是 Button、ScrollBox 等组件的基础（Lua 层为主）
+- `P2` **`useHover()` hook**：依赖命中测试，返回 `{hovered=bool}`，组件内直接使用无需手算鼠标坐标（Lua 层）
+- `P3` `mouse_events.lua` 示例：演示 `useMouse`、click、scroll wheel
+
 ### 内置组件扩充
 
 - `P0` **ScrollBox**：可滚动容器 + 命令式滚动 API（scrollTo/scrollBy）+ stickyScroll + 视口裁剪；复杂内容展示刚需（Lua 层为主，C 层可选加速）
@@ -58,13 +64,13 @@ _暂无_
 
 ### 架构改进
 
-- `P2` **`input.dispatch` 中间件链**：当前用 `handled_by_focus_nav` bool 手动串 `pre → focus → broadcast`，改为可插拔中间件链，方便插入 mouse / 日志等中间件
+- `P1` **`input.dispatch` 中间件链**：现已有 paste / focus / mouse 三条手写 `if` 分支，改为可插拔中间件链，方便插入日志、调试等中间件（Lua 层）
 - `P2` **`put_cell` OOM 检测**：当前 OOM 时静默丢弃 grapheme cluster，dev-mode 下应报错或记录标志位
 
 ### 输入扩展
 
 - `P1` **文本选择 + 剪贴板**：选择状态机（字符/词/行选择、键盘选择）+ 多路径剪贴板（pbcopy / wl-copy / xclip / OSC 52 fallback）（Lua + C）
-- `P0` **鼠标事件**：SGR / X10 鼠标协议；C 层解析 + Lua 层 `useMouse` hook + 事件派发（click/drag/wheel/hover）
+
 - `P2` **`useInput` key 结构补齐**：`pageUp` / `pageDown` / `home` / `end` / `meta` / `super`
 
 ### 终端兼容性

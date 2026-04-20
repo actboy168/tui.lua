@@ -971,4 +971,20 @@ function M.useTerminalTitle(title)
     end, { title })
 end
 
+--- useMouse(fn)
+-- Registers a mouse-event handler for the lifetime of the component.
+-- `fn(event)` is called with each mouse event:
+--   { name="mouse", type, button, x, y, scroll, shift, meta, ctrl }
+-- where:
+--   type   = "down" | "up" | "move" | "scroll"
+--   button = 1 (left) | 2 (middle) | 3 (right) | nil (scroll/move)
+--   scroll = 1 (up) | -1 (down) | nil
+--   shift/meta/ctrl = boolean modifier flags
+function M.useMouse(fn)
+    assert(current, "useMouse called outside of a component render")
+    M.useEffect(function()
+        return input_mod.subscribe_mouse(function(ev) fn(ev) end)
+    end, {})
+end
+
 return M

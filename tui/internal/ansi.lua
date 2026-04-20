@@ -430,6 +430,11 @@ M.disableBracketedPaste = ESC .. "[?2004l"
 M.enableFocusEvents  = ESC .. "[?1004h"
 M.disableFocusEvents = ESC .. "[?1004l"
 
+-- Mouse events: normal button-tracking (1000) + SGR extended coordinates (1006).
+-- SGR (1006) must be enabled alongside 1000 to avoid the 223-cell X10 limit.
+M.enableMouse  = ESC .. "[?1000h" .. ESC .. "[?1006h"
+M.disableMouse = ESC .. "[?1006l" .. ESC .. "[?1000l"
+
 -- ---------------------------------------------------------------------------
 -- Terminal title (OSC 0/2)
 

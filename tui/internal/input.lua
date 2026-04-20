@@ -34,6 +34,10 @@ local _paste_bus = bus_mod.new()
 -- Receives the event name: "focus_in" or "focus_out".
 local _focus_bus = bus_mod.new()
 
+-- Mouse-event channel (useMouse subscribers).
+-- Receives the full mouse event table: { name="mouse", type, button, x, y, ... }
+local _mouse_bus = bus_mod.new()
+
 -- Bracketed-paste accumulator state (persists across dispatch() calls so
 -- multi-chunk pastes — rare but possible — are assembled correctly).
 local _pasting    = false
@@ -66,6 +70,11 @@ local function incomplete_esc_tail(s)
                 -- CSI is complete only when it contains a final byte (0x40-0x7E).
                 for k = j + 2, n do
                     if s:byte(k) >= 0x40 and s:byte(k) <= 0x7E then
+                        -- Legacy X10 mouse: bare ESC[M (k == j+2, byte == 0x4D)
+                        -- needs 3 more raw bytes after the 'M'. Buffer until complete.
+                        if s:byte(k) == 0x4D and k == j + 2 and (n - k) < 3 then
+                            return n - j + 1
+                        end
                         return 0          -- complete CSI before end of buffer
                     end
                 end
@@ -95,6 +104,11 @@ M.subscribe_paste = _paste_bus.subscribe
 -- Registers a terminal-focus handler. `fn(event_name)` is called with
 -- "focus_in" or "focus_out" when the terminal gains/loses focus (DEC 1004).
 M.subscribe_focus = _focus_bus.subscribe
+
+--- subscribe_mouse(fn) -> unsubscribe
+-- Registers a mouse handler. `fn(event)` is called with each mouse event
+-- table: { name="mouse", type, button, x, y, scroll, shift, meta, ctrl }.
+M.subscribe_mouse = _mouse_bus.subscribe
 
 --- debug_log: when non-nil, each dispatch() call appends a line to this file.
 -- Enable from Lua before tui.render:  require("tui.internal.input")._debug_log = "input_debug.txt"
@@ -188,6 +202,11 @@ function M.dispatch(bytes)
             _focus_bus.dispatch(ev.name)
             goto continue
         end
+        -- ── Mouse events ──────────────────────────────────────────────────────
+        if ev.name == "mouse" then
+            _mouse_bus.dispatch(ev)
+            goto continue
+        end
         -- ── Normal key routing ───────────────────────────────────────────────
         if ev.ctrl and ev.name == "char"
             and (ev.input == "c" or ev.input == "d") then
@@ -220,6 +239,7 @@ end
 function M._handlers() return _broadcast._handlers() end
 function M._paste_handlers() return _paste_bus._handlers() end
 function M._focus_handlers() return _focus_bus._handlers() end
+function M._mouse_handlers() return _mouse_bus._handlers() end
 
 --- Dispatch a single pre-built event table (for testing IME composing, etc.).
 -- Routes through the same pipeline as dispatch(), but skips key parsing.
@@ -254,6 +274,7 @@ function M._reset()
     _broadcast._reset()
     _paste_bus._reset()
     _focus_bus._reset()
+    _mouse_bus._reset()
     _pasting      = false
     _paste_buf    = {}
     _pending_bytes = ""

@@ -542,6 +542,30 @@ function Harness:paste(text)
     return self
 end
 
+--- Harness:mouse(ev_type, btn, x, y [, mods]) -> self
+-- Dispatches a synthetic SGR mouse event into the input pipeline.
+--   ev_type : "down" | "up" | "move" | "scroll_up" | "scroll_down"
+--   btn     : 1 (left) | 2 (middle) | 3 (right)  (ignored for scroll/move)
+--   x, y    : 1-based column / row
+--   mods    : optional table { shift=bool, meta=bool, ctrl=bool }
+function Harness:mouse(ev_type, btn, x, y, mods)
+    mods = mods or {}
+    local pb = 0
+    if     ev_type == "scroll_up"   then pb = 64
+    elseif ev_type == "scroll_down" then pb = 65
+    elseif ev_type == "move"        then pb = 32 + ((btn or 1) - 1)
+    else                                 pb = (btn or 1) - 1
+    end
+    if mods.shift then pb = pb + 4  end
+    if mods.meta  then pb = pb + 8  end
+    if mods.ctrl  then pb = pb + 16 end
+    local final = (ev_type == "up") and "m" or "M"
+    local seq = string.format("\x1b[<%d;%d;%d%s", pb, x, y, final)
+    input_mod.dispatch(seq)
+    self:_paint()
+    return self
+end
+
 function Harness:type(str)
     if type(str) ~= "string" then
         error("type: expected string, got " .. type(str), 2)
