@@ -14,8 +14,6 @@
 ## 安装与编译
 
 ```bash
-git clone https://github.com/yourusername/tui.lua.git
-cd tui.lua
 luamake
 ```
 
