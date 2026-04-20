@@ -129,6 +129,11 @@ typedef struct {
      * Used to detect when content grows and new rows must be claimed via \r\n
      * rather than CUD (which clamps at the terminal bottom). */
     int  prev_effective_h;
+    /* Set to 1 whenever next is known-clean: fill_space'd, slab reset, and
+     * dirty_xmax initialized. Cleared by put_cell on first write. Allows
+     * clear() to be a no-op when next is already blank (e.g. right after diff
+     * or resize), avoiding a redundant O(w*h) fill_space each frame. */
+    int  next_clean;
 } screen_t;
 
 #define SCREEN_MT "tui_core.screen"
@@ -278,6 +283,7 @@ l_new(lua_State *L) {
     dirty_xmax_init(s->dirty_xmax, s->h);
     dirty_xmax_init(s->prev_xmax, s->h);
     s->prev_valid = 0;
+    s->next_clean = 1;
     s->mode = SCREEN_MODE_ALT;
     s->virt_x = 0; s->virt_y = 0;
     s->display_x = -1; s->display_y = -1;
@@ -327,6 +333,7 @@ l_resize(lua_State *L) {
     /* row pool buffers invalidated: drop them so next rows() reallocates. */
     row_pool_free(&s->rows);
     s->prev_valid = 0;
+    s->next_clean = 1;
     return 0;
 }
 
@@ -340,9 +347,12 @@ l_invalidate(lua_State *L) {
 static int
 l_clear(lua_State *L) {
     screen_t *s = check_screen(L, 1);
-    fill_space(s->next, s->w * s->h);
-    slab_reset(&s->next_slab);
-    dirty_xmax_init(s->dirty_xmax, s->h);
+    if (!s->next_clean) {
+        fill_space(s->next, s->w * s->h);
+        slab_reset(&s->next_slab);
+        dirty_xmax_init(s->dirty_xmax, s->h);
+        s->next_clean = 1;
+    }
     return 0;
 }
 
@@ -363,6 +373,8 @@ put_cell(screen_t *s, int x, int y,
     if (x < 0 || y < 0 || x >= s->w || y >= s->h) return 0;
     if (cw == 2 && x + 1 >= s->w) return 0;
     if (slen == 0 || slen > 256u) return 0;  /* cap grapheme cluster at 256B */
+
+    s->next_clean = 0;
 
     cell_t *c = cell_at(s->next, s->w, x, y);
     memset(c, 0, sizeof(*c));
@@ -906,10 +918,9 @@ diff_alt(screen_t *s, bytes_t *out) {
     s->next_slab = tmp_slab;
     slab_reset(&s->next_slab);
     /* Refill the freshly-promoted `next` (old prev, carries stale cells)
-     * with spaces. Caller's next paint pass will clear() again which
-     * produces the same state; doing it here lets `rows()` and repeated
-     * `diff()` calls behave deterministically when paint isn't re-run. */
+     * with spaces, and mark it clean so the next clear() call is a no-op. */
     fill_space(s->next, s->w * s->h);
+    s->next_clean = 1;
     /* Swap dirty tracking: prev_xmax = what was just rendered; reset dirty_xmax. */
     {
         int *tmp = s->prev_xmax;
@@ -1111,6 +1122,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
     s->next_slab = tmp_slab;
     slab_reset(&s->next_slab);
     fill_space(s->next, s->w * s->h);
+    s->next_clean = 1;
     /* Swap dirty tracking arrays. */
     {
         int *tmp = s->prev_xmax;

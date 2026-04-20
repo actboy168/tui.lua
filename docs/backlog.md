@@ -32,7 +32,6 @@ _暂无_
 - **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
 - **超链接（OSC 8）**：终端超链接支持，URL 去重存储到 HyperlinkPool
 - `focus` 链表 entry→idx 映射（当前 Tab 切换线性搜索 O(n) → O(1)）
-- `screen.c fill_space` 冗余消除：diff 后清空 next 缓冲，下一帧 `clear()` 又重清一遍，可跳过
 
 ### 开发者体验
 
