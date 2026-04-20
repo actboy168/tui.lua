@@ -53,6 +53,99 @@ M.wrap = text_c.wrap
 -- Returns an array of line strings.
 M.wrap_hard = text_c.wrap_hard
 
+--- wrap_runs(runs, max_cols) -> line_runs
+-- Soft-wrap a sequence of {text=str, props=?} runs to fit within max_cols
+-- columns.  Returns an array of "line run arrays"; each element is itself an
+-- array of {text=str, props=?} segments.
+--
+-- Word-wrap semantics match M.wrap(): break on whitespace when possible,
+-- place an overlong word on its own line (overflow) as a last resort.
+-- Trailing spaces at break boundaries are not included in either line.
+function M.wrap_runs(runs, max_cols)
+    if not runs or #runs == 0 then return {{}} end
+    if max_cols <= 0 then return {{}} end
+
+    local grapheme_next = wcwidth.grapheme_next
+
+    local result   = {}     -- array of completed lines
+    local cur_segs = {}     -- current line: array of {text, props}
+    local cur_w    = 0      -- display width of current line
+
+    local pword   = {}      -- pending word: array of {text, props}
+    local pword_w = 0       -- display width of pending word
+
+    -- Append `text/props` to an array of segments, merging with the last
+    -- segment when props are identical.
+    local function seg_push(arr, text, props)
+        if text == "" then return end
+        local n = #arr
+        if n > 0 and arr[n].props == props then
+            arr[n] = { text = arr[n].text .. text, props = props }
+        else
+            arr[n + 1] = { text = text, props = props }
+        end
+    end
+
+    -- Commit the pending word to cur_segs (starting a new line when needed).
+    local function flush()
+        if pword_w == 0 then return end
+        if cur_w > 0 and cur_w + pword_w > max_cols then
+            result[#result + 1] = cur_segs
+            cur_segs = {}
+            cur_w    = 0
+        end
+        for _, wp in ipairs(pword) do
+            seg_push(cur_segs, wp.text, wp.props)
+        end
+        cur_w   = cur_w + pword_w
+        pword   = {}
+        pword_w = 0
+    end
+
+    for _, run in ipairs(runs) do
+        local text  = run.text or ""
+        local props = run.props
+        local i     = 1
+        while i <= #text do
+            local ch, cw, ni = grapheme_next(text, i)
+            if ch == "" then break end
+            i = ni
+            if ch == "\n" then
+                flush()
+                result[#result + 1] = cur_segs
+                cur_segs = {}
+                cur_w    = 0
+            elseif cw == 0 then
+                -- Zero-width combining: attach to the pending word (or the
+                -- current line if there is no pending word yet).
+                if pword_w > 0 then
+                    seg_push(pword, ch, props)
+                else
+                    seg_push(cur_segs, ch, props)
+                end
+            elseif ch:byte(1) <= 0x20 then
+                -- ASCII whitespace: word boundary.
+                flush()
+                -- Keep one space on the line (drop at break boundaries).
+                if cur_w > 0 and cur_w < max_cols then
+                    seg_push(cur_segs, ch, props)
+                    cur_w = cur_w + 1
+                end
+            else
+                -- Regular printable grapheme: accumulate into pending word.
+                seg_push(pword, ch, props)
+                pword_w = pword_w + cw
+            end
+        end
+    end
+
+    flush()
+    -- Always emit the trailing line (preserves single-line output for
+    -- short/empty input, matching the behaviour of M.wrap()).
+    result[#result + 1] = cur_segs
+    return result
+end
+
 -- Truncate `s` from the end to fit within `max_cols` display columns.
 -- If truncation occurs, replaces the excess with U+2026 (…).
 M.truncate = text_c.truncate

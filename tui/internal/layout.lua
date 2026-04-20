@@ -174,16 +174,22 @@ local function readback_from_cache(element, ax, ay)
     element.rect = { x = cax, y = cay, w = lw, h = cache[4] }
     if element.kind == "text" and element._wrap then
         local mode = element._wrap_mode or "wrap"
-        if mode == "hard" then
-            element.lines = text_mod.wrap_hard(element.text or "", lw)
-        elseif mode == "truncate" or mode == "truncate-end" then
-            element.lines = { text_mod.truncate(element.text or "", lw) }
-        elseif mode == "truncate-start" then
-            element.lines = { text_mod.truncate_start(element.text or "", lw) }
-        elseif mode == "truncate-middle" then
-            element.lines = { text_mod.truncate_middle(element.text or "", lw) }
+        if element.runs and mode == "wrap" then
+            element.line_runs = text_mod.wrap_runs(element.runs, lw)
+            element.lines     = nil
         else
-            element.lines = text_mod.wrap(element.text or "", lw)
+            element.line_runs = nil
+            if mode == "hard" then
+                element.lines = text_mod.wrap_hard(element.text or "", lw)
+            elseif mode == "truncate" or mode == "truncate-end" then
+                element.lines = { text_mod.truncate(element.text or "", lw) }
+            elseif mode == "truncate-start" then
+                element.lines = { text_mod.truncate_start(element.text or "", lw) }
+            elseif mode == "truncate-middle" then
+                element.lines = { text_mod.truncate_middle(element.text or "", lw) }
+            else
+                element.lines = text_mod.wrap(element.text or "", lw)
+            end
         end
     end
     if element.kind == "box" then
@@ -219,19 +225,31 @@ local function readback(element, ox, oy, phase, wrap_nodes)
         if element.kind == "text" and element._wrap then
             local mode = element._wrap_mode or "wrap"
             local lines
-            if mode == "hard" then
+            if element.runs and mode == "wrap" then
+                local lr = text_mod.wrap_runs(element.runs, lw)
+                element.line_runs = lr
+                element.lines     = nil
+                if phase == "measure" and wrap_nodes and #lr > 1 then
+                    wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lr }
+                end
+            elseif mode == "hard" then
+                element.line_runs = nil
                 lines = text_mod.wrap_hard(element.text or "", lw)
                 element.lines = lines
                 if phase == "measure" and wrap_nodes and #lines > 1 then
                     wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
                 end
             elseif mode == "truncate" or mode == "truncate-end" then
+                element.line_runs = nil
                 element.lines = { text_mod.truncate(element.text or "", lw) }
             elseif mode == "truncate-start" then
+                element.line_runs = nil
                 element.lines = { text_mod.truncate_start(element.text or "", lw) }
             elseif mode == "truncate-middle" then
+                element.line_runs = nil
                 element.lines = { text_mod.truncate_middle(element.text or "", lw) }
             else
+                element.line_runs = nil
                 lines = text_mod.wrap(element.text or "", lw)
                 element.lines = lines
                 if phase == "measure" and wrap_nodes and #lines > 1 then
@@ -277,23 +295,35 @@ local function readback(element, ox, oy, phase, wrap_nodes)
         if element._wrap then
             local mode = element._wrap_mode or "wrap"
             local lines
-            if mode == "hard" then
+            if element.runs and mode == "wrap" then
+                local lr = text_mod.wrap_runs(element.runs, lw)
+                element.line_runs = lr
+                element.lines     = nil
+                if phase == "measure" and wrap_nodes and #lr > 1 then
+                    wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lr }
+                end
+            elseif mode == "hard" then
+                element.line_runs = nil
                 lines = text_mod.wrap_hard(element.text or "", lw)
                 element.lines = lines
                 if phase == "measure" and wrap_nodes and #lines > 1 then
                     wrap_nodes[#wrap_nodes + 1] = { node = element, lines = lines }
                 end
             elseif mode == "truncate" or mode == "truncate-end" then
+                element.line_runs = nil
                 lines = { text_mod.truncate(element.text or "", lw) }
                 element.lines = lines
             elseif mode == "truncate-start" then
+                element.line_runs = nil
                 lines = { text_mod.truncate_start(element.text or "", lw) }
                 element.lines = lines
             elseif mode == "truncate-middle" then
+                element.line_runs = nil
                 lines = { text_mod.truncate_middle(element.text or "", lw) }
                 element.lines = lines
             else
                 -- default "wrap" mode
+                element.line_runs = nil
                 lines = text_mod.wrap(element.text or "", lw)
                 element.lines = lines
                 if phase == "measure" and wrap_nodes and #lines > 1 then

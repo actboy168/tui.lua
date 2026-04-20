@@ -56,23 +56,49 @@ function M.Box(t)
 end
 
 --- Text(props_and_children) -> element
--- Children must all be strings (concatenated on render).
+-- Children may be strings or span tables.
+-- A span table has the shape { text = "...", color = "...", bold = true, ... }
+-- and applies per-segment style overrides within the rendered text.
+-- Mixed and plain-string children may be combined freely.
 function M.Text(t)
     t = t or {}
     local props, children = split_props_children(t)
     local key, _ref = pluck_reserved(props)
     _ref = nil  -- Text does not use ref
-    -- Join all string children into a single string for now.
-    local parts = {}
-    for i, v in ipairs(children) do
-        parts[i] = tostring(v)
+    local parts     = {}
+    local runs      = {}
+    local has_spans = false
+    for _, v in ipairs(children) do
+        if type(v) == "table" then
+            -- Span child: must have a string `text` field.
+            if type(v.text) ~= "string" then
+                error("Text: span child must have a string 'text' field, got "
+                      .. type(v.text), 2)
+            end
+            parts[#parts + 1] = v.text
+            -- Collect span style props (every key except `text`).
+            local span_props = nil
+            for k, sv in pairs(v) do
+                if k ~= "text" then
+                    if not span_props then span_props = {} end
+                    span_props[k] = sv
+                end
+            end
+            runs[#runs + 1] = { text = v.text, props = span_props }
+            has_spans = true
+        else
+            local s = tostring(v)
+            parts[#parts + 1] = s
+            runs[#runs + 1]   = { text = s, props = nil }
+        end
     end
     return {
-        kind = "text",
-        key = key,
-        props = props,
+        kind     = "text",
+        key      = key,
+        props    = props,
         children = parts,
-        text = table.concat(parts),
+        text     = table.concat(parts),
+        runs     = has_spans and runs or nil,
     }
 end
 

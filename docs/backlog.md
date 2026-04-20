@@ -13,6 +13,11 @@ _暂无_
 
 ## 未完成 · 按类别
 
+### Text 行内混合样式（已完成特性的后续）
+
+- **Span 文本的 `wrap="hard"` / truncate 模式**：`element.runs` 目前仅在 `wrap="wrap"` 时走 `wrap_runs` 路径；其余模式 `element.line_runs = nil` 退回纯文本渲染，span 样式静默丢失
+- **`wrap_runs` 不处理 span 内的 `\n`**：原始 `text.wrap` 会拆显式换行，`wrap_runs` 只在空格断行，span 中含 `\n` 时行为与纯文本不一致
+
 ### 内置组件扩充
 
 - `Transform { transform=fn }`
@@ -22,11 +27,8 @@ _暂无_
 
 ### 渲染性能与稳定性
 
-- **Truecolor / 256 色**：`cell_t` 扩到 16 字节 or 独立 style pool，给 `fg / bg` 加 16/24 bit 值
-- **Text 行内混合样式**：`Text { "plain ", {text="red", color="red"} }`，wrap 沿 run 边界切片
 - **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点，解决弹窗关闭后焦点丢失问题
 - **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
-- **StylePool 缓存**：style_id → SGR 会话级缓存，避免每帧重复计算 ANSI 序列。方案：`cell_t` 存 `style_id (uint16_t)` 索引到独立 pool，首次 interning 后续直接查找
 - **CharPool 字符串去重**：相同文本共享存储，减少内存占用
 - **光标 shape 支持**：`\x1B[n q` 切换 bar / block / underline；TextInput 暴露 `cursorShape` prop
 - **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
@@ -35,6 +37,7 @@ _暂无_
 
 ### 开发者体验
 
+- **`tui.Text` span 语法文档**：README / API 文档里尚无 span 子表语法（`{text="x", color="red"}`）的说明，需补充
 - `tui._VERSION` 字符串常量
 - `make.lua` 加 `lm:conf_debug` / `lm:conf_release` 区分（asan / NDEBUG 开关）
 - `testing.lua` `io.stderr` 全局替换改为生命周期受限的拦截（`render` 到 `unmount` 之间），避免并行测试风险

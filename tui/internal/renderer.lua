@@ -16,6 +16,7 @@
 
 local screen_c = require "tui_core".screen
 local sgr      = require "tui.internal.sgr"
+local text_mod = require "tui.internal.text"
 
 local M = {}
 
@@ -50,6 +51,19 @@ local function child_inherit(props, inherit)
     return { color = c, backgroundColor = bg }
 end
 
+-- Merge base style props with span-level override props.
+-- If the span sets `color` (but not `dimColor`), any inherited `dimColor` is
+-- cleared so the span's plain color wins.
+local function merge_span_props(base, span_props)
+    local merged = {}
+    if base then for k, v in pairs(base) do merged[k] = v end end
+    for k, v in pairs(span_props) do merged[k] = v end
+    if span_props.color ~= nil and span_props.dimColor == nil then
+        merged.dimColor = nil
+    end
+    return merged
+end
+
 local function paint(element, screen, inherit)
     local r = element.rect
     if not r then return end
@@ -75,14 +89,39 @@ local function paint(element, screen, inherit)
         end
     elseif element.kind == "text" then
         local props = effective_props(element.props, inherit)
-        local style_id = sgr.pack_style(screen, props)
-        if element.lines then
+        if element.line_runs then
+            -- Inline mixed styles: one pass per line, one draw_line per segment.
+            local base_style_id = sgr.pack_style(screen, props)
+            for li, segs in ipairs(element.line_runs) do
+                if li - 1 >= r.h then break end
+                local y = r.y + (li - 1)
+                -- Fill the whole line with the base style first (handles
+                -- background colour and trailing space after the last segment).
+                screen_c.draw_line(screen, r.x, y, "", r.w, base_style_id)
+                local x_off = 0
+                for _, seg in ipairs(segs) do
+                    local seg_props
+                    if seg.props then
+                        seg_props = merge_span_props(props, seg.props)
+                    else
+                        seg_props = props
+                    end
+                    local style_id = sgr.pack_style(screen, seg_props)
+                    local seg_w    = text_mod.display_width(seg.text)
+                    screen_c.draw_line(screen, r.x + x_off, y, seg.text,
+                                       seg_w, style_id)
+                    x_off = x_off + seg_w
+                end
+            end
+        elseif element.lines then
+            local style_id = sgr.pack_style(screen, props)
             for li, line in ipairs(element.lines) do
                 if li - 1 >= r.h then break end
                 screen_c.draw_line(screen, r.x, r.y + (li - 1), line, r.w,
                                    style_id)
             end
         else
+            local style_id = sgr.pack_style(screen, props)
             screen_c.draw_line(screen, r.x, r.y, element.text or "", r.w,
                                style_id)
         end

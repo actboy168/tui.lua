@@ -306,6 +306,7 @@ local function expand(state, element, path)
             -- Text children are strings; copy verbatim + keep .text field.
             for i, c in ipairs(element.children or {}) do out.children[i] = c end
             out.text = element.text
+            out.runs = element.runs
             -- Propagate cursor metadata fields used by builtin components.
             -- TextInput sets these during render based on focus state.
             out._cursor_offset = element._cursor_offset
