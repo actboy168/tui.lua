@@ -49,6 +49,8 @@ l_get_size(lua_State *L) {
     return 2;
 }
 
+#endif /* _WIN32 */
+
 /* ── Shared input-normalization helpers ───────────────────────── */
 
 #define TUI_CTRL_ALT_LEFT    0x0002u
@@ -316,6 +318,8 @@ l_test_normalize_input(lua_State *L) {
 }
 
 /* ── raw mode ─────────────────────────────────────────────────── */
+
+#if defined(_WIN32)
 
 static DWORD s_orig_in_mode  = 0;
 static DWORD s_orig_out_mode = 0;
