@@ -42,30 +42,37 @@
 
 /* ── cell / slab / screen structs ─────────────────────────────── */
 
-/* SGR attribute layout (Stage 10):
+/* SGR style layout (Stage 10+):
  *
- *   fg_bg:  high nibble = fg (0..15 = ANSI 16-color), low nibble = bg (0..15).
- *           Values 0..7 map to normal 30-37 / 40-47; 8..15 map to bright
- *           90-97 / 100-107. Default (no-color) is tracked by the is_default
- *           bits in `attrs` — fg_bg bits are ignored when that bit is set.
+ *   cell_t.style_id: index into the screen's style_pool.  id=0 means
+ *     "terminal default" — no fg/bg/attr overrides.  Non-zero IDs index
+ *     style_pool_t.entries[id-1] which carries fg_mode/bg_mode (one of
+ *     COLOR_MODE_DEFAULT/16/256/24BIT), the color value, and the attrs
+ *     bitmask (BOLD|DIM|UNDERLINE|INVERSE|ITALIC|STRIKETHROUGH).
  *
- *   attrs:  bit0 bold     bit1 dim       bit2 underline  bit3 inverse
- *           bit4 fg_def   bit5 bg_def    bit6..7 reserved
- *           When bit4/bit5 is set, the corresponding nibble in fg_bg must
- *           be treated as "terminal default" regardless of its value. The
- *           default-filled cell is `attrs = ATTR_DEFAULT_STYLE` = 0x30.
+ *   Downgrade: when screen.color_level < the mode requested, emit_sgr
+ *     transparently downgrades (24bit→256→16) at render time.  The pool
+ *     always stores the original (highest-fidelity) value.
  */
 #define ATTR_BOLD          0x01u
 #define ATTR_DIM           0x02u
 #define ATTR_UNDERLINE     0x04u
 #define ATTR_INVERSE       0x08u
-#define ATTR_FG_DEFAULT    0x10u
-#define ATTR_BG_DEFAULT    0x20u
 #define ATTR_ITALIC        0x40u
 #define ATTR_STRIKETHROUGH 0x80u
 #define ATTR_STYLE_MASK    (ATTR_BOLD | ATTR_DIM | ATTR_UNDERLINE | ATTR_INVERSE \
                             | ATTR_ITALIC | ATTR_STRIKETHROUGH)
-#define ATTR_DEFAULT       (ATTR_FG_DEFAULT | ATTR_BG_DEFAULT)
+
+/* Color mode stored in style_entry_t.fg_mode / bg_mode. */
+#define COLOR_MODE_DEFAULT  0u  /* terminal default color (SGR 39/49) */
+#define COLOR_MODE_16       1u  /* ANSI 16-color (0..15) */
+#define COLOR_MODE_256      2u  /* xterm 256-color (0..255) */
+#define COLOR_MODE_24BIT    3u  /* 24-bit truecolor (0x00RRGGBB) */
+
+/* Screen-level color depth limit. */
+#define COLOR_LEVEL_16    0  /* ANSI 16-color only */
+#define COLOR_LEVEL_256   1  /* up to xterm 256-color */
+#define COLOR_LEVEL_24BIT 2  /* full 24-bit truecolor */
 
 typedef struct {
     union {
@@ -76,10 +83,9 @@ typedef struct {
             uint8_t  _pad[2];
         } ext;
     } u;
-    uint8_t len;    /* 1..8 inline, 0xFF slab, 0 WIDE_TAIL */
-    uint8_t width;  /* 0 tail, 1 narrow, 2 wide head */
-    uint8_t fg_bg;  /* high nibble fg, low nibble bg (see ATTR_*_DEFAULT) */
-    uint8_t attrs;  /* ATTR_* bitmask */
+    uint8_t  len;       /* 1..8 inline, 0xFF slab, 0 WIDE_TAIL */
+    uint8_t  width;     /* 0 tail, 1 narrow, 2 wide head */
+    uint16_t style_id;  /* style pool index; 0 = default (no style) */
 } cell_t;
 
 /* Compile-time guard: must stay 12 bytes / 4-byte alignment. */
@@ -92,6 +98,27 @@ typedef struct {
     uint32_t size;
     uint32_t cap;
 } slab_t;
+
+/* ── style_entry_t / style_pool_t ─────────────────────────────────
+ *
+ * style_id=0 is the implicit default style (all-default fg/bg, no attrs).
+ * style_id N > 0 refers to pool->entries[N-1].  The pool grows
+ * monotonically during the session — no per-frame reset — so prev-buffer
+ * style_ids remain valid across frame boundaries (required for diff). */
+typedef struct {
+    uint32_t fg_val;   /* color value (meaning depends on fg_mode) */
+    uint32_t bg_val;   /* color value (meaning depends on bg_mode) */
+    uint8_t  fg_mode;  /* COLOR_MODE_* */
+    uint8_t  bg_mode;  /* COLOR_MODE_* */
+    uint8_t  attrs;    /* ATTR_BOLD | ATTR_DIM | … (no DEFAULT bits) */
+    uint8_t  _pad;
+} style_entry_t;  /* 12 bytes */
+
+typedef struct {
+    style_entry_t *entries;  /* entries[i] → style_id (i+1) */
+    uint32_t       count;
+    uint32_t       cap;
+} style_pool_t;
 
 #define ROW_POOL_GEN 4
 
@@ -135,6 +162,8 @@ typedef struct {
      * clear() to be a no-op when next is already blank (e.g. right after diff
      * or resize), avoiding a redundant O(w*h) fill_space each frame. */
     int  next_clean;
+    int  color_level;    /* COLOR_LEVEL_* — limits SGR output depth */
+    style_pool_t pool;   /* persistent style pool (never reset between frames) */
 } screen_t;
 
 #define SCREEN_MT "tui_core.screen"
@@ -149,22 +178,20 @@ cell_at(cell_t *buf, int w, int x, int y) {
 static inline void
 cell_set_space(cell_t *c) {
     c->u.inline_bytes[0] = ' ';
-    c->len   = 1;
-    c->width = 1;
-    c->fg_bg = 0;
-    c->attrs = ATTR_DEFAULT;
+    c->len      = 1;
+    c->width    = 1;
+    c->style_id = 0;
 }
 
 static void
 fill_space(cell_t *buf, int n) {
     for (int i = 0; i < n; i++) {
         cell_t *c = &buf[i];
-        /* zero the 12 bytes deterministically, then set space. */
         memset(c, 0, sizeof(*c));
         c->u.inline_bytes[0] = ' ';
-        c->len = 1;
+        c->len   = 1;
         c->width = 1;
-        c->attrs = ATTR_DEFAULT;
+        /* style_id already 0 from memset → terminal default */
     }
 }
 
@@ -185,7 +212,7 @@ cell_eq(const cell_t *a, const slab_t *slab_a,
         const cell_t *b, const slab_t *slab_b) {
     if (a->len != b->len || a->width != b->width) return 0;
     if (a->len == 0)    return 1;                  /* both WIDE_TAIL */
-    if (a->fg_bg != b->fg_bg || a->attrs != b->attrs) return 0;
+    if (a->style_id != b->style_id) return 0;
     if (a->len == 0xFF) {
         if (a->u.ext.slab_len != b->u.ext.slab_len) return 0;
         return memcmp(slab_a->buf + a->u.ext.slab_off,
@@ -231,6 +258,202 @@ row_pool_free(row_pool_t *p) {
         p->bufs[i].cap = 0;
     }
     p->gen = 0;
+}
+
+/* ── style pool helpers ────────────────────────────────────────── */
+
+static const style_entry_t STYLE_DEFAULT_ENTRY = {0u, 0u, 0u, 0u, 0u, 0u};
+
+static const style_entry_t *
+pool_get(const style_pool_t *p, uint16_t id) {
+    if (id == 0 || (uint32_t)(id - 1) >= p->count)
+        return &STYLE_DEFAULT_ENTRY;
+    return &p->entries[id - 1];
+}
+
+static uint16_t
+style_intern(style_pool_t *p,
+             uint8_t fg_mode, uint32_t fg_val,
+             uint8_t bg_mode, uint32_t bg_val,
+             uint8_t attrs) {
+    /* id=0 is the implicit all-default; avoid storing it. */
+    if (fg_mode == COLOR_MODE_DEFAULT &&
+        bg_mode == COLOR_MODE_DEFAULT && attrs == 0)
+        return 0;
+    /* Linear scan — pool typically stays well under 200 entries. */
+    for (uint32_t i = 0; i < p->count; i++) {
+        const style_entry_t *e = &p->entries[i];
+        if (e->fg_mode == fg_mode && e->fg_val == fg_val &&
+            e->bg_mode == bg_mode && e->bg_val == bg_val &&
+            e->attrs   == attrs)
+            return (uint16_t)(i + 1);
+    }
+    /* Grow pool if needed. */
+    if (p->count >= p->cap) {
+        uint32_t ncap = p->cap ? p->cap * 2 : 64;
+        if (ncap > 65534u) ncap = 65534u;  /* cap at max uint16_t - 1 */
+        style_entry_t *ne = (style_entry_t *)realloc(p->entries,
+                                                      ncap * sizeof(style_entry_t));
+        if (!ne) return 0;  /* OOM: fall back to default */
+        p->entries = ne;
+        p->cap = ncap;
+    }
+    uint16_t id = (uint16_t)(p->count + 1);
+    style_entry_t *e = &p->entries[p->count++];
+    e->fg_mode = fg_mode; e->fg_val  = fg_val;
+    e->bg_mode = bg_mode; e->bg_val  = bg_val;
+    e->attrs   = attrs;   e->_pad    = 0;
+    return id;
+}
+
+static void
+pool_free(style_pool_t *p) {
+    free(p->entries);
+    p->entries = NULL;
+    p->count = p->cap = 0;
+}
+
+/* ── Color downgrade helpers ───────────────────────────────────── */
+
+/* Expand xterm-256 palette index to approximate (r, g, b). */
+static void
+xterm256_to_rgb(uint8_t idx, uint8_t *r, uint8_t *g, uint8_t *b) {
+    if (idx < 16) {
+        static const uint8_t ansi16[16][3] = {
+            {  0,  0,  0}, {128,  0,  0}, {  0,128,  0}, {128,128,  0},
+            {  0,  0,128}, {128,  0,128}, {  0,128,128}, {192,192,192},
+            {128,128,128}, {255,  0,  0}, {  0,255,  0}, {255,255,  0},
+            {  0,  0,255}, {255,  0,255}, {  0,255,255}, {255,255,255},
+        };
+        *r = ansi16[idx][0]; *g = ansi16[idx][1]; *b = ansi16[idx][2];
+    } else if (idx < 232) {
+        /* 6×6×6 color cube: values 0,95,135,175,215,255. */
+        static const uint8_t cv[6] = {0, 95, 135, 175, 215, 255};
+        uint8_t i6 = idx - 16;
+        *r = cv[i6 / 36]; *g = cv[(i6 / 6) % 6]; *b = cv[i6 % 6];
+    } else {
+        /* 24-step grayscale ramp: 8..238, step 10. */
+        uint8_t v = (uint8_t)(8 + (idx - 232) * 10);
+        *r = *g = *b = v;
+    }
+}
+
+/* Nearest ANSI 16-color for an RGB value. */
+static uint8_t
+rgb_to_ansi16(uint8_t r, uint8_t g, uint8_t b) {
+    static const uint8_t ansi16[16][3] = {
+        {  0,  0,  0}, {128,  0,  0}, {  0,128,  0}, {128,128,  0},
+        {  0,  0,128}, {128,  0,128}, {  0,128,128}, {192,192,192},
+        {128,128,128}, {255,  0,  0}, {  0,255,  0}, {255,255,  0},
+        {  0,  0,255}, {255,  0,255}, {  0,255,255}, {255,255,255},
+    };
+    uint8_t best = 0;
+    int best_d = 0x7FFFFFFF;
+    for (int i = 0; i < 16; i++) {
+        int dr = (int)r - ansi16[i][0];
+        int dg = (int)g - ansi16[i][1];
+        int db = (int)b - ansi16[i][2];
+        int d = dr*dr + dg*dg + db*db;
+        if (d < best_d) { best_d = d; best = (uint8_t)i; }
+    }
+    return best;
+}
+
+/* Nearest xterm-256 index for an RGB value. */
+static uint8_t
+rgb_to_xterm256(uint8_t r, uint8_t g, uint8_t b) {
+    /* 6×6×6 color cube: component values 0,95,135,175,215,255. */
+    static const uint8_t CV[6] = {0, 95, 135, 175, 215, 255};
+    /* Find nearest cube dimension index for each channel. */
+    int ri = 0, gi = 0, bi = 0;
+    for (int i = 1; i < 6; i++) {
+        if (abs((int)r - CV[i]) < abs((int)r - CV[ri])) ri = i;
+        if (abs((int)g - CV[i]) < abs((int)g - CV[gi])) gi = i;
+        if (abs((int)b - CV[i]) < abs((int)b - CV[bi])) bi = i;
+    }
+    uint8_t cube_idx = (uint8_t)(16 + 36*ri + 6*gi + bi);
+    int cdr = (int)r - CV[ri], cdg = (int)g - CV[gi], cdb = (int)b - CV[bi];
+    int cube_d = cdr*cdr + cdg*cdg + cdb*cdb;
+    /* Compare against nearest grayscale ramp entry (232..255 = 8..238 step 10). */
+    int gray_avg = ((int)r + g + b) / 3;
+    int gray_i = (gray_avg - 8) / 10;
+    if (gray_i < 0) gray_i = 0;
+    if (gray_i > 23) gray_i = 23;
+    uint8_t gv = (uint8_t)(8 + gray_i * 10);
+    int gdr = (int)r - gv, gdg = (int)g - gv, gdb = (int)b - gv;
+    int gray_d = gdr*gdr + gdg*gdg + gdb*gdb;
+    return (gray_d < cube_d) ? (uint8_t)(232 + gray_i) : cube_idx;
+}
+
+/* xterm-256 index → nearest ANSI 16-color index. */
+static uint8_t
+xterm256_to_ansi16(uint8_t idx) {
+    uint8_t r, g, b;
+    xterm256_to_rgb(idx, &r, &g, &b);
+    return rgb_to_ansi16(r, g, b);
+}
+
+/* ── Effective-style computation ────────────────────────────────── */
+
+/* Effective (post-downgrade) style; used by emit_sgr for comparison
+ * and emission.  Stores mode+val per channel so comparison is uniform. */
+typedef struct {
+    uint8_t  fg_mode;
+    uint32_t fg_val;
+    uint8_t  bg_mode;
+    uint32_t bg_val;
+    uint8_t  attrs;
+} eff_style_t;
+
+static eff_style_t
+compute_eff(const style_entry_t *s, int color_level) {
+    eff_style_t e;
+    e.attrs = s->attrs;
+
+    /* FG channel */
+    if (s->fg_mode == COLOR_MODE_DEFAULT) {
+        e.fg_mode = COLOR_MODE_DEFAULT; e.fg_val = 0;
+    } else if (color_level >= COLOR_LEVEL_24BIT) {
+        e.fg_mode = s->fg_mode; e.fg_val = s->fg_val;
+    } else if (color_level == COLOR_LEVEL_256) {
+        if (s->fg_mode == COLOR_MODE_24BIT) {
+            e.fg_mode = COLOR_MODE_256;
+            e.fg_val = rgb_to_xterm256((s->fg_val>>16)&0xFF,
+                                       (s->fg_val>>8)&0xFF, s->fg_val&0xFF);
+        } else { e.fg_mode = s->fg_mode; e.fg_val = s->fg_val; }
+    } else { /* COLOR_LEVEL_16 */
+        if (s->fg_mode == COLOR_MODE_24BIT) {
+            e.fg_mode = COLOR_MODE_16;
+            e.fg_val = rgb_to_ansi16((s->fg_val>>16)&0xFF,
+                                     (s->fg_val>>8)&0xFF, s->fg_val&0xFF);
+        } else if (s->fg_mode == COLOR_MODE_256) {
+            e.fg_mode = COLOR_MODE_16;
+            e.fg_val = xterm256_to_ansi16((uint8_t)s->fg_val);
+        } else { e.fg_mode = s->fg_mode; e.fg_val = s->fg_val; }
+    }
+
+    /* BG channel (identical logic) */
+    if (s->bg_mode == COLOR_MODE_DEFAULT) {
+        e.bg_mode = COLOR_MODE_DEFAULT; e.bg_val = 0;
+    } else if (color_level >= COLOR_LEVEL_24BIT) {
+        e.bg_mode = s->bg_mode; e.bg_val = s->bg_val;
+    } else if (color_level == COLOR_LEVEL_256) {
+        if (s->bg_mode == COLOR_MODE_24BIT) {
+            e.bg_mode = COLOR_MODE_256;
+            e.bg_val = rgb_to_xterm256((s->bg_val>>16)&0xFF,
+                                       (s->bg_val>>8)&0xFF, s->bg_val&0xFF);
+        } else { e.bg_mode = s->bg_mode; e.bg_val = s->bg_val; }
+    } else {
+        if (s->bg_mode == COLOR_MODE_24BIT) {
+            e.bg_mode = COLOR_MODE_16;
+            e.bg_val = rgb_to_ansi16((s->bg_val>>16)&0xFF,
+                                     (s->bg_val>>8)&0xFF, s->bg_val&0xFF);
+        } else if (s->bg_mode == COLOR_MODE_256) {
+            e.bg_mode = COLOR_MODE_16;
+            e.bg_val = xterm256_to_ansi16((uint8_t)s->bg_val);
+        } else { e.bg_mode = s->bg_mode; e.bg_val = s->bg_val; }
+    }
+    return e;
 }
 
 static screen_t *
@@ -365,12 +588,12 @@ l_clear(lua_State *L) {
  * grapheme clusters (up to UINT16_MAX bytes; practical limit is 255 per
  * slab_len field width is fine; we allow up to 16-bit).
  *
- * style parameters (fg_bg, attrs) are written as-is; wide-char tail gets
- * the same style so cell_eq is stable pair-wise. */
+ * style_id is written as-is; wide-char tail gets the same style_id so
+ * cell_eq is stable pair-wise. */
 static int
 put_cell(screen_t *s, int x, int y,
          const char *str, size_t slen, int cw,
-         uint8_t fg_bg, uint8_t attrs) {
+         uint16_t style_id) {
     if (x < 0 || y < 0 || x >= s->w || y >= s->h) return 0;
     if (cw == 2 && x + 1 >= s->w) return 0;
     if (slen == 0 || slen > 256u) return 0;  /* cap grapheme cluster at 256B */
@@ -391,9 +614,8 @@ put_cell(screen_t *s, int x, int y,
         c->u.ext.slab_len = (uint16_t)slen;
         c->len = 0xFF;
     }
-    c->width = (uint8_t)cw;
-    c->fg_bg = fg_bg;
-    c->attrs = attrs;
+    c->width    = (uint8_t)cw;
+    c->style_id = style_id;
 
     /* Track rightmost column written for damage-based row skipping in diff. */
     {
@@ -404,12 +626,11 @@ put_cell(screen_t *s, int x, int y,
     if (cw == 2) {
         cell_t *tail = cell_at(s->next, s->w, x + 1, y);
         memset(tail, 0, sizeof(*tail));
-        tail->len   = 0;  /* WIDE_TAIL */
-        tail->width = 0;
+        tail->len      = 0;  /* WIDE_TAIL */
+        tail->width    = 0;
         /* Tail keeps the head's style so a diff over (head,tail) is
          * consistent when the style changes but bytes don't. */
-        tail->fg_bg = fg_bg;
-        tail->attrs = attrs;
+        tail->style_id = style_id;
     }
     return 1;
 }
@@ -425,9 +646,8 @@ l_put(lua_State *L) {
 
     if (cw != 1 && cw != 2) TUI_FATAL(L, "screen.put: width must be 1 or 2");
 
-    uint8_t fg_bg = (uint8_t)luaL_optinteger(L, 6, 0);
-    uint8_t attrs = (uint8_t)luaL_optinteger(L, 7, ATTR_DEFAULT);
-    put_cell(s, x, y, str, slen, cw, fg_bg, attrs);
+    uint16_t style_id = (uint16_t)luaL_optinteger(L, 6, 0);
+    put_cell(s, x, y, str, slen, cw, style_id);
     return 0;
 }
 
@@ -519,23 +739,22 @@ l_put_border(lua_State *L) {
     int h = (int)luaL_checkinteger(L, 5);
     const char *style = luaL_optstring(L, 6, "single");
 
-    uint8_t fg_bg = (uint8_t)luaL_optinteger(L, 7, 0);
-    uint8_t attrs = (uint8_t)luaL_optinteger(L, 8, ATTR_DEFAULT);
+    uint16_t style_id = (uint16_t)luaL_optinteger(L, 7, 0);
 
     if (w < 2 || h < 2) return 0;
     const border_glyphs_t *g = border_lookup(style);
 
-    put_cell(s, x,           y,           g->tl, 3, 1, fg_bg, attrs);
-    put_cell(s, x + w - 1,   y,           g->tr, 3, 1, fg_bg, attrs);
-    put_cell(s, x,           y + h - 1,   g->bl, 3, 1, fg_bg, attrs);
-    put_cell(s, x + w - 1,   y + h - 1,   g->br, 3, 1, fg_bg, attrs);
+    put_cell(s, x,           y,           g->tl, 3, 1, style_id);
+    put_cell(s, x + w - 1,   y,           g->tr, 3, 1, style_id);
+    put_cell(s, x,           y + h - 1,   g->bl, 3, 1, style_id);
+    put_cell(s, x + w - 1,   y + h - 1,   g->br, 3, 1, style_id);
     for (int i = 1; i < w - 1; i++) {
-        put_cell(s, x + i,   y,           g->hh, 3, 1, fg_bg, attrs);
-        put_cell(s, x + i,   y + h - 1,   g->hh, 3, 1, fg_bg, attrs);
+        put_cell(s, x + i,   y,           g->hh, 3, 1, style_id);
+        put_cell(s, x + i,   y + h - 1,   g->hh, 3, 1, style_id);
     }
     for (int i = 1; i < h - 1; i++) {
-        put_cell(s, x,       y + i,       g->vv, 3, 1, fg_bg, attrs);
-        put_cell(s, x + w - 1, y + i,     g->vv, 3, 1, fg_bg, attrs);
+        put_cell(s, x,       y + i,       g->vv, 3, 1, style_id);
+        put_cell(s, x + w - 1, y + i,     g->vv, 3, 1, style_id);
     }
     return 0;
 }
@@ -557,8 +776,7 @@ l_draw_line(lua_State *L) {
     const char *text = luaL_checklstring(L, 4, &tlen);
     int max_w = (int)luaL_optinteger(L, 5, s->w);
 
-    uint8_t fg_bg = (uint8_t)luaL_optinteger(L, 6, 0);
-    uint8_t attrs = (uint8_t)luaL_optinteger(L, 7, ATTR_DEFAULT);
+    uint16_t style_id = (uint16_t)luaL_optinteger(L, 6, 0);
 
     int cx = x;
     int stop = x + max_w;
@@ -569,7 +787,7 @@ l_draw_line(lua_State *L) {
         grapheme_next((const unsigned char *)text, tlen, &i, &clen, &cw);
         if (cw <= 0) continue;  /* controls / lone 0-width: skip */
         if (cx + cw > stop) break;
-        put_cell(s, cx, y, text + i0, clen, cw, fg_bg, attrs);
+        put_cell(s, cx, y, text + i0, clen, cw, style_id);
         cx += cw;
     }
     return 0;
@@ -614,150 +832,147 @@ bytes_append_cup(bytes_t *b, int y, int x) {
 }
 
 /* Map a 4-bit color nibble (0..15) to its ANSI SGR fg/bg parameter.
- * 0..7 → 30..37 (normal), 8..15 → 90..97 (bright). Caller passes the base
- * (30 for fg normal, 40 for bg normal); bright offset is +60 (standard). */
+ * 0..7 → 30..37 (normal), 8..15 → 90..97 (bright). */
 static int
 sgr_color_param(uint8_t nibble, int base) {
     if (nibble < 8) return base + (int)nibble;
     return base + 60 + (int)(nibble - 8);
 }
 
-/* Emit a SGR sequence to transition terminal state from (cur_fg_bg,cur_attrs)
- * to (next_fg_bg, next_attrs). Stage 11: pure incremental diff — only the
- * attributes that actually changed produce parameters, using the standard
- * "off" codes (22/24/27/39/49) for turning properties off.
- *
- * `cur_fg_bg / cur_attrs` are updated in place. If the state already
- * matches, nothing is emitted (zero-byte early return).
- *
- * Bold/dim share the 22m off-code: per ECMA-48, "22" clears BOTH bold and
- * dim intensity. If we need to turn one off while keeping the other on,
- * we emit ";22" first (clearing both) and then re-emit the survivor. */
+/* Emit a SGR sequence to transition terminal state from cur_id to next_id.
+ * Uses the screen's style pool and color_level to downgrade if needed.
+ * Pure incremental: only changed attributes produce parameters.
+ * cur_id is updated in-place.  No-op when effective styles are identical. */
 static void
 emit_sgr(bytes_t *b,
-         uint8_t *cur_fg_bg, uint8_t *cur_attrs,
-         uint8_t next_fg_bg, uint8_t next_attrs) {
-    if (*cur_fg_bg == next_fg_bg && *cur_attrs == next_attrs) return;
+         const style_pool_t *pool, int color_level,
+         uint16_t *cur_id, uint16_t next_id) {
+    if (*cur_id == next_id) return;
 
-    char tmp[96];
+    const style_entry_t *cur_se = pool_get(pool, *cur_id);
+    const style_entry_t *nxt_se = pool_get(pool, next_id);
+
+    eff_style_t cur_e = compute_eff(cur_se, color_level);
+    eff_style_t nxt_e = compute_eff(nxt_se, color_level);
+
+    /* If effective (post-downgrade) states are identical, skip. */
+    if (cur_e.fg_mode == nxt_e.fg_mode && cur_e.fg_val == nxt_e.fg_val &&
+        cur_e.bg_mode == nxt_e.bg_mode && cur_e.bg_val == nxt_e.bg_val &&
+        cur_e.attrs   == nxt_e.attrs) {
+        *cur_id = next_id;
+        return;
+    }
+
+    /* Truecolor SGR params can be "\x1b[38;2;255;255;255;48;2;255;255;255;" + attrs
+     * — allocate 256 bytes to be safe. */
+    char tmp[256];
     int n = 0;
     int first = 1;
     n += snprintf(tmp + n, sizeof(tmp) - n, "\x1b[");
 
-    /* Helper macro: emit ";p" or "p" depending on whether we've already
-     * written a parameter. Assumes `first`, `tmp`, `n`, `sizeof(tmp)` in scope. */
-    #define EMIT_PARAM(lit) do {                                           \
-        if (first) {                                                        \
-            n += snprintf(tmp + n, sizeof(tmp) - n, "%s", lit);             \
-            first = 0;                                                      \
-        } else {                                                            \
-            n += snprintf(tmp + n, sizeof(tmp) - n, ";%s", lit);             \
-        }                                                                   \
+    #define EMIT_P(lit) do {                                                  \
+        if (first) { n += snprintf(tmp+n, sizeof(tmp)-n, "%s", lit); first=0; } \
+        else        { n += snprintf(tmp+n, sizeof(tmp)-n, ";%s", lit); }      \
     } while (0)
-    #define EMIT_PARAM_NUM(num) do {                                       \
-        if (first) {                                                        \
-            n += snprintf(tmp + n, sizeof(tmp) - n, "%d", (num));           \
-            first = 0;                                                      \
-        } else {                                                            \
-            n += snprintf(tmp + n, sizeof(tmp) - n, ";%d", (num));           \
-        }                                                                   \
+    #define EMIT_N(num) do {                                                  \
+        if (first) { n += snprintf(tmp+n, sizeof(tmp)-n, "%d", (num)); first=0; } \
+        else        { n += snprintf(tmp+n, sizeof(tmp)-n, ";%d", (num)); }    \
+    } while (0)
+    #define EMIT_F(fmt, ...) do {                                             \
+        if (first) { n += snprintf(tmp+n, sizeof(tmp)-n, fmt, __VA_ARGS__); first=0; } \
+        else        { n += snprintf(tmp+n, sizeof(tmp)-n, ";" fmt, __VA_ARGS__); }     \
     } while (0)
 
     /* --- bold / dim (share 22m for turn-off) --- */
-    uint8_t cur_bd = *cur_attrs & (ATTR_BOLD | ATTR_DIM);
-    uint8_t nxt_bd = next_attrs & (ATTR_BOLD | ATTR_DIM);
+    uint8_t cur_bd = cur_e.attrs & (ATTR_BOLD | ATTR_DIM);
+    uint8_t nxt_bd = nxt_e.attrs & (ATTR_BOLD | ATTR_DIM);
     if (cur_bd != nxt_bd) {
         uint8_t turned_off = cur_bd & ~nxt_bd;
         if (turned_off) {
-            /* 22m clears both bold and dim, then re-add survivors. */
-            EMIT_PARAM("22");
-            if (nxt_bd & ATTR_BOLD) EMIT_PARAM("1");
-            if (nxt_bd & ATTR_DIM)  EMIT_PARAM("2");
+            EMIT_P("22");
+            if (nxt_bd & ATTR_BOLD) EMIT_P("1");
+            if (nxt_bd & ATTR_DIM)  EMIT_P("2");
         } else {
-            /* Only additions — turn on the new ones. */
             uint8_t turned_on = nxt_bd & ~cur_bd;
-            if (turned_on & ATTR_BOLD) EMIT_PARAM("1");
-            if (turned_on & ATTR_DIM)  EMIT_PARAM("2");
+            if (turned_on & ATTR_BOLD) EMIT_P("1");
+            if (turned_on & ATTR_DIM)  EMIT_P("2");
         }
     }
 
     /* --- underline --- */
-    if ((*cur_attrs ^ next_attrs) & ATTR_UNDERLINE) {
-        if (next_attrs & ATTR_UNDERLINE) EMIT_PARAM("4");
-        else                             EMIT_PARAM("24");
+    if ((cur_e.attrs ^ nxt_e.attrs) & ATTR_UNDERLINE) {
+        if (nxt_e.attrs & ATTR_UNDERLINE) EMIT_P("4");
+        else                              EMIT_P("24");
     }
 
     /* --- inverse --- */
-    if ((*cur_attrs ^ next_attrs) & ATTR_INVERSE) {
-        if (next_attrs & ATTR_INVERSE) EMIT_PARAM("7");
-        else                           EMIT_PARAM("27");
+    if ((cur_e.attrs ^ nxt_e.attrs) & ATTR_INVERSE) {
+        if (nxt_e.attrs & ATTR_INVERSE) EMIT_P("7");
+        else                            EMIT_P("27");
     }
 
     /* --- italic --- */
-    if ((*cur_attrs ^ next_attrs) & ATTR_ITALIC) {
-        if (next_attrs & ATTR_ITALIC) EMIT_PARAM("3");
-        else                          EMIT_PARAM("23");
+    if ((cur_e.attrs ^ nxt_e.attrs) & ATTR_ITALIC) {
+        if (nxt_e.attrs & ATTR_ITALIC) EMIT_P("3");
+        else                           EMIT_P("23");
     }
 
     /* --- strikethrough --- */
-    if ((*cur_attrs ^ next_attrs) & ATTR_STRIKETHROUGH) {
-        if (next_attrs & ATTR_STRIKETHROUGH) EMIT_PARAM("9");
-        else                                 EMIT_PARAM("29");
+    if ((cur_e.attrs ^ nxt_e.attrs) & ATTR_STRIKETHROUGH) {
+        if (nxt_e.attrs & ATTR_STRIKETHROUGH) EMIT_P("9");
+        else                                  EMIT_P("29");
     }
 
     /* --- fg --- */
-    {
-        uint8_t cur_def = *cur_attrs & ATTR_FG_DEFAULT;
-        uint8_t nxt_def = next_attrs & ATTR_FG_DEFAULT;
-        uint8_t cur_fg  = (uint8_t)((*cur_fg_bg >> 4) & 0x0F);
-        uint8_t nxt_fg  = (uint8_t)((next_fg_bg >> 4) & 0x0F);
-        if (cur_def != nxt_def) {
-            if (nxt_def) EMIT_PARAM("39");
-            else         EMIT_PARAM_NUM(sgr_color_param(nxt_fg, 30));
-        } else if (!nxt_def && cur_fg != nxt_fg) {
-            EMIT_PARAM_NUM(sgr_color_param(nxt_fg, 30));
+    if (cur_e.fg_mode != nxt_e.fg_mode || cur_e.fg_val != nxt_e.fg_val) {
+        if (nxt_e.fg_mode == COLOR_MODE_DEFAULT) {
+            EMIT_P("39");
+        } else if (nxt_e.fg_mode == COLOR_MODE_16) {
+            EMIT_N(sgr_color_param((uint8_t)nxt_e.fg_val, 30));
+        } else if (nxt_e.fg_mode == COLOR_MODE_256) {
+            EMIT_F("38;5;%u", (unsigned)nxt_e.fg_val);
+        } else { /* COLOR_MODE_24BIT */
+            EMIT_F("38;2;%u;%u;%u",
+                   (nxt_e.fg_val >> 16) & 0xFF,
+                   (nxt_e.fg_val >>  8) & 0xFF,
+                    nxt_e.fg_val        & 0xFF);
         }
     }
 
     /* --- bg --- */
-    {
-        uint8_t cur_def = *cur_attrs & ATTR_BG_DEFAULT;
-        uint8_t nxt_def = next_attrs & ATTR_BG_DEFAULT;
-        uint8_t cur_bg  = (uint8_t)(*cur_fg_bg & 0x0F);
-        uint8_t nxt_bg  = (uint8_t)(next_fg_bg & 0x0F);
-        if (cur_def != nxt_def) {
-            if (nxt_def) EMIT_PARAM("49");
-            else         EMIT_PARAM_NUM(sgr_color_param(nxt_bg, 40));
-        } else if (!nxt_def && cur_bg != nxt_bg) {
-            EMIT_PARAM_NUM(sgr_color_param(nxt_bg, 40));
+    if (cur_e.bg_mode != nxt_e.bg_mode || cur_e.bg_val != nxt_e.bg_val) {
+        if (nxt_e.bg_mode == COLOR_MODE_DEFAULT) {
+            EMIT_P("49");
+        } else if (nxt_e.bg_mode == COLOR_MODE_16) {
+            EMIT_N(sgr_color_param((uint8_t)nxt_e.bg_val, 40));
+        } else if (nxt_e.bg_mode == COLOR_MODE_256) {
+            EMIT_F("48;5;%u", (unsigned)nxt_e.bg_val);
+        } else { /* COLOR_MODE_24BIT */
+            EMIT_F("48;2;%u;%u;%u",
+                   (nxt_e.bg_val >> 16) & 0xFF,
+                   (nxt_e.bg_val >>  8) & 0xFF,
+                    nxt_e.bg_val        & 0xFF);
         }
     }
 
-    #undef EMIT_PARAM
-    #undef EMIT_PARAM_NUM
+    #undef EMIT_P
+    #undef EMIT_N
+    #undef EMIT_F
 
-    /* If nothing actually differed (shouldn't happen given guard above, but
-     * defensively): drop the bare "\x1b[" without emitting a final 'm'. */
-    if (first) {
-        /* No params written — don't emit a bare "ESC[m" (which means ESC[0m
-         * in most terminals, a surprise reset). */
-    } else {
+    if (!first) {
         n += snprintf(tmp + n, sizeof(tmp) - n, "m");
         bytes_append(b, tmp, (size_t)n);
     }
 
-    *cur_fg_bg = next_fg_bg;
-    *cur_attrs = next_attrs;
+    *cur_id = next_id;
 }
 
-/* Reset SGR state if currently non-default. Used at line boundaries so
- * unchanged trailing whitespace on the next row doesn't inherit color. */
+/* Reset SGR state to terminal default.  No-op when cur_id is already 0. */
 static void
-reset_sgr(bytes_t *b, uint8_t *cur_fg_bg, uint8_t *cur_attrs) {
-    if (*cur_attrs == ATTR_DEFAULT && *cur_fg_bg == 0) return;
+reset_sgr(bytes_t *b, uint16_t *cur_id) {
+    if (*cur_id == 0) return;
     bytes_append_cstr(b, "\x1b[0m");
-    *cur_fg_bg = 0;
-    *cur_attrs = ATTR_DEFAULT;
+    *cur_id = 0;
 }
 
 /* Segment-merge diff: adjacent changed cells within MERGE_GAP unchanged
@@ -805,95 +1020,69 @@ emit_relative_move(bytes_t *b,
 
 static void
 diff_alt(screen_t *s, bytes_t *out) {
-    uint8_t cur_fg_bg = 0;
-    uint8_t cur_attrs = ATTR_DEFAULT;
+    uint16_t cur_style_id = 0;
 
     if (!s->prev_valid) {
-        /* first-frame / invalidated: clear-screen + full redraw.
-         * The trailing ESC[0m is a hard SGR baseline so (cur_fg_bg,
-         * cur_attrs) = (0, ATTR_DEFAULT) is trustworthy going forward. */
+        /* first-frame / invalidated: clear-screen + full redraw. */
         bytes_append_cstr(out, "\x1b[H\x1b[2J\x1b[0m");
         for (int y = 0; y < s->h; y++) {
             bytes_append_cup(out, y, 0);
             for (int x = 0; x < s->w; x++) {
                 const cell_t *c = cell_at(s->next, s->w, x, y);
                 if (c->len == 0) continue;  /* WIDE_TAIL: skip */
-                emit_sgr(out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
+                emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
                 const uint8_t *p; size_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
             }
-            /* Row-end reset: a full-redraw may end a row on a non-default
-             * SGR (e.g. a wide-char head at col w-2 whose tail is skipped).
-             * The next row begins with CUP; if we carry styled state across
-             * that cursor jump some terminals render subsequent spaces with
-             * the stale colour.  reset_sgr is a no-op when already default. */
-            reset_sgr(out, &cur_fg_bg, &cur_attrs);
+            reset_sgr(out, &cur_style_id);
         }
     } else {
-        /* Per-row segment-merge.Only scan rows that have changes in either
-         * next (dirty_xmax >= 0) or prev (prev_xmax >= 0).  Within each
-         * dirty row, only scan up to the rightmost relevant column so that
-         * trailing unchanged blank cells are never compared. */
         for (int y = 0; y < s->h; y++) {
             int dx = s->dirty_xmax[y];
             int px = s->prev_xmax[y];
-            if (dx < 0 && px < 0) continue;  /* row untouched in both frames */
+            if (dx < 0 && px < 0) continue;
             int x_end = (dx > px ? dx : px) + 1;
-            int run_start = -1;      /* x of first changed cell in current run */
-            int last_change = -1;    /* x of last changed cell emitted so far */
+            int run_start = -1;
+            int last_change = -1;
 
             for (int x = 0; x < x_end; x++) {
                 const cell_t *cn = cell_at(s->next, s->w, x, y);
                 const cell_t *cp = cell_at(s->prev, s->w, x, y);
                 int changed = !cell_eq(cn, &s->next_slab, cp, &s->prev_slab);
-                /* Treat WIDE_TAIL as "not independently changed" — its head
-                 * drives the comparison. Also, never start a run AT a tail. */
                 if (cn->len == 0) changed = 0;
 
                 if (!changed) continue;
 
                 if (run_start < 0) {
-                    /* open new run */
                     bytes_append_cup(out, y, x);
-                    emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                             cn->fg_bg, cn->attrs);
+                    emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                     const uint8_t *p; size_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
                     bytes_append(out, p, n);
                     run_start = x;
                     last_change = x;
-                    /* skip over wide-char tail so we don't double-emit */
-                    if (cn->width == 2) x++;  /* outer loop will ++ again */
+                    if (cn->width == 2) x++;
                 } else {
                     int gap = x - last_change - 1;
                     if (gap <= MERGE_GAP) {
-                        /* bridge: emit the unchanged cells between
-                         * last_change+1 .. x-1 (using next_slab since after
-                         * the swap that happens post-diff, these are the
-                         * bytes the terminal should hold). Skip WIDE_TAIL.
-                         * Honor per-cell style during the bridge too. */
                         for (int k = last_change + 1; k < x; k++) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
-                            emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                                     bc->fg_bg, bc->attrs);
+                            emit_sgr(out, &s->pool, s->color_level, &cur_style_id, bc->style_id);
                             const uint8_t *bp; size_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
                             bytes_append(out, bp, bn);
                         }
-                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                                 cn->fg_bg, cn->attrs);
+                        emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
                         last_change = x;
                         if (cn->width == 2) x++;
                     } else {
-                        /* gap too big: close old run, open new one */
                         bytes_append_cup(out, y, x);
-                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                                 cn->fg_bg, cn->attrs);
+                        emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
@@ -903,16 +1092,10 @@ diff_alt(screen_t *s, bytes_t *out) {
                     }
                 }
             }
-
-            /* No row-end reset: SGR state carries across rows, and the
-             * next row's changed cells will emit deltas against the
-             * current state via emit_sgr. */
         }
     }
 
-    /* Final safety: if any SGR state is still non-default, reset it so
-     * post-diff terminal output (status line, etc.) stays uncolored. */
-    reset_sgr(out, &cur_fg_bg, &cur_attrs);
+    reset_sgr(out, &cur_style_id);
 
     /* swap next/prev (both cells and slabs) so next frame diffs against this. */
     cell_t *tc = s->prev; s->prev = s->next; s->next = tc;
@@ -938,8 +1121,7 @@ diff_alt(screen_t *s, bytes_t *out) {
 
 static void
 diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
-    uint8_t cur_fg_bg = 0;
-    uint8_t cur_attrs = ATTR_DEFAULT;
+    uint16_t cur_style_id = 0;
     int virt_x = s->virt_x;
     int virt_y = s->virt_y;
 
@@ -1009,16 +1191,13 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                     if (x > 0) bytes_append_csi_n(out, x, 'C');
                 }
                 virt_x = x;
-                emit_sgr(out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
+                emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
                 const uint8_t *p; size_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
                 virt_x += c->width;
             }
-            /* Row-end reset: \r\n carries cursor to next line while SGR
-             * state persists; spaces skipped with CUF may leave a styled
-             * state that bleeds into the next row's implicit blank prefix. */
-            reset_sgr(out, &cur_fg_bg, &cur_attrs);
+            reset_sgr(out, &cur_style_id);
         }
         virt_y = effective_h - 1;
     } else if (!s->prev_valid) {
@@ -1031,16 +1210,13 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                 if (c->len == 0) continue;
                 emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                 virt_x = x; virt_y = y;
-                emit_sgr(out, &cur_fg_bg, &cur_attrs, c->fg_bg, c->attrs);
+                emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
                 const uint8_t *p; size_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
                 virt_x += c->width;
             }
-            /* Row-end reset: relative moves navigate to the next row while
-             * SGR state persists; the last styled cell's attributes would
-             * otherwise bleed across the inter-row cursor jump. */
-            reset_sgr(out, &cur_fg_bg, &cur_attrs);
+            reset_sgr(out, &cur_style_id);
         }
     } else {
         /* Segment-merge incremental diff with relative moves instead of CUP.
@@ -1066,8 +1242,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                     /* open new run */
                     emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                     virt_x = x; virt_y = y;
-                    emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                             cn->fg_bg, cn->attrs);
+                    emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                     const uint8_t *p; size_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
                     bytes_append(out, p, n);
@@ -1082,15 +1257,13 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                         for (int k = last_change + 1; k < x; k++) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
-                            emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                                     bc->fg_bg, bc->attrs);
+                            emit_sgr(out, &s->pool, s->color_level, &cur_style_id, bc->style_id);
                             const uint8_t *bp; size_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
                             bytes_append(out, bp, bn);
                         }
                         virt_x = x;
-                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                                 cn->fg_bg, cn->attrs);
+                        emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
@@ -1101,8 +1274,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                         /* gap too big: new run */
                         emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                         virt_x = x; virt_y = y;
-                        emit_sgr(out, &cur_fg_bg, &cur_attrs,
-                                 cn->fg_bg, cn->attrs);
+                        emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; size_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
@@ -1117,7 +1289,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
     }
 
     /* Final SGR reset. */
-    reset_sgr(out, &cur_fg_bg, &cur_attrs);
+    reset_sgr(out, &cur_style_id);
 
     /* Cursor restore: move to (0, effective_h-1) — the last claimed row.
      * Never scrolls. Subsequent frames start here and use CUU to reach row 0. */
@@ -1303,6 +1475,7 @@ l_gc(lua_State *L) {
     slab_free(&s->next_slab);
     slab_free(&s->prev_slab);
     row_pool_free(&s->rows);
+    pool_free(&s->pool);
     free(s->dirty_xmax); s->dirty_xmax = NULL;
     free(s->prev_xmax);  s->prev_xmax  = NULL;
     return 0;
@@ -1313,7 +1486,12 @@ l_gc(lua_State *L) {
  *                              inverse, italic, strikethrough, fg, bg}
  * row is 1-based.  Wide-tail slots are skipped so the output array has
  * one entry per visible column position (head cells only).
- * fg/bg are 0..15 when set, nil when the cell uses the terminal default. */
+ *
+ * fg/bg format (new):
+ *   nil            → terminal default
+ *   integer 0..15  → 16-color index
+ *   integer 16..255 → 256-color index
+ *   string "#RRGGBB" → 24-bit truecolor */
 static int
 l_cells(lua_State *L) {
     screen_t *s = check_screen(L, 1);
@@ -1332,6 +1510,8 @@ l_cells(lua_State *L) {
         const cell_t *c = cell_at((cell_t *)cells, s->w, x, y);
         if (c->len == 0) continue;  /* WIDE_TAIL: skip */
 
+        const style_entry_t *se = pool_get(&s->pool, c->style_id);
+
         lua_createtable(L, 0, 10);
 
         const uint8_t *p; size_t n;
@@ -1342,35 +1522,81 @@ l_cells(lua_State *L) {
         lua_pushinteger(L, c->width);
         lua_setfield(L, -2, "width");
 
-        lua_pushboolean(L, (c->attrs & ATTR_BOLD)          != 0);
+        lua_pushboolean(L, (se->attrs & ATTR_BOLD)          != 0);
         lua_setfield(L, -2, "bold");
-        lua_pushboolean(L, (c->attrs & ATTR_DIM)           != 0);
+        lua_pushboolean(L, (se->attrs & ATTR_DIM)           != 0);
         lua_setfield(L, -2, "dim");
-        lua_pushboolean(L, (c->attrs & ATTR_UNDERLINE)     != 0);
+        lua_pushboolean(L, (se->attrs & ATTR_UNDERLINE)     != 0);
         lua_setfield(L, -2, "underline");
-        lua_pushboolean(L, (c->attrs & ATTR_INVERSE)       != 0);
+        lua_pushboolean(L, (se->attrs & ATTR_INVERSE)       != 0);
         lua_setfield(L, -2, "inverse");
-        lua_pushboolean(L, (c->attrs & ATTR_ITALIC)        != 0);
+        lua_pushboolean(L, (se->attrs & ATTR_ITALIC)        != 0);
         lua_setfield(L, -2, "italic");
-        lua_pushboolean(L, (c->attrs & ATTR_STRIKETHROUGH) != 0);
+        lua_pushboolean(L, (se->attrs & ATTR_STRIKETHROUGH) != 0);
         lua_setfield(L, -2, "strikethrough");
 
-        if (c->attrs & ATTR_FG_DEFAULT)
+        /* fg */
+        if (se->fg_mode == COLOR_MODE_DEFAULT) {
             lua_pushnil(L);
-        else
-            lua_pushinteger(L, (c->fg_bg >> 4) & 0x0F);
+        } else if (se->fg_mode == COLOR_MODE_24BIT) {
+            char hex[8];
+            snprintf(hex, sizeof(hex), "#%06X", se->fg_val & 0xFFFFFFu);
+            lua_pushstring(L, hex);
+        } else {
+            lua_pushinteger(L, (lua_Integer)se->fg_val);
+        }
         lua_setfield(L, -2, "fg");
 
-        if (c->attrs & ATTR_BG_DEFAULT)
+        /* bg */
+        if (se->bg_mode == COLOR_MODE_DEFAULT) {
             lua_pushnil(L);
-        else
-            lua_pushinteger(L, c->fg_bg & 0x0F);
+        } else if (se->bg_mode == COLOR_MODE_24BIT) {
+            char hex[8];
+            snprintf(hex, sizeof(hex), "#%06X", se->bg_val & 0xFFFFFFu);
+            lua_pushstring(L, hex);
+        } else {
+            lua_pushinteger(L, (lua_Integer)se->bg_val);
+        }
         lua_setfield(L, -2, "bg");
 
         lua_rawseti(L, -2, col);
         col++;
     }
     return 1;
+}
+
+/* ── Lua API: intern_style / set_color_level ─────────────────────
+ *
+ * intern_style(ud, fg_mode, fg_val, bg_mode, bg_val, attrs) -> style_id
+ *   fg_mode / bg_mode: 0=default 1=16-color 2=256-color 3=24bit
+ *   fg_val / bg_val:   integer color value (0xRRGGBB for 24bit, 0..255 etc.)
+ *   attrs:             ATTR_* bitmask (no FG/BG DEFAULT bits)
+ *   returns: uint16 style_id for use with put/put_border/draw_line
+ *
+ * set_color_level(ud, level)
+ *   level: 0=16-color 1=256-color 2=24bit-truecolor
+ */
+static int
+l_intern_style(lua_State *L) {
+    screen_t *s  = check_screen(L, 1);
+    uint8_t  fg_mode = (uint8_t)luaL_checkinteger(L, 2);
+    uint32_t fg_val  = (uint32_t)luaL_checkinteger(L, 3);
+    uint8_t  bg_mode = (uint8_t)luaL_checkinteger(L, 4);
+    uint32_t bg_val  = (uint32_t)luaL_checkinteger(L, 5);
+    uint8_t  attrs   = (uint8_t)luaL_checkinteger(L, 6);
+    uint16_t id = style_intern(&s->pool, fg_mode, fg_val, bg_mode, bg_val, attrs);
+    lua_pushinteger(L, (lua_Integer)id);
+    return 1;
+}
+
+static int
+l_set_color_level(lua_State *L) {
+    screen_t *s = check_screen(L, 1);
+    int level = (int)luaL_checkinteger(L, 2);
+    if (level < COLOR_LEVEL_16 || level > COLOR_LEVEL_24BIT)
+        return luaL_error(L, "screen.set_color_level: level must be 0, 1, or 2");
+    s->color_level = level;
+    return 0;
 }
 
 /* ── registration ─────────────────────────────────────────────── */
@@ -1390,6 +1616,8 @@ static const luaL_Reg screen_lib[] = {
     {"set_mode",          l_set_mode},
     {"cursor_pos",        l_cursor_pos},
     {"set_display_cursor", l_set_display_cursor},
+    {"intern_style",      l_intern_style},
+    {"set_color_level",   l_set_color_level},
     {NULL, NULL},
 };
 

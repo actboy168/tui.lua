@@ -73,7 +73,8 @@ end
 --- Return an array of styled cell tables for the given 1-based row.
 -- Each entry: {char, width, bold, dim, underline, inverse, italic,
 --              strikethrough, fg, bg}.  Wide-tail slots are omitted.
--- fg/bg are 0..15 when explicitly set, nil for terminal default.
+-- Attr fields are booleans (true/false). fg/bg: nil=default, integer=16/256-color,
+-- string "#RRGGBB"=24-bit truecolor.
 function M.cells(ud, row)
     return screen_c.cells(ud, row)
 end

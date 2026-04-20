@@ -4,9 +4,10 @@
 -- Stage 9: the cell buffer / diff / ANSI generation live in C (see
 -- src/tui_core/screen.c). This module now just walks the element tree
 -- and issues put / put_border / draw_line calls into that buffer.
--- Stage 15: style props are packed in Lua (tui/sgr.pack_bytes) into the
--- two bytes the C layer stores per cell; we pass (fg_bg, attrs) directly
--- instead of a style table so C never walks Lua tables during paint.
+-- Stage 16 (Truecolor/StylePool): style props are interned into the C-side
+-- StylePool via sgr.pack_style(screen, props) → style_id (uint16). The C
+-- layer stores one style_id per cell and downgrades to the screen's
+-- color_level at SGR-emit time.
 --
 -- Color inheritance: `color` and `backgroundColor` on a Box propagate down
 -- to all descendant Text nodes, mirroring Ink's CSS-style color context.
@@ -56,12 +57,9 @@ local function paint(element, screen, inherit)
         local props = element.props
         local border_style = props and props.borderStyle
         if border_style then
-            local fg_bg, attrs = sgr.pack_border_bytes(props)
+            local style_id = sgr.pack_border_style(screen, props)
             -- When the box overflows the screen vertically, clamp draw_h so
-            -- the bottom border lands on the last visible row. Only apply
-            -- when the clamped height still has room for both border rows
-            -- (>= 2); otherwise keep r.h so OOB writes are dropped naturally
-            -- by the C layer (top border chars still appear).
+            -- the bottom border lands on the last visible row.
             local _, sh = screen_c.size(screen)
             local draw_h = r.h
             if r.y + r.h > sh then
@@ -69,7 +67,7 @@ local function paint(element, screen, inherit)
                 if clamped >= 2 then draw_h = clamped end
             end
             screen_c.put_border(screen, r.x, r.y, r.w, draw_h, border_style,
-                                fg_bg, attrs)
+                                style_id)
         end
         local ci = child_inherit(props, inherit)
         for _, ch in ipairs(element.children or {}) do
@@ -77,16 +75,16 @@ local function paint(element, screen, inherit)
         end
     elseif element.kind == "text" then
         local props = effective_props(element.props, inherit)
-        local fg_bg, attrs = sgr.pack_bytes(props)
+        local style_id = sgr.pack_style(screen, props)
         if element.lines then
             for li, line in ipairs(element.lines) do
                 if li - 1 >= r.h then break end
                 screen_c.draw_line(screen, r.x, r.y + (li - 1), line, r.w,
-                                   fg_bg, attrs)
+                                   style_id)
             end
         else
             screen_c.draw_line(screen, r.x, r.y, element.text or "", r.w,
-                               fg_bg, attrs)
+                               style_id)
         end
     end
 end

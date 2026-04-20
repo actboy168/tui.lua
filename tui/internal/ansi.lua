@@ -103,6 +103,37 @@ local function detect()
 end
 
 -- ---------------------------------------------------------------------------
+-- Color depth detection
+
+--- Detect the best color level this terminal supports.
+-- Returns:
+--   2 = 24-bit truecolor
+--   1 = 256-color (xterm palette)
+--   0 = ANSI 16-color only
+local function detect_color_level()
+    local colorterm = os.getenv("COLORTERM") or ""
+    if colorterm == "truecolor" or colorterm == "24bit" then
+        return 2
+    end
+
+    local term_type = detect()
+    local TRUECOLOR_TERMS = {
+        kitty = true, wezterm = true, iterm2 = true, ghostty = true,
+        alacritty = true, foot = true, windows_terminal = true, zed = true,
+    }
+    if TRUECOLOR_TERMS[term_type] then return 2 end
+
+    local term = os.getenv("TERM") or ""
+    if term:find("256color", 1, true) or term_type == "tmux" then
+        return 1
+    end
+
+    return 0
+end
+
+M.color_level = detect_color_level()
+
+-- ---------------------------------------------------------------------------
 -- Capability detection
 --
 -- Per-terminal base flags (only true values listed; nil → false).

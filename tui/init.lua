@@ -225,11 +225,15 @@ local function produce_tree(rec_state, root, app_handle, w, h, is_main)
     return tree
 end
 
---- tui.render(root)
+--- tui.render(root, opts)
 -- Run the main loop with `root` as the top of the component tree. Blocks
 -- until the app calls `useApp():exit()`, or an emergency key is received
 -- (Ctrl+C / Ctrl+D — always honored by the framework).
-function M.render(root)
+--
+-- opts (optional):
+--   colorLevel  "16" | "256" | "truecolor"  — override auto-detected color level
+function M.render(root, opts)
+    opts = opts or {}
     local interactive = ansi.interactive()
 
     terminal.windows_vt_enable()
@@ -241,6 +245,21 @@ function M.render(root)
     local rec_state    = reconciler.new()
     local init_w, init_h = terminal.get_size()
     local screen_state = screen_mod.new(init_w, init_h)
+
+    -- Color level: auto-detect, then apply user override from opts.
+    do
+        local screen_c = tui_core.screen
+        local level = ansi.color_level
+        if opts.colorLevel == "16" then
+            level = 0
+        elseif opts.colorLevel == "256" then
+            level = 1
+        elseif opts.colorLevel == "truecolor" then
+            level = 2
+        end
+        screen_c.set_color_level(screen_state, level)
+    end
+
     if interactive then
         screen_mod.set_mode(screen_state, "main")
     end

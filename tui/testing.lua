@@ -390,7 +390,8 @@ function Harness:tree()   return self._tree end
 --- Return a styled-cell array for the given 1-based screen row.
 -- Each entry: {char, width, bold, dim, underline, inverse, italic,
 --              strikethrough, fg, bg}.  Wide-tail slots are omitted.
--- fg/bg are 0..15 when explicitly colored, nil for terminal default.
+-- Attr fields (bold, dim, etc.) are always booleans (true/false).
+-- fg/bg: nil=terminal default, integer=16/256-color index, string "#RRGGBB"=truecolor.
 function Harness:cells(row)
     return screen_mod.cells(self._screen, row)
 end
@@ -828,6 +829,12 @@ function M.render(App, opts)
         _ansi_restore = ansi_restore,
     }, Harness)
     h._app_handle = { exit = function() h._dead = true end }
+
+    -- Use full truecolor in test harnesses so cells() assertions can check
+    -- 24-bit color values. Tests that need a lower level can call
+    -- screen_c.set_color_level(h._screen, 0|1) after mount.
+    local screen_c = require "tui_core".screen
+    screen_c.set_color_level(h._screen, 2)
 
     -- Fake terminal stored on the harness instance — no global state touched.
     h._terminal = make_fake_terminal(h)
