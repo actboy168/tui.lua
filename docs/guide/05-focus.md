@@ -1,6 +1,6 @@
 # 焦点系统指南
 
-tui.lua 的焦点系统用于管理可交互元素的键盘导航。
+tui.lua 的焦点系统用于管理可交互元素的键盘导航。API 签名参见 [核心 API - 焦点](../api/core.md#焦点)。
 
 ## 核心概念
 
@@ -15,7 +15,7 @@ tui.lua 的焦点系统用于管理可交互元素的键盘导航。
 ### TextInput 自动焦点
 
 ```lua
-tui.TextInput {
+extra.TextInput {
     value = text,
     onChange = setText,
     onSubmit = submit,
@@ -31,21 +31,16 @@ tui.TextInput {
 | `Shift+Tab` | 上一个可聚焦元素 |
 | `Enter` | 触发当前元素的 `onSubmit` |
 
-## 焦点顺序
+### 焦点顺序
 
 焦点顺序由组件注册顺序决定：
 
 ```lua
 local function Form()
     return tui.Box {
-        -- 第一个 TextInput 获得焦点
-        tui.TextInput { key = "input1", autoFocus = true },
-
-        -- 按 Tab 会到这里
-        tui.TextInput { key = "input2" },
-
-        -- 再按 Tab 到这里
-        tui.TextInput { key = "input3" }
+        extra.TextInput { key = "input1", autoFocus = true },  -- 第一个
+        extra.TextInput { key = "input2" },                     -- Tab 到这里
+        extra.TextInput { key = "input3" }                      -- 再 Tab 到这里
     }
 end
 ```
@@ -79,48 +74,22 @@ local function CustomInput(props)
 end
 ```
 
-### useFocus 选项
-
-| 选项 | 类型 | 说明 |
-|------|------|------|
-| `id` | string | 焦点标识符 |
-| `autoFocus` | boolean | 自动获得焦点 |
-| `isActive` | boolean | 是否可聚焦 |
-| `on_change` | function(isFocused) | 焦点变化回调 |
-| `on_input` | function(input, key) | 输入处理回调 |
-
-### 返回值
-
-```lua
-local focus = tui.useFocus {...}
-
-focus.isFocused  -- 布尔值，是否有焦点
-focus.focus()    -- 方法：主动获取焦点
-```
+> `useFocus` 选项和返回值的完整定义参见 [核心 API](../api/core.md#usefocus)。
 
 ## 手动控制焦点
 
-在组件中使用 `useFocusManager` hook：
-
 ```lua
-local function MyComponent()
-    local focusMgr = tui.useFocusManager()
+local focusMgr = tui.useFocusManager()
 
-    -- 聚焦指定元素
-    focusMgr.focus("myInputId")
-
-    -- 导航
-    focusMgr.focusNext()      -- 下一个
-    focusMgr.focusPrevious()  -- 上一个
-
-    return tui.Box { ... }
-end
+focusMgr.focus("myInputId")   -- 聚焦指定元素
+focusMgr.focusNext()           -- 下一个
+focusMgr.focusPrevious()       -- 上一个
 ```
 
 ## 禁用焦点元素
 
 ```lua
-tui.TextInput {
+extra.TextInput {
     value = text,
     focus = false,  -- 禁用焦点（isActive = false）
 }
@@ -144,15 +113,15 @@ local function LoginForm()
         gap = 1,
 
         tui.Text { "用户名" },
-        tui.TextInput {
+        extra.TextInput {
             value = username,
             onChange = setUsername,
-            onSubmit = function() end,  -- Tab 会自动移动到下一个
+            onSubmit = function() end,  -- Tab 移动到下一个
             width = 30
         },
 
         tui.Text { "密码" },
-        tui.TextInput {
+        extra.TextInput {
             value = password,
             onChange = setPassword,
             onSubmit = submit,  -- Enter 提交
@@ -190,23 +159,19 @@ local function Wizard()
     if step == 1 then
         return tui.Box {
             tui.Text { "步骤 1/3" },
-            tui.TextInput {
+            extra.TextInput {
                 value = data.name or "",
-                onChange = function(v)
-                    setData({ ...data, name = v })
-                end,
-                onSubmit = nextStep,  -- Enter 进入下一步
+                onChange = function(v) setData({ ...data, name = v }) end,
+                onSubmit = nextStep,
                 placeholder = "姓名"
             }
         }
     elseif step == 2 then
         return tui.Box {
             tui.Text { "步骤 2/3" },
-            tui.TextInput {
+            extra.TextInput {
                 value = data.email or "",
-                onChange = function(v)
-                    setData({ ...data, email = v })
-                end,
+                onChange = function(v) setData({ ...data, email = v }) end,
                 onSubmit = nextStep,
                 placeholder = "邮箱"
             }
@@ -222,63 +187,16 @@ local function Wizard()
 end
 ```
 
-## 测试焦点
-
-```lua
-local testing = require "tui.testing"
-
-function suite:test_focus_flow()
-    local h = testing.render(Form)
-
-    -- 第一个输入框自动聚焦
-    h:type("用户名")
-
-    -- Tab 切换到下一个
-    h:press("tab")
-    h:type("密码")
-
-    -- Enter 提交
-    h:press("return")
-
-    -- 验证结果
-    lt.assertNotEquals(submitted, nil)
-end
-```
-
 ## 焦点与样式的区别
 
 ```lua
-local function ConfusingExample()
-    -- 这是状态变量，只影响显示
-    local focusedField, setFocusedField = tui.useState("username")
+-- ❌ 混淆：状态变量只影响显示，不影响焦点
+local focusedField, setFocusedField = tui.useState("username")
+-- setFocusedField("password") 只更新了状态，没切换实际焦点！
 
-    return tui.Box {
-        tui.Box {
-            -- 改变边框样式
-            borderStyle = focusedField == "username" and "single" or nil,
-            tui.TextInput {
-                -- 但这是独立的焦点系统！
-                -- 即使边框样式变了，实际焦点可能还在这里
-            }
-        }
-    }
-end
-```
-
-**正确做法**：
-
-```lua
-local function CorrectExample()
-    return tui.Box {
-        tui.TextInput {
-            -- 焦点系统自动控制边框样式
-            -- 无需手动管理
-        },
-        tui.TextInput {
-            -- 按 Tab 自动切换
-        }
-    }
-end
+-- ✅ 正确：焦点系统自动控制，无需手动管理
+extra.TextInput {},   -- 按 Tab 自动切换
+extra.TextInput {}
 ```
 
 ## 常见错误
@@ -290,18 +208,7 @@ end
 setFocused("password")  -- 只更新了状态，没切换实际焦点
 ```
 
-✅ 正确：
-```lua
--- 方法1：按 Tab
-h:press("tab")
-
--- 方法2：使用 onSubmit
-tui.TextInput {
-    onSubmit = function()
-        -- 进入下一步
-    end
-}
-```
+✅ 正确：使用 `onSubmit` 实现步骤流转，或按 Tab 导航。
 
 ### 2. 条件分支中使用 useInput
 
@@ -321,7 +228,7 @@ tui.useInput(function(_, key)
 end)
 ```
 
-### 3. 忘记 Tab 导航
+### 3. 测试中忘记 Tab 导航
 
 ❌ 错误：
 ```lua
@@ -335,3 +242,5 @@ h:type("username")
 h:press("tab")      -- 切换焦点
 h:type("password")
 ```
+
+> 测试 harness 完整 API 参见 [测试套件](../api/testing.md)。

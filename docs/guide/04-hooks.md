@@ -1,6 +1,6 @@
 # Hooks 指南
 
-Hooks 是 tui.lua 中管理状态和副作用的核心机制。
+Hooks 是 tui.lua 中管理状态和副作用的核心机制。完整 API 签名参见 [核心 API - Hooks](../api/core.md#hooks)。
 
 ## 规则
 
@@ -81,17 +81,15 @@ local function DataFetcher()
     tui.useEffect(function()
         setLoading(true)
 
-        -- 模拟异步请求
         local timer = tui.setTimeout(function()
             setData({ name = "John" })
             setLoading(false)
         end, 1000)
 
-        -- 清理函数
         return function()
             tui.clearTimer(timer)
         end
-    end, {})  -- 仅在挂载时执行
+    end, {})
 
     if loading then
         return tui.Spinner { label = "加载中..." }
@@ -114,7 +112,7 @@ local function ExpensiveList(props)
         end
         table.sort(result, function(a, b) return a.value > b.value end)
         return result
-    end, { props.items })  -- 仅在 items 变化时重新计算
+    end, { props.items })
 
     return tui.Static {
         items = sorted,
@@ -133,18 +131,13 @@ end
 local function Parent()
     local count, setCount = tui.useState(0)
 
-    -- 每次渲染都创建新函数
-    local handleClick_bad = function()
-        setCount(count + 1)
-    end
-
     -- 仅在 count 变化时创建新函数
-    local handleClick_good = tui.useCallback(function()
+    local handleClick = tui.useCallback(function()
         setCount(count + 1)
     end, { count })
 
     return ChildComponent {
-        onClick = handleClick_good
+        onClick = handleClick
     }
 end
 ```
@@ -210,33 +203,21 @@ end
 
 ## useContext - 上下文
 
-### 创建上下文
-
 ```lua
+-- 创建上下文
 local ThemeContext = tui.createContext("light")
-```
 
-### 提供值
-
-```lua
+-- 提供值
 local function App()
-    local theme = tui.useState("dark")
-
     return ThemeContext.Provider {
-        value = theme,
-        children = {
-            ChildComponent {}
-        }
+        value = "dark",
+        children = { ChildComponent {} }
     }
 end
-```
 
-### 消费值
-
-```lua
+-- 消费值
 local function ChildComponent()
     local theme = tui.useContext(ThemeContext)
-
     return tui.Text {
         color = theme == "dark" and "white" or "black",
         "当前主题: " .. theme
@@ -247,27 +228,22 @@ end
 ## useInterval / useTimeout - 定时器
 
 ```lua
+-- 定时刷新时钟
 local function Clock()
     local time, setTime = tui.useState(os.date("%H:%M:%S"))
-
     tui.useInterval(function()
         setTime(os.date("%H:%M:%S"))
-    end, 1000)  -- 每秒更新
-
+    end, 1000)
     return tui.Text { time }
 end
-```
 
-```lua
+-- 延迟消失的通知
 local function Notification()
     local visible, setVisible = tui.useState(true)
-
     tui.useTimeout(function()
         setVisible(false)
-    end, 3000)  -- 3秒后消失
-
+    end, 3000)
     if not visible then return nil end
-
     return tui.Box {
         borderStyle = "single",
         tui.Text { "3秒后消失的消息" }
@@ -280,12 +256,6 @@ end
 ```lua
 local function InputHandler()
     tui.useInput(function(input, key)
-        -- key.name 可以是：
-        -- "char", "enter", "return", "escape", "tab"
-        -- "up", "down", "left", "right"
-        -- "home", "end", "pageup", "pagedown"
-        -- "f1"-"f12", 等等
-
         if key.name == "char" then
             print("输入字符:", input)
         elseif key.name == "enter" then
@@ -299,38 +269,15 @@ local function InputHandler()
 end
 ```
 
-## useWindowSize - 窗口大小
+> KeyEvent 完整字段参见 [核心 API - KeyEvent 类型](../api/core.md#keyevent)。
 
-```lua
-local function ResponsiveLayout()
-    local size = tui.useWindowSize()
+## useFocus / useFocusManager
 
-    return tui.Box {
-        tui.Text { ("宽度: %d, 高度: %d"):format(size.width, size.height) }
-    }
-end
-```
-
-## useApp - 应用控制
-
-```lua
-local function ExitButton()
-    local app = tui.useApp()
-
-    tui.useInput(function(_, key)
-        if key.name == "q" then
-            app:exit()  -- 退出应用
-        end
-    end)
-
-    return tui.Text { "按 q 退出" }
-end
-```
+焦点相关 Hooks 详见 [焦点系统指南](05-focus.md)。
 
 ## 自定义 Hook
 
 ```lua
--- 创建自定义 Hook
 local function useCounter(initial)
     local count, setCount = tui.useState(initial or 0)
 

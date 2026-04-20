@@ -1,6 +1,6 @@
 # 布局系统
 
-tui.lua 使用基于 CSS Flexbox 的布局系统。
+tui.lua 使用基于 CSS Flexbox 的布局系统。Box 的完整属性签名参见 [核心 API - Box](../api/core.md#box)。
 
 ## Box 组件
 

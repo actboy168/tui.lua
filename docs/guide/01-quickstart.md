@@ -1,22 +1,6 @@
 # 快速开始
 
-## 安装
-
-```bash
-# 克隆仓库
-git clone https://github.com/yourusername/tui.lua.git
-cd tui.lua
-```
-
-## 编译
-
-使用 luamake 编译项目：
-
-```bash
-luamake
-```
-
-这将编译 C 扩展模块（wcwidth、screen、terminal 等）并生成必要的构建产物。
+项目安装与编译说明参见 [README](../../README.md)。可运行的完整示例参见 [examples/](../../examples/)。
 
 ## 第一个应用
 
@@ -138,3 +122,9 @@ tui.render(App)
 - [组件详解](03-components.md) - 了解所有内置组件
 - [Hooks 指南](04-hooks.md) - 掌握状态管理
 - [焦点系统](05-focus.md) - 处理用户输入
+
+## API 参考
+
+- [核心 API](../api/core.md) - `tui/init.lua` 导出的组件、Hooks、工具函数
+- [高级控件](../api/extra.md) - `tui/extra/` 交互组件
+- [测试套件](../api/testing.md) - `tui/testing.lua` 离屏渲染与快照测试
