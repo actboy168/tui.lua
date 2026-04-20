@@ -5,7 +5,7 @@
 local tui = require "tui"
 
 local function ProgressDemo()
-    local progress, setProgress] = tui.useState(0)
+    local progress, setProgress = tui.useState(0)
     local app = tui.useApp()
 
     -- 模拟进度增长

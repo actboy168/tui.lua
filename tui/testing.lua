@@ -805,6 +805,7 @@ function M.render(App, opts)
     resize_mod._reset()
     focus_mod._reset()
     scheduler._reset()
+    layout.reset()
     hooks._set_dev_mode(true)
 
     local h = setmetatable({
@@ -1116,6 +1117,58 @@ function M.text_content(tree)
     end
     walk(tree)
     return out
+end
+
+--- testing.load_app(path) -> component_fn
+-- Loads a tui app Lua file without running its tui.render() event loop.
+-- Returns the root component passed to tui.render() so it can be mounted
+-- via testing.render(comp, opts) without any modification to the source file.
+--
+-- The file is executed in the current package environment; all `require`
+-- calls inside it reuse the normal module cache, so the tui module and its
+-- dependencies are shared with the test process.
+--
+-- Example:
+--   local App = testing.load_app("examples/counter.lua")
+--   local h = testing.render(App, { cols = 40, rows = 10 })
+--   h:press("up")
+--   lt.assertEquals(h:row(2), "1                         ")
+--   h:unmount()
+function M.load_app(path)
+    if type(path) ~= "string" or #path == 0 then
+        error("load_app: path must be a non-empty string", 2)
+    end
+
+    local tui_mod = require "tui"
+    local saved_render = tui_mod.render
+    local captured = nil
+    local call_count = 0
+
+    tui_mod.render = function(root)
+        captured = root
+        call_count = call_count + 1
+    end
+
+    -- loadfile returns nil+msg on file-not-found (no C-level abort);
+    -- pcall wraps the execution phase so runtime errors in the file
+    -- are caught and re-raised with a clean "load_app:" prefix.
+    local chunk, load_err = loadfile(path)
+    if not chunk then
+        tui_mod.render = saved_render
+        error("load_app: failed to load '" .. path .. "': " .. tostring(load_err), 2)
+    end
+
+    local ok, run_err = pcall(chunk)
+    tui_mod.render = saved_render  -- always restore, even on error
+
+    if not ok then
+        error("load_app: error in '" .. path .. "': " .. tostring(run_err), 2)
+    end
+    if call_count == 0 then
+        error("load_app: '" .. path .. "' did not call tui.render()", 2)
+    end
+
+    return captured
 end
 
 return M

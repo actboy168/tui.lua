@@ -31,6 +31,10 @@ local tui_core   = require "tui_core"
 local terminal = tui_core.terminal
 
 local M = {}
+-- Pre-register in package.loaded so that circular requires from tui.extra.*
+-- (which all do `require "tui"`) safely receive this table rather than
+-- triggering a second load of this file.
+package.loaded["tui"] = M
 
 -- Dev-mode (Stage 17). Enable in-framework validation of hook order,
 -- setState-during-render, and missing key warnings. Default OFF in
@@ -108,6 +112,21 @@ M.clearTimer  = scheduler.clearTimer
 
 -- Layout utilities
 M.intrinsicSize = layout.intrinsic_size
+
+-- Inline layout helpers (avoid requiring tui.extra for commonly used primitives).
+--- Newline { count = n } — vertical spacer of n rows (default 1).
+function M.Newline(t)
+    t = t or {}
+    local count = t.count or 1
+    if count < 1 then count = 1 end
+    return element.Box { key = t.key, height = count, flexShrink = 0 }
+end
+
+--- Spacer { } — flexible empty space that expands to fill the parent.
+function M.Spacer(t)
+    t = t or {}
+    return element.Box { key = t.key, flexGrow = 1 }
+end
 
 -- Text utilities
 M.iterChars     = text_mod.iterChars
@@ -344,6 +363,21 @@ function M.render(root)
     terminal.set_raw(false)
 
     if not ok then error(err) end
+end
+
+-- Re-export tui.extra components so examples can use a single `require "tui"`
+-- import. These are loaded last: by the time the extras do `require "tui"`,
+-- all hooks and host elements are already in M (Lua stores the partial module
+-- table in package.loaded before executing the body, so circular requires
+-- safely return the in-progress table).
+do
+    local extra = require "tui.extra"
+    M.TextInput   = extra.TextInput
+    M.Textarea    = extra.Textarea
+    M.Static      = extra.Static
+    M.Select      = extra.Select
+    M.Spinner     = extra.Spinner
+    M.ProgressBar = extra.ProgressBar
 end
 
 return M

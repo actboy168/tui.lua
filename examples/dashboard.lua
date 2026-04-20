@@ -5,7 +5,7 @@
 local tui = require "tui"
 
 local function Dashboard()
-    local metrics, setMetrics] = tui.useState({
+    local metrics, setMetrics = tui.useState({
         cpu = 45,
         memory = 60,
         requests = 1234

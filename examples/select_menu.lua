@@ -12,7 +12,7 @@ local function MenuApp()
         { label = "设置", value = "settings" },
         { label = "退出", value = "quit" },
     }
-    local selected, setSelected] = tui.useState(nil)
+    local selected, setSelected = tui.useState(nil)
     local app = tui.useApp()
 
     tui.useInput(function(_, key)
