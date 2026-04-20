@@ -466,10 +466,9 @@ function suite:test_id_hot_update_resubscribes()
     end
 
     local h = testing.render(App, { cols = 1, rows = 3 })
-    local focus_mod = require "tui.internal.focus"
     local ids = function()
         local out = {}
-        for _, e in ipairs(focus_mod._entries()) do out[#out + 1] = e.id end
+        for _, e in ipairs(testing.focus_entries()) do out[#out + 1] = e.id end
         return table.concat(out, ",")
     end
     lt.assertEquals(ids(), "a,b,c")
@@ -498,9 +497,8 @@ function suite:test_textinput_disabled_is_inactive_entry()
     end
 
     local h = testing.render(App, { cols = 20, rows = 3 })
-    local focus_mod = require "tui.internal.focus"
     -- All three are in the chain (stable hook call order).
-    lt.assertEquals(#focus_mod._entries(), 3)
+    lt.assertEquals(#testing.focus_entries(), 3)
     -- First active one autoFocuses (TextInput default).
     lt.assertEquals(h:focus_id(), "top")
     -- Tab skips the inactive middle input.

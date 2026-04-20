@@ -9,7 +9,6 @@
 local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
-local input   = require "tui.internal.input"
 
 local suite = lt.test "memory"
 
@@ -34,12 +33,12 @@ function suite:test_mount_unmount_loop_does_not_leak_handlers()
     -- (anything persistent that happens to exist won't bias us).
     local h0 = testing.render(AppWithInput, { cols = 4, rows = 1 })
     h0:unmount()
-    local baseline = #input._handlers()
+    local baseline = testing.input_handler_count()
     for _ = 1, 500 do
         local h = testing.render(AppWithInput, { cols = 4, rows = 1 })
         h:unmount()
     end
-    lt.assertEquals(#input._handlers(), baseline,
+    lt.assertEquals(testing.input_handler_count(), baseline,
         "handler count must return to baseline after 500 mount/unmount cycles")
 end
 
@@ -65,11 +64,11 @@ function suite:test_multiple_subscriptions_all_cleaned_up()
     -- Warm-up cycle to stabilize any global state.
     local h0 = testing.render(App, { cols = 4, rows = 1 })
     h0:unmount()
-    local baseline = #input._handlers()
+    local baseline = testing.input_handler_count()
     local h = testing.render(App, { cols = 4, rows = 1 })
-    lt.assertEquals(#input._handlers(), baseline + 3,
+    lt.assertEquals(testing.input_handler_count(), baseline + 3,
         "three useInput hooks should register three subscribers")
     h:unmount()
-    lt.assertEquals(#input._handlers(), baseline,
+    lt.assertEquals(testing.input_handler_count(), baseline,
         "all three subscribers must be removed on unmount")
 end

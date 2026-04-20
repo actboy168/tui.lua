@@ -364,11 +364,9 @@ function suite:test_ctrl_enter_submit()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     -- Ctrl+Enter should call onSubmit and NOT change the value.
-    -- The testing harness cannot inject ctrl+enter via :press, so we use the
-    -- lower-level _dispatch_event API that bypasses key parsing.
-    local input_mod = require "tui.internal.input"
-    input_mod._dispatch_event({ name = "enter", ctrl = true, meta = false, shift = false, input = "\r", raw = "\r" })
-    h:_paint()
+    -- The testing harness cannot inject ctrl+enter via :press, so we use
+    -- h:dispatch_event() which bypasses key parsing.
+    h:dispatch_event({ name = "enter", ctrl = true, meta = false, shift = false, input = "\r", raw = "\r" })
     lt.assertEquals(#submitted, 1)
     lt.assertEquals(submitted[1], "hello")
     lt.assertEquals(value, "hello")

@@ -166,8 +166,7 @@ end
 -- rather than masquerading as a routine render error behind fallback.
 
 function suite:test_fatal_error_bypasses_boundary()
-    local reconciler = require "tui.internal.reconciler"
-    local function Bad_fn() reconciler.fatal("something broke") end
+    local function Bad_fn() testing.fatal("something broke") end
     local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
@@ -536,12 +535,11 @@ function suite:test_fallback_function_that_throws_degrades_to_empty()
 end
 
 function suite:test_fallback_function_with_fatal_still_propagates()
-    local reconciler = require "tui.internal.reconciler"
     local function Bad_fn() error("normal", 0) end
     local Bad = tui.component(Bad_fn)
     local function App()
         return tui.ErrorBoundary {
-            fallback = function() reconciler.fatal("fatal-from-fb") end,
+            fallback = function() testing.fatal("fatal-from-fb") end,
             Bad {},
         }
     end

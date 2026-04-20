@@ -3,17 +3,8 @@
 local lt        = require "ltest"
 local tui       = require "tui"
 local testing   = require "tui.testing"
-local scheduler = require "tui.internal.scheduler"
 
 local suite = lt.test "use_animation"
-
--- Helper: count live timers (harness configures fake clock; scheduler._timers
--- is a dict keyed by numeric id).
-local function timer_count()
-    local n = 0
-    for _ in pairs(scheduler._timers()) do n = n + 1 end
-    return n
-end
 
 -- Initial frame is 0, time is 0, delta is 0 before any tick has fired.
 function suite:test_initial_snapshot()
@@ -74,7 +65,7 @@ function suite:test_inactive_freezes()
         return tui.Text { "" }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    lt.assertEquals(timer_count(), 0)
+    lt.assertEquals(testing.timer_count(), 0)
     h:advance(500)
     lt.assertEquals(seen.frame, 0)
     lt.assertEquals(seen.time, 0)
@@ -96,7 +87,7 @@ function suite:test_toggle_active_preserves_counters()
 
     active = false
     h:rerender()
-    lt.assertEquals(timer_count(), 0)
+    lt.assertEquals(testing.timer_count(), 0)
     h:advance(500)   -- no-op for the hook
     lt.assertEquals(seen.frame, 2)
     lt.assertEquals(seen.time, 200)
@@ -180,7 +171,7 @@ function suite:test_unmount_clears_timer()
         return tui.Text { "" }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    lt.assertEquals(timer_count(), 1)
+    lt.assertEquals(testing.timer_count(), 1)
     h:unmount()
-    lt.assertEquals(timer_count(), 0)
+    lt.assertEquals(testing.timer_count(), 0)
 end

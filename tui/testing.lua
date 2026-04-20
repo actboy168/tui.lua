@@ -972,6 +972,56 @@ function M.capture_stderr(fn)
     return s
 end
 
+-- ---------------------------------------------------------------------------
+-- Diagnostic helpers.
+--
+-- These expose framework internals that tests need for verifying resource
+-- cleanup and for triggering specific framework conditions in integration
+-- tests. Centralising them here avoids individual test files reaching into
+-- tui.internal.* directly.
+
+--- Number of live timers currently registered with the virtual scheduler.
+-- Useful for asserting that timers are created and cleaned up correctly
+-- (e.g. Spinner, useAnimation, useInterval tests).
+function M.timer_count()
+    local n = 0
+    for _ in pairs(scheduler._timers()) do n = n + 1 end
+    return n
+end
+
+--- Number of active input subscribers across the whole harness session.
+-- Useful in leak tests: mount N components, unmount them, verify count
+-- returns to baseline.
+function M.input_handler_count()
+    return #input_mod._handlers()
+end
+
+--- Trigger a [tui:fatal] error from inside a component render function.
+-- Use this in ErrorBoundary tests where you need a component to raise a
+-- fatal (non-catchable) error to verify the boundary re-throws it.
+function M.fatal(msg)
+    reconciler.fatal(msg)
+end
+
+--- Return the current list of focus-registry entries.
+-- Each entry is the internal table registered by useFocus/TextInput.
+-- Useful for asserting that the right number of focusable elements are
+-- registered and that they have the expected ids.
+function M.focus_entries()
+    return focus_mod._entries()
+end
+
+--- Inject a fully-parsed key event into the input dispatcher, bypassing
+-- the ANSI parser. Use when h:press() cannot express a key combination
+-- (e.g. ctrl+enter, shift+enter via kitty protocol).
+-- `event` must have the shape: { name, input, raw, ctrl, meta, shift }.
+-- Triggers a repaint after dispatch, like all other driving methods.
+function Harness:dispatch_event(event)
+    input_mod._dispatch_event(event)
+    self:_paint()
+    return self
+end
+
 -- Handy tree-walker exported for tests that need to locate a Text node by
 -- its _cursor_offset marker (TextInput-tagged nodes).
 function M.find_text_with_cursor(tree)

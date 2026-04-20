@@ -3,7 +3,6 @@
 local lt         = require "ltest"
 local tui        = require "tui"
 local testing    = require "tui.testing"
-local reconciler = require "tui.internal.reconciler"
 
 local suite = lt.test "reconciler_and_hooks"
 
@@ -122,6 +121,7 @@ end
 
 -- reconciler.shutdown runs cleanups on all remaining instances.
 function suite:test_shutdown_runs_cleanups()
+    local reconciler = require "tui.internal.reconciler"
     local cleaned = 0
     local function Comp()
         tui.useEffect(function()
@@ -227,8 +227,6 @@ end
 
 -- useInput: handler receives parsed events; subscribe/unsubscribe lifecycle.
 function suite:test_use_input_subscribes_and_unsubscribes()
-    local input_mod = require "tui.internal.input"
-
     local got = {}
     local mounted = true
     local function Child()
@@ -242,7 +240,7 @@ function suite:test_use_input_subscribes_and_unsubscribes()
     end
 
     local b = testing.mount_bare(Root)
-    lt.assertEquals(#input_mod._handlers(), 1)
+    lt.assertEquals(testing.input_handler_count(), 1)
 
     b:dispatch("x")
     lt.assertEquals(#got, 1)
@@ -250,7 +248,7 @@ function suite:test_use_input_subscribes_and_unsubscribes()
 
     mounted = false
     b:rerender()
-    lt.assertEquals(#input_mod._handlers(), 0)
+    lt.assertEquals(testing.input_handler_count(), 0)
 
     b:dispatch("y")
     lt.assertEquals(#got, 1)   -- no new events

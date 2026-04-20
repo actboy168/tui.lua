@@ -4,15 +4,8 @@ local lt        = require "ltest"
 local tui       = require "tui"
 local Spinner   = require "tui.extra.spinner".Spinner
 local testing   = require "tui.testing"
-local scheduler = require "tui.internal.scheduler"
 
 local suite = lt.test "spinner"
-
-local function timer_count()
-    local n = 0
-    for _ in pairs(scheduler._timers()) do n = n + 1 end
-    return n
-end
 
 -- Default type=dots renders its first frame (Braille "⠋") on mount.
 function suite:test_default_first_frame()
@@ -131,9 +124,9 @@ function suite:test_conditional_mount_clears_timer()
         }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    lt.assertEquals(timer_count(), 1)
+    lt.assertEquals(testing.timer_count(), 1)
     show = false
     h:rerender()
-    lt.assertEquals(timer_count(), 0)
+    lt.assertEquals(testing.timer_count(), 0)
     h:unmount()
 end
