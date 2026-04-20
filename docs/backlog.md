@@ -24,6 +24,8 @@ _暂无_
 
 - `P1` **命中测试 / `onClick` prop**：Box 持有 layout 坐标，框架层做 hit-test；在 Box 上暴露 `onClick` / `onMouseEnter` / `onMouseLeave` prop，是 Button、ScrollBox 等组件的基础（Lua 层为主）
 - `P2` **`useHover()` hook**：依赖命中测试，返回 `{hovered=bool}`，组件内直接使用无需手算鼠标坐标（Lua 层）
+- `P2` **鼠标框选 + 高亮**：以插件/中间件形式实现，不嵌入核心。主要步骤：① 用 `input_mod.subscribe_mouse` + `request_mouse_level(2)` 监听拖拽事件；② 维护选区状态（`selection.lua` 已有）；③ 在每帧 `paint()` 后调用 `tui_core.screen.overlay_selection()` 写入 ATTR_INVERSE；④ Esc 清除选区；⑤ mouseup 时通过 OSC 52 / clipboard.copy 复制文本。`tui/internal/selection.lua` 和 C 层 `overlay_selection` 已实现，可直接复用。
+- `P3` **双击选词 / 三击选行**：依赖框选插件，300ms 内双击→选词，三击→选行
 - `P3` `mouse_events.lua` 示例：演示 `useMouse`、click、scroll wheel
 
 ### 内置组件扩充
@@ -61,6 +63,7 @@ _暂无_
 - `P2` **核心模块入门测试**：`init.lua`、`renderer.lua`、`input.dispatch` 中间件链（pre → focus → broadcast）
 - `P2` **集成测试：监控仪表盘**：useInterval + ProgressBar + Spinner
 - `P2` **集成测试：终端缩放**：useWindowSize + Box 动态 resize
+- `P3` **`testing.simulate_mouse`**：测试套件里方便触发鼠标事件，通过 `input_mod._dispatch_event()` 分发，降低鼠标交互测试摩擦
 
 ### 架构改进
 
@@ -69,7 +72,10 @@ _暂无_
 ### 输入扩展
 
 - `P1` **文本选择 + 剪贴板**：选择状态机（字符/词/行选择、键盘选择）+ 多路径剪贴板（pbcopy / wl-copy / xclip / OSC 52 fallback）（Lua + C）
-
+  - ✅ 基础拖选 + wl-copy/xclip/pbcopy 已完成
+  - 剩余：OSC 52 fallback（SSH/tmux 场景）
+- `P2` **OSC 52 clipboard**：通过终端转义序列写剪贴板，无需 xclip/wl-copy，SSH/tmux/Kitty 均适用；加入 `clipboard.lua` 最高优先级
+- `P2` **`useClipboard` hook**：组件内程序化读写剪贴板（`write(text)` / `read() → string`），暴露为 `tui.useClipboard()`
 - `P2` **`useInput` key 结构补齐**：`pageUp` / `pageDown` / `home` / `end` / `meta` / `super`
 
 ### 终端兼容性

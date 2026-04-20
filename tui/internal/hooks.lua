@@ -983,8 +983,60 @@ end
 function M.useMouse(fn)
     assert(current, "useMouse called outside of a component render")
     M.useEffect(function()
-        return input_mod.subscribe_mouse(function(ev) fn(ev) end)
+        if not input_mod then input_mod = require "tui.internal.input" end
+        local unsub   = input_mod.subscribe_mouse(function(ev) fn(ev) end)
+        local release = input_mod.request_mouse_level(2)  -- drag level
+        return function() unsub(); release() end
     end, {})
+end
+
+-- useClipboard() → { write = fn(text), read = fn() → string|nil }
+--
+-- write(text) copies text to the clipboard via the same priority chain used
+-- by the framework (OSC 52 → wl-copy → xclip → xsel → pbcopy).
+-- read()      reads the clipboard via xclip / pbcopy / xsel -o / wl-paste.
+--             Returns nil if no tool is available or the clipboard is empty.
+--
+-- Unlike clipboard.copy() which is called at the framework level, the hook
+-- exposes clipboard access directly to components.
+function M.useClipboard()
+    assert(current, "useClipboard called outside of a component render")
+    local clipboard_mod = require "tui.internal.clipboard"
+
+    local handle = M.useMemo(function()
+        local function write(text)
+            clipboard_mod.copy(text)
+        end
+
+        local _read_tools = {
+            { cmd = "xclip -selection clipboard -o" },
+            { cmd = "xsel --clipboard --output" },
+            { cmd = "pbpaste" },
+            { cmd = "wl-paste --no-newline" },
+        }
+
+        local function read()
+            for _, t in ipairs(_read_tools) do
+                local binary = t.cmd:match("^%S+")
+                local probe = io.popen("command -v " .. binary .. " 2>/dev/null")
+                local found = probe and probe:read("*l")
+                if probe then probe:close() end
+                if found and found ~= "" then
+                    local f = io.popen(t.cmd .. " 2>/dev/null")
+                    if f then
+                        local text = f:read("*a")
+                        f:close()
+                        if text and #text > 0 then return text end
+                    end
+                end
+            end
+            return nil
+        end
+
+        return { write = write, read = read }
+    end, {})
+
+    return handle
 end
 
 return M

@@ -430,10 +430,24 @@ M.disableBracketedPaste = ESC .. "[?2004l"
 M.enableFocusEvents  = ESC .. "[?1004h"
 M.disableFocusEvents = ESC .. "[?1004l"
 
--- Mouse events: normal button-tracking (1000) + SGR extended coordinates (1006).
--- SGR (1006) must be enabled alongside 1000 to avoid the 223-cell X10 limit.
-M.enableMouse  = ESC .. "[?1000h" .. ESC .. "[?1006h"
-M.disableMouse = ESC .. "[?1006l" .. ESC .. "[?1000l"
+-- Mouse mode sequences.
+-- Mouse tracking is enabled on demand (ref-counted via input.request_mouse_level).
+-- Levels:
+--   1 = click  : ?1000h — report press and release only
+--   2 = drag   : ?1002h — additionally report button-motion (drag)
+--   3 = any    : ?1003h — additionally report all motion including hover
+-- SGR extended coordinates (?1006h) must always be enabled alongside any level
+-- to avoid the 223-cell X10 coordinate limit.
+M.mouseMode = {
+    sgr_on    = ESC .. "[?1006h",
+    sgr_off   = ESC .. "[?1006l",
+    click_on  = ESC .. "[?1000h",
+    click_off = ESC .. "[?1000l",
+    drag_on   = ESC .. "[?1002h",
+    drag_off  = ESC .. "[?1002l",
+    any_on    = ESC .. "[?1003h",
+    any_off   = ESC .. "[?1003l",
+}
 
 -- ---------------------------------------------------------------------------
 -- Terminal title (OSC 0/2)

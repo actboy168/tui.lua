@@ -26,6 +26,7 @@ local focus_mod  = require "tui.internal.focus"
 local cursor_mod = require "tui.internal.cursor"
 local ansi       = require "tui.internal.ansi"
 local text_mod   = require "tui.internal.text"
+local clipboard  = require "tui.internal.clipboard"
 local tui_core   = require "tui_core"
 
 local terminal = tui_core.terminal
@@ -107,6 +108,7 @@ M.useErrorBoundary = hooks.useErrorBoundary
 M.useTerminalFocus = hooks.useTerminalFocus
 M.useTerminalTitle = hooks.useTerminalTitle
 M.useMouse         = hooks.useMouse
+M.useClipboard     = hooks.useClipboard
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
 M.setInterval = scheduler.setInterval
@@ -234,7 +236,7 @@ end
 -- (Ctrl+C / Ctrl+D — always honored by the framework).
 --
 -- opts (optional):
---   colorLevel  "16" | "256" | "truecolor"  — override auto-detected color level
+--   colorLevel      "16" | "256" | "truecolor"  — override auto-detected color level
 function M.render(root, opts)
     opts = opts or {}
     local interactive = ansi.interactive()
@@ -242,7 +244,13 @@ function M.render(root, opts)
     terminal.windows_vt_enable()
     terminal.set_raw(true)
     if interactive then
-        terminal.write(ansi.cursorHide() .. ansi.enableBracketedPaste .. ansi.enableFocusEvents .. ansi.enableMouse)
+        terminal.write(ansi.cursorHide() .. ansi.enableBracketedPaste .. ansi.enableFocusEvents)
+        -- Wire terminal.write as the mouse mode sequence emitter.
+        -- Mouse modes are enabled on demand (ref-counted via request_mouse_level).
+        input_mod.set_mouse_mode_writer(terminal.write)
+        -- Enable OSC 52 clipboard and wire it to the terminal writer.
+        clipboard.set_writer(terminal.write)
+        clipboard._osc52_enabled = true
     end
 
     local rec_state    = reconciler.new()
@@ -360,7 +368,8 @@ function M.render(root, opts)
         }
     end)
 
-    -- Teardown: run cleanups on all live instances.
+    -- Run cleanups on all live instances (useMouse components release their
+    -- level refs here via useEffect cleanup, then _reset zeroes everything).
     reconciler.shutdown(rec_state)
     input_mod._reset()
     resize_mod._reset()
@@ -380,9 +389,13 @@ function M.render(root, opts)
                 move_seq = ansi.cursorDown(dy) .. "\r"
             end
         end
-        terminal.write(ansi.disableBracketedPaste .. ansi.disableFocusEvents .. ansi.disableMouse .. move_seq .. ansi.cursorShow() .. "\n")
+        terminal.write(ansi.disableBracketedPaste .. ansi.disableFocusEvents .. move_seq .. ansi.cursorShow() .. "\n")
+        -- Detach the mouse mode writer; mouse level is already 0 after releases above.
+        input_mod.set_mouse_mode_writer(nil)
     end
     terminal.set_raw(false)
+    -- Reset clipboard state so the module is clean for subsequent render() calls.
+    clipboard._osc52_enabled = false
 
     if not ok then error(err) end
 end

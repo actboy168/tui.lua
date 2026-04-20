@@ -1599,6 +1599,60 @@ l_set_color_level(lua_State *L) {
     return 0;
 }
 
+/* overlay_selection(ud, c1, r1, c2, r2)
+ *
+ * XOR ATTR_INVERSE into every cell in the rectangular region defined by the
+ * inclusive character-cell range [c1,r1]..[c2,r2] (0-based).  The operation
+ * modifies the next (upcoming) buffer so the highlight is included in the
+ * next diff pass.  Call screen.invalidate() afterwards to force a full rediff
+ * whenever the selection bounds change between frames.
+ *
+ * The style_id stored on each cell is not changed; only the attrs field of the
+ * style_pool entry for that cell is toggled.  Because we need a *per-cell*
+ * transient toggle without mutating the style pool, we write a new style entry
+ * with ATTR_INVERSE OR'd in (or cloned without it if already set).
+ */
+static int
+l_overlay_selection(lua_State *L) {
+    screen_t *s  = check_screen(L, 1);
+    int c1 = (int)luaL_checkinteger(L, 2);
+    int r1 = (int)luaL_checkinteger(L, 3);
+    int c2 = (int)luaL_checkinteger(L, 4);
+    int r2 = (int)luaL_checkinteger(L, 5);
+
+    /* Clamp to buffer bounds. */
+    if (c1 < 0) c1 = 0;
+    if (r1 < 0) r1 = 0;
+    if (c2 >= s->w) c2 = s->w - 1;
+    if (r2 >= s->h) r2 = s->h - 1;
+    if (c1 > c2 || r1 > r2) return 0;
+
+    for (int row = r1; row <= r2; row++) {
+        for (int col = c1; col <= c2; col++) {
+            cell_t *c = cell_at(s->next, s->w, col, row);
+            if (c->len == 0) continue; /* WIDE_TAIL placeholder — skip */
+            uint16_t sid = c->style_id;
+            style_entry_t e;
+            if (sid == 0) {
+                /* Default style: synthesize an entry with only ATTR_INVERSE. */
+                memset(&e, 0, sizeof(e));
+                e.attrs = ATTR_INVERSE;
+            } else {
+                e = s->pool.entries[sid - 1];
+                e.attrs ^= ATTR_INVERSE;
+            }
+            /* Intern the modified style (may reuse an existing entry). */
+            c->style_id = style_intern(&s->pool,
+                                       e.fg_mode, e.fg_val,
+                                       e.bg_mode, e.bg_val,
+                                       e.attrs);
+            /* Mark the cell as dirty so diff picks it up. */
+            if (col > s->dirty_xmax[row]) s->dirty_xmax[row] = col;
+        }
+    }
+    return 0;
+}
+
 /* ── registration ─────────────────────────────────────────────── */
 
 static const luaL_Reg screen_lib[] = {
@@ -1618,6 +1672,7 @@ static const luaL_Reg screen_lib[] = {
     {"set_display_cursor", l_set_display_cursor},
     {"intern_style",      l_intern_style},
     {"set_color_level",   l_set_color_level},
+    {"overlay_selection", l_overlay_selection},
     {NULL, NULL},
 };
 

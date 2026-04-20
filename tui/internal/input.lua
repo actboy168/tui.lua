@@ -38,6 +38,64 @@ local _focus_bus = bus_mod.new()
 -- Receives the full mouse event table: { name="mouse", type, button, x, y, ... }
 local _mouse_bus = bus_mod.new()
 
+-- ---------------------------------------------------------------------------
+-- Mouse mode level management (ref-counted).
+--
+-- Levels: 1 = click (?1000h), 2 = drag (?1002h), 3 = any (?1003h).
+-- SGR extended coordinates (?1006h) are enabled alongside any non-zero level.
+-- The writer function is injected by init.lua (terminal.write).
+-- Components request a level via request_mouse_level(); the highest currently
+-- demanded level is active at all times.
+local _mouse_writer  = nil   -- injected by set_mouse_mode_writer()
+local _mouse_level   = 0     -- currently active terminal level
+local _mouse_refs    = {0, 0, 0}  -- ref counts for levels 1, 2, 3
+
+local _mm  -- forward declaration; defined below after ansi is loaded lazily
+local function _get_mm()
+    if not _mm then _mm = require("tui.internal.ansi").mouseMode end
+    return _mm
+end
+
+local _LEVEL_ON  = { "click_on",  "drag_on",  "any_on"  }
+local _LEVEL_OFF = { "click_off", "drag_off", "any_off" }
+
+local function _mouse_level_needed()
+    for i = 3, 1, -1 do
+        if _mouse_refs[i] > 0 then return i end
+    end
+    return 0
+end
+
+local function _apply_mouse_level(needed)
+    if needed == _mouse_level then return end
+    if not _mouse_writer then _mouse_level = needed; return end
+    local mm = _get_mm()
+    if needed > _mouse_level then
+        -- Upgrading: enable SGR + click base on first activation, then add levels.
+        if _mouse_level == 0 then
+            _mouse_writer(mm.sgr_on)
+            _mouse_writer(mm.click_on)
+            for i = 2, needed do
+                _mouse_writer(mm[_LEVEL_ON[i]])
+            end
+        else
+            for i = _mouse_level + 1, needed do
+                _mouse_writer(mm[_LEVEL_ON[i]])
+            end
+        end
+    else
+        -- Downgrading: disable extra levels from top down.
+        for i = _mouse_level, math.max(needed + 1, 2), -1 do
+            _mouse_writer(mm[_LEVEL_OFF[i]])
+        end
+        if needed == 0 then
+            _mouse_writer(mm.click_off)
+            _mouse_writer(mm.sgr_off)
+        end
+    end
+    _mouse_level = needed
+end
+
 -- User-registered middleware functions: fn(ev) -> bool.
 -- Run after paste accumulation, before focus/mouse/key routing.
 -- A middleware that returns true consumes the event (stops all further processing).
@@ -114,6 +172,36 @@ M.subscribe_focus = _focus_bus.subscribe
 -- Registers a mouse handler. `fn(event)` is called with each mouse event
 -- table: { name="mouse", type, button, x, y, scroll, shift, meta, ctrl }.
 M.subscribe_mouse = _mouse_bus.subscribe
+
+--- set_mouse_mode_writer(fn | nil)
+-- Injects the function used to write terminal escape sequences for mouse mode
+-- changes.  Pass `terminal.write` on startup and `nil` on teardown.
+-- When set to nil, level changes are tracked in memory but no sequences are sent.
+function M.set_mouse_mode_writer(fn)
+    _mouse_writer = fn
+    if fn == nil then
+        -- Caller is responsible for sending disable sequences before clearing.
+        _mouse_level = 0
+    end
+end
+
+--- request_mouse_level(level) -> release_fn
+-- Increments the ref count for the given level (1=click, 2=drag, 3=any).
+-- If the highest needed level rises, the appropriate terminal sequences are
+-- written via the configured writer.  Returns a release function; call it when
+-- the mouse is no longer needed (e.g., on component unmount).
+function M.request_mouse_level(level)
+    assert(level >= 1 and level <= 3, "mouse level must be 1, 2, or 3")
+    _mouse_refs[level] = _mouse_refs[level] + 1
+    _apply_mouse_level(_mouse_level_needed())
+    local released = false
+    return function()
+        if released then return end
+        released = true
+        _mouse_refs[level] = math.max(0, _mouse_refs[level] - 1)
+        _apply_mouse_level(_mouse_level_needed())
+    end
+end
 
 --- use_middleware(fn) -> unsubscribe
 -- Inserts a middleware into the event pipeline. `fn(ev)` is called for every
@@ -290,6 +378,25 @@ function M._reset()
     _pasting      = false
     _paste_buf    = {}
     _pending_bytes = ""
+    -- Reset mouse level state. The writer is intentionally NOT cleared here:
+    -- init.lua manages the writer lifecycle explicitly around tui.render().
+    _mouse_refs  = {0, 0, 0}
+    _mouse_level = 0
+end
+
+--- _flush_pending() — force any buffered incomplete-escape bytes through the
+-- parser right now (as if a short timeout elapsed). Used in tests to dispatch
+-- a standalone Esc key without waiting for a follow-up byte.
+function M._flush_pending()
+    if _pending_bytes == "" then return false end
+    local bytes = _pending_bytes
+    _pending_bytes = ""
+    local events = keys.parse(bytes)
+    local should_exit = false
+    for _, ev in ipairs(events) do
+        if _process_event(ev) then should_exit = true end
+    end
+    return should_exit
 end
 
 return M
