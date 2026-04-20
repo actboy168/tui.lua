@@ -64,7 +64,6 @@ _暂无_
 
 ### 架构改进
 
-- `P1` **`input.dispatch` 中间件链**：现已有 paste / focus / mouse 三条手写 `if` 分支，改为可插拔中间件链，方便插入日志、调试等中间件（Lua 层）
 - `P2` **`put_cell` OOM 检测**：当前 OOM 时静默丢弃 grapheme cluster，dev-mode 下应报错或记录标志位
 
 ### 输入扩展

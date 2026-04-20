@@ -38,6 +38,11 @@ local _focus_bus = bus_mod.new()
 -- Receives the full mouse event table: { name="mouse", type, button, x, y, ... }
 local _mouse_bus = bus_mod.new()
 
+-- User-registered middleware functions: fn(ev) -> bool.
+-- Run after paste accumulation, before focus/mouse/key routing.
+-- A middleware that returns true consumes the event (stops all further processing).
+local _middlewares = {}
+
 -- Bracketed-paste accumulator state (persists across dispatch() calls so
 -- multi-chunk pastes — rare but possible — are assembled correctly).
 local _pasting    = false
@@ -110,6 +115,21 @@ M.subscribe_focus = _focus_bus.subscribe
 -- table: { name="mouse", type, button, x, y, scroll, shift, meta, ctrl }.
 M.subscribe_mouse = _mouse_bus.subscribe
 
+--- use_middleware(fn) -> unsubscribe
+-- Inserts a middleware into the event pipeline. `fn(ev)` is called for every
+-- parsed event that survives paste accumulation. If `fn` returns a truthy
+-- value the event is consumed and no further processing occurs (focus routing,
+-- mouse bus, broadcast — all skipped). Middlewares run in registration order.
+-- Returns an unsubscribe function that removes the middleware.
+function M.use_middleware(fn)
+    _middlewares[#_middlewares + 1] = fn
+    return function()
+        for i, m in ipairs(_middlewares) do
+            if m == fn then table.remove(_middlewares, i); break end
+        end
+    end
+end
+
 --- debug_log: when non-nil, each dispatch() call appends a line to this file.
 -- Enable from Lua before tui.render:  require("tui.internal.input")._debug_log = "input_debug.txt"
 M._debug_log = nil
@@ -118,6 +138,49 @@ local function _dbg(msg)
     if not M._debug_log then return end
     local f = io.open(M._debug_log, "a")
     if f then f:write(msg .. "\n"); f:close() end
+end
+
+-- Process one event through the unified chain.
+-- Chain order: [user middlewares] → [built-in routing]
+-- Returns true if the event signals Ctrl+C / Ctrl+D (caller should exit).
+local function _process_event(ev)
+    -- ── User middleware chain ─────────────────────────────────────────────
+    for _, mw in ipairs(_middlewares) do
+        if mw(ev) then return false end
+    end
+    -- ── Terminal focus events (DEC 1004) ─────────────────────────────────
+    if ev.name == "focus_in" or ev.name == "focus_out" then
+        _focus_bus.dispatch(ev.name)
+        return false
+    end
+    -- ── Mouse events ──────────────────────────────────────────────────────
+    if ev.name == "mouse" then
+        _mouse_bus.dispatch(ev)
+        return false
+    end
+    -- ── Paste (assembled by dispatch(); also accepts pre-built paste ev) ──
+    if ev.name == "paste" then
+        local text = ev.input or ""
+        focus_mod.dispatch_focused(text, ev)
+        _broadcast.dispatch(text, ev)
+        _paste_bus.dispatch(text)
+        return false
+    end
+    -- ── Normal key routing ───────────────────────────────────────────────
+    local exit = ev.ctrl and ev.name == "char"
+                 and (ev.input == "c" or ev.input == "d")
+    if focus_mod.is_enabled() then
+        if ev.name == "tab" and not ev.shift then
+            focus_mod.focus_next()
+            return exit
+        elseif ev.name == "backtab" or (ev.name == "tab" and ev.shift) then
+            focus_mod.focus_prev()
+            return exit
+        end
+    end
+    focus_mod.dispatch_focused(ev.input or "", ev)
+    _broadcast.dispatch(ev.input or "", ev)
+    return exit
 end
 
 --- dispatch(bytes) -> should_exit
@@ -169,7 +232,7 @@ function M.dispatch(bytes)
     end
     local should_exit = false
     for _, ev in ipairs(events) do
-        -- ── Bracketed-paste accumulation ────────────────────────────────────
+        -- ── Bracketed-paste accumulation (stateful stream transform) ─────────
         if ev.name == "paste_start" then
             _pasting   = true
             _paste_buf = {}
@@ -182,9 +245,7 @@ function M.dispatch(bytes)
                 _paste_buf = {}
                 local paste_ev = { name = "paste", input = text,
                                    ctrl = false, meta = false, shift = false, raw = "" }
-                focus_mod.dispatch_focused(text, paste_ev)
-                _broadcast.dispatch(text, paste_ev)
-                _paste_bus.dispatch(text)
+                _process_event(paste_ev)
             end
             goto continue
         end
@@ -197,39 +258,8 @@ function M.dispatch(bytes)
             end
             goto continue
         end
-        -- ── Terminal focus events (DEC 1004) ─────────────────────────────────
-        if ev.name == "focus_in" or ev.name == "focus_out" then
-            _focus_bus.dispatch(ev.name)
-            goto continue
-        end
-        -- ── Mouse events ──────────────────────────────────────────────────────
-        if ev.name == "mouse" then
-            _mouse_bus.dispatch(ev)
-            goto continue
-        end
-        -- ── Normal key routing ───────────────────────────────────────────────
-        if ev.ctrl and ev.name == "char"
-            and (ev.input == "c" or ev.input == "d") then
-            should_exit = true
-        end
-
-        local handled_by_focus_nav = false
-        if focus_mod.is_enabled() then
-            if ev.name == "tab" and not ev.shift then
-                focus_mod.focus_next()
-                handled_by_focus_nav = true
-            elseif ev.name == "backtab" or (ev.name == "tab" and ev.shift) then
-                focus_mod.focus_prev()
-                handled_by_focus_nav = true
-            end
-        end
-
-        if not handled_by_focus_nav then
-            -- Focused component sees it first (order within a single event:
-            -- focused → broadcast).
-            focus_mod.dispatch_focused(ev.input or "", ev)
-            _broadcast.dispatch(ev.input or "", ev)
-        end
+        -- All other events go through the unified chain.
+        if _process_event(ev) then should_exit = true end
         ::continue::
     end
     return should_exit
@@ -240,32 +270,13 @@ function M._handlers() return _broadcast._handlers() end
 function M._paste_handlers() return _paste_bus._handlers() end
 function M._focus_handlers() return _focus_bus._handlers() end
 function M._mouse_handlers() return _mouse_bus._handlers() end
+function M._middleware_list() return _middlewares end
 
 --- Dispatch a single pre-built event table (for testing IME composing, etc.).
--- Routes through the same pipeline as dispatch(), but skips key parsing.
+-- Routes through the same unified chain as dispatch(), but skips key parsing
+-- and paste accumulation.
 function M._dispatch_event(ev)
-    if ev.name == "paste" then
-        local text = ev.input or ""
-        focus_mod.dispatch_focused(text, ev)
-        _broadcast.dispatch(text, ev)
-        _paste_bus.dispatch(text)
-        return
-    end
-    local handled_by_focus_nav = false
-    if focus_mod.is_enabled() then
-        if ev.name == "tab" and not ev.shift then
-            focus_mod.focus_next()
-            handled_by_focus_nav = true
-        elseif ev.name == "backtab" or (ev.name == "tab" and ev.shift) then
-            focus_mod.focus_prev()
-            handled_by_focus_nav = true
-        end
-    end
-
-    if not handled_by_focus_nav then
-        focus_mod.dispatch_focused(ev.input or "", ev)
-        _broadcast.dispatch(ev.input or "", ev)
-    end
+    _process_event(ev)
 end
 
 -- Reset broadcast channel only. focus is a separate singleton; callers
@@ -275,6 +286,7 @@ function M._reset()
     _paste_bus._reset()
     _focus_bus._reset()
     _mouse_bus._reset()
+    _middlewares  = {}
     _pasting      = false
     _paste_buf    = {}
     _pending_bytes = ""
