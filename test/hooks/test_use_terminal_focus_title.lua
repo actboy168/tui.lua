@@ -4,7 +4,7 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
-local input_mod = require "tui.internal.input"
+local input_helpers = require "tui.testing.input"
 
 local suite = lt.test "use_terminal_focus_title"
 
@@ -29,15 +29,15 @@ end
 function suite:test_focus_out_event_changes_state()
     local h = testing.render(FocusApp, { cols = 20, rows = 1 })
     -- ESC [ O  →  CSI O  →  focus_out
-    h:dispatch("\x1b[O")
+    h:dispatch(input_helpers.posix("\x1b[O"))
     lt.assertEquals(h:row(1):match("^%S+"), "blurred")
     h:unmount()
 end
 
 function suite:test_focus_in_event_restores_state()
     local h = testing.render(FocusApp, { cols = 20, rows = 1 })
-    h:dispatch("\x1b[O")  -- lose focus
-    h:dispatch("\x1b[I")  -- regain focus
+    h:dispatch(input_helpers.posix("\x1b[O"))  -- lose focus
+    h:dispatch(input_helpers.posix("\x1b[I"))  -- regain focus
     lt.assertEquals(h:row(1):match("^%S+"), "focused")
     h:unmount()
 end
@@ -52,8 +52,8 @@ function suite:test_focus_events_not_dispatched_to_useInput()
         return tui.Text { width = 5, height = 1, "x" }
     end
     local h = testing.render(App, { cols = 5, rows = 1 })
-    h:dispatch("\x1b[I")
-    h:dispatch("\x1b[O")
+    h:dispatch(input_helpers.posix("\x1b[I"))
+    h:dispatch(input_helpers.posix("\x1b[O"))
     lt.assertEquals(#seen, 0, "focus events must not reach useInput handlers")
     h:unmount()
 end
@@ -82,7 +82,7 @@ function suite:test_multiple_subscribers()
     local r2 = h:row(2):match("^%S+")
     lt.assertEquals(r1, "A:Y")
     lt.assertEquals(r2, "B:Y")
-    h:dispatch("\x1b[O")
+    h:dispatch(input_helpers.posix("\x1b[O"))
     lt.assertEquals(h:row(1):match("^%S+"), "A:N")
     lt.assertEquals(h:row(2):match("^%S+"), "B:N")
     h:unmount()

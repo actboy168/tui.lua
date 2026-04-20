@@ -7,6 +7,7 @@ local lt       = require "ltest"
 local tui      = require "tui"
 local Textarea = require "tui.extra.textarea".Textarea
 local testing  = require "tui.testing"
+local input_helpers = require "tui.testing.input"
 
 local suite = lt.test "textarea"
 
@@ -106,7 +107,7 @@ function suite:test_shift_enter_inserts_newline()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:type("a")
-    h:dispatch("\x1b[13;2u")  -- Shift+Enter → insert newline
+    h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter → insert newline
     h:type("b")
     lt.assertEquals(value, "a\nb")
     h:unmount()
@@ -127,7 +128,7 @@ function suite:test_newline_cursor_on_last_line()
     end
     local h = testing.render(App, { cols = 20, rows = 10 })
     h:type("hello")
-    h:dispatch("\x1b[13;2u")  -- Shift+Enter → insert newline
+    h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter → insert newline
     -- Cursor must be on row 2 (second line), column 1 (after the scroll origin).
     local col, row = h:cursor()
     lt.assertEquals(row, 2, "cursor should be on line 2 after newline")
@@ -153,7 +154,7 @@ function suite:test_scroll_when_taller_than_terminal()
     local h = testing.render(App, { cols = 20, rows = 5 })
     for i = 1, 6 do
         h:type("line" .. i)
-        h:dispatch("\x1b[13;2u")  -- Shift+Enter
+        h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter
     end
     h:type("line7")
     -- value should have 7 lines
@@ -191,7 +192,7 @@ function suite:test_scroll_taller_than_terminal_with_border()
     local h = testing.render(App, { cols = 20, rows = 7 })
     for i = 1, 7 do
         h:type("L" .. i)
-        h:dispatch("\x1b[13;2u")  -- Shift+Enter
+        h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter
     end
     h:type("L8")
     -- Cursor must be visible (within the 7-row terminal)
@@ -271,7 +272,7 @@ function suite:test_paste_singleline()
         }
     end
     local h = testing.render(App, { cols = 40, rows = 4 })
-    h:dispatch("\x1b[200~hello world\x1b[201~")
+    h:dispatch(input_helpers.paste("hello world"))
     lt.assertEquals(value, "hello world")
     h:unmount()
 end
@@ -285,7 +286,7 @@ function suite:test_paste_multiline()
         }
     end
     local h = testing.render(App, { cols = 40, rows = 4 })
-    h:dispatch("\x1b[200~line1\nline2\nline3\x1b[201~")
+    h:dispatch(input_helpers.paste("line1\nline2\nline3"))
     lt.assertEquals(value, "line1\nline2\nline3")
     h:unmount()
 end
@@ -301,7 +302,7 @@ function suite:test_paste_into_existing_text()
     local h = testing.render(App, { cols = 40, rows = 4 })
     -- Caret at end of "ac"; press Left to get before 'c', then paste "b".
     h:press("left")
-    h:dispatch("\x1b[200~b\x1b[201~")
+    h:dispatch(input_helpers.paste("b"))
     lt.assertEquals(value, "abc")
     h:unmount()
 end
@@ -318,7 +319,7 @@ function suite:test_paste_multiline_into_existing_text()
     -- Move to end of "start " (position 6), paste "mid1\nmid2\n".
     h:press("home")
     for _ = 1, 6 do h:press("right") end
-    h:dispatch("\x1b[200~mid1\nmid2\n\x1b[201~")
+    h:dispatch(input_helpers.paste("mid1\nmid2\n"))
     lt.assertEquals(value, "start mid1\nmid2\nend")
     h:unmount()
 end
@@ -394,7 +395,7 @@ function suite:test_shift_enter_inserts_newline_via_csi_u()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     -- ESC [ 1 3 ; 2 u  (Shift+Enter in kitty keyboard protocol) → insert newline
-    h:dispatch("\x1b[13;2u")
+    h:dispatch(input_helpers.raw("\x1b[13;2u"))
     h:_paint()
     lt.assertEquals(#submitted, 0)
     lt.assertEquals(value, "hi\n")
@@ -418,7 +419,7 @@ function suite:test_ctrl_enter_submit_via_csi_u()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     -- ESC [ 1 3 ; 5 u  (Ctrl+Enter in kitty keyboard protocol)
-    h:dispatch("\x1b[13;5u")
+    h:dispatch(input_helpers.raw("\x1b[13;5u"))
     h:_paint()
     lt.assertEquals(#submitted, 1)
     lt.assertEquals(submitted[1], "world")
@@ -502,7 +503,7 @@ function suite:test_split_esc_right_arrow()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("home")            -- cursor at col 0
-    h:dispatch("\x1b")         -- ESC alone (should be buffered, not "escape")
+    h:dispatch(input_helpers.raw("\x1b"))         -- ESC alone (should be buffered, not "escape")
     h:dispatch("[C")           -- rest of right-arrow CSI
     -- Value must be unchanged (cursor moved; nothing inserted)
     lt.assertEquals(value, "ab")
@@ -519,7 +520,7 @@ function suite:test_split_esc_up_arrow()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
-    h:dispatch("\x1b")
+    h:dispatch(input_helpers.raw("\x1b"))
     h:dispatch("[A")           -- up arrow split
     h:type("!")                -- should land on line 1
     lt.assertEquals(value, "foo!\nbar")
@@ -536,7 +537,7 @@ function suite:test_split_esc_bracket_then_final()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
-    h:dispatch("\x1b")
+    h:dispatch(input_helpers.raw("\x1b"))
     h:dispatch("[")
     h:dispatch("A")            -- up arrow delivered byte-by-byte
     h:type("!")
@@ -563,5 +564,30 @@ function suite:test_sticky_x_through_short_line()
     h:press("up")   -- line 2→1, sticky x=5 still, col=5
     h:type("!")
     lt.assertEquals(value, "abcde!\nx\nfghij")
+    h:unmount()
+end
+
+function suite:test_windows_ime_confirm_space_not_inserted()
+    local input_helpers = require "tui.testing.input"
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    local bytes = input_helpers.windows {
+        { vk = 0xE5, char = "" },  -- VK_PROCESSKEY
+        { vk = 0,    char = "中" },
+        { vk = 0,    char = "午" },
+        { vk = 0x20, char = " " }, -- swallowed confirmation space
+        { vk = 0xE5, char = "" },
+        { vk = 0,    char = "中" },
+        { vk = 0,    char = "午" },
+        { vk = 0x20, char = " " },
+    }
+    h:dispatch(bytes)
+    lt.assertEquals(value, "中午中午")
     h:unmount()
 end

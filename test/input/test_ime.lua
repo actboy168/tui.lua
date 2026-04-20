@@ -3,6 +3,7 @@ local lt       = require "ltest"
 local tui      = require "tui"
 local extra = require "tui.extra"
 local testing  = require "tui.testing"
+local input_helpers = require "tui.testing.input"
 
 local test_ime = lt.test "ime"
 
@@ -71,6 +72,26 @@ function test_ime:test_composing_then_confirm()
     -- The confirmed text is now in the value.
     lt.assertEquals(lastValue, "你")
 
+    h:unmount()
+end
+
+function test_ime:test_windows_fixture_commit_without_confirm_space()
+    local lastValue = ""
+    local function App()
+        local v, setV = tui.useState("")
+        lastValue = v
+        return extra.TextInput { value = v, onChange = setV, width = 20 }
+    end
+    local h = testing.render(App)
+
+    h:dispatch(input_helpers.windows {
+        { vk = 0xE5, char = "" },  -- VK_PROCESSKEY
+        { vk = 0,    char = "中" },
+        { vk = 0,    char = "午" },
+        { vk = 0x20, char = " " }, -- swallowed confirmation space
+    })
+
+    lt.assertEquals(lastValue, "中午")
     h:unmount()
 end
 

@@ -4,12 +4,22 @@ local lt        = require "ltest"
 local tui_core  = require "tui_core"
 local keys      = tui_core.keys
 local input_mod = require "tui.internal.input"
+local input_helpers = require "tui.testing.input"
 
 local suite = lt.test "keys_parse"
 
 local function first(bytes)
     local evs = keys.parse(bytes)
     return evs[1]
+end
+
+local function first_spec(spec)
+    local evs = input_helpers.parse(spec)
+    return evs[1]
+end
+
+local function parse_spec(spec)
+    return input_helpers.parse(spec)
 end
 
 -- Printable ASCII.
@@ -32,6 +42,17 @@ function suite:test_char_utf8_emoji()
     local ev = first("\240\159\154\128")  -- 🚀, 4-byte
     lt.assertEquals(ev.name, "char")
     lt.assertEquals(#ev.input, 4)
+end
+
+function suite:test_char_utf8_cjk_via_windows_fixture()
+    local ev = first_spec {
+        platform = "windows",
+        events = {
+            { vk = 0, char = "中" },
+        },
+    }
+    lt.assertEquals(ev.name, "char")
+    lt.assertEquals(ev.input, "中")
 end
 
 -- Enter, Tab, Backspace, Escape.
@@ -82,9 +103,32 @@ end
 function suite:test_arrow_left()
     lt.assertEquals(first("\27[D").name, "left")
 end
+
+function suite:test_arrow_up_via_windows_fixture()
+    local ev = first_spec {
+        platform = "windows",
+        events = {
+            { vk = 0x26, char = "" },
+        },
+    }
+    lt.assertEquals(ev.name, "up")
+end
+
 function suite:test_home_end()
     lt.assertEquals(first("\27[H").name, "home")
     lt.assertEquals(first("\27[F").name, "end")
+end
+
+function suite:test_home_end_via_windows_fixture()
+    local evs = parse_spec {
+        platform = "windows",
+        events = {
+            { vk = 0x24, char = "" },
+            { vk = 0x23, char = "" },
+        },
+    }
+    lt.assertEquals(evs[1].name, "home")
+    lt.assertEquals(evs[2].name, "end")
 end
 
 -- Tilde keys.
@@ -120,6 +164,28 @@ function suite:test_ctrl_up()
     lt.assertEquals(ev.shift, false)
     lt.assertEquals(ev.meta, false)
 end
+
+function suite:test_ctrl_enter_via_windows_fixture()
+    local ev = first_spec {
+        platform = "windows",
+        events = {
+            { vk = 0, char = "\r", ctrl = true },
+        },
+    }
+    lt.assertEquals(ev.name, "enter")
+    lt.assertEquals(ev.ctrl, true)
+end
+
+function suite:test_shift_enter_via_windows_fixture()
+    local ev = first_spec {
+        platform = "windows",
+        events = {
+            { vk = 0, char = "\r", shift = true },
+        },
+    }
+    lt.assertEquals(ev.name, "enter")
+    lt.assertEquals(ev.shift, true)
+end
 -- ESC [ 1 ; 2 A => shift+up.
 function suite:test_shift_up()
     local ev = first("\27[1;2A")
@@ -151,6 +217,21 @@ function suite:test_multiple_events()
     lt.assertEquals(evs[3].name, "up")
 end
 
+function suite:test_windows_ime_fixture_drops_confirm_space()
+    local evs = parse_spec {
+        platform = "windows",
+        events = {
+            { vk = 0xE5, char = "" },
+            { vk = 0, char = "中" },
+            { vk = 0, char = "午" },
+            { vk = 0x20, char = " " },
+        },
+    }
+    lt.assertEquals(#evs, 2)
+    lt.assertEquals(evs[1].input, "中")
+    lt.assertEquals(evs[2].input, "午")
+end
+
 -- Shift-tab (CSI Z).
 function suite:test_backtab()
     lt.assertEquals(first("\27[Z").name, "backtab")
@@ -167,7 +248,7 @@ function dsuite:test_subscribe_receives_events()
     local unsub = input_mod.subscribe(function(input, key)
         got[#got + 1] = { input = input, name = key.name }
     end)
-    input_mod.dispatch("a\27[A")
+    input_mod.dispatch(input_helpers.raw("a\27[A"))
     lt.assertEquals(#got, 2)
     lt.assertEquals(got[1].input, "a")
     lt.assertEquals(got[1].name, "char")
@@ -179,10 +260,10 @@ function dsuite:test_unsubscribe_stops_events()
     input_mod._reset()
     local count = 0
     local unsub = input_mod.subscribe(function() count = count + 1 end)
-    input_mod.dispatch("a")
+    input_mod.dispatch(input_helpers.raw("a"))
     lt.assertEquals(count, 1)
     unsub()
-    input_mod.dispatch("b")
+    input_mod.dispatch(input_helpers.raw("b"))
     lt.assertEquals(count, 1)
 end
 
@@ -191,7 +272,7 @@ function dsuite:test_multiple_subscribers_all_notified()
     local a, b = 0, 0
     input_mod.subscribe(function() a = a + 1 end)
     input_mod.subscribe(function() b = b + 1 end)
-    input_mod.dispatch("x")
+    input_mod.dispatch(input_helpers.raw("x"))
     lt.assertEquals(a, 1)
     lt.assertEquals(b, 1)
 
@@ -228,13 +309,13 @@ function dsuite:test_unsubscribe_mid_dispatch_is_safe()
         unsub_b()  -- unsubscribe b while we're iterating
     end)
     unsub_b = input_mod.subscribe(function() b_calls = b_calls + 1 end)
-    input_mod.dispatch("x")
+    input_mod.dispatch(input_helpers.raw("x"))
     lt.assertEquals(a_calls, 1)
     -- b might or might not receive this event (snapshot behavior); subsequent
     -- events must not reach b.
-    input_mod.dispatch("y")
+    input_mod.dispatch(input_helpers.raw("y"))
     -- After the second dispatch, b_calls should be the same as after the first.
     local b_after = b_calls
-    input_mod.dispatch("z")
+    input_mod.dispatch(input_helpers.raw("z"))
     lt.assertEquals(b_calls, b_after)
 end

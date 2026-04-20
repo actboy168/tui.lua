@@ -5,6 +5,7 @@ local lt        = require "ltest"
 local testing   = require "tui.testing"
 local tui       = require "tui"
 local input_mod = require "tui.internal.input"
+local mouse_helpers = require "tui.testing.mouse"
 
 local suite = lt.test "use_mouse"
 
@@ -24,8 +25,7 @@ end
 function suite:test_left_button_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<0;10;5M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 10, y = 5 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 1)
@@ -37,8 +37,7 @@ end
 function suite:test_left_button_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<0;3;7m")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "up", button = 1, x = 3, y = 7 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "up")
     lt.assertEquals(events[1].button, 1)
@@ -50,8 +49,7 @@ end
 function suite:test_middle_button_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<1;1;1M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "down", button = 2, x = 1, y = 1 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 2)
@@ -61,8 +59,7 @@ end
 function suite:test_right_button_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<2;1;1M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "down", button = 3, x = 1, y = 1 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 3)
@@ -75,8 +72,7 @@ end
 function suite:test_scroll_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<64;1;1M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "scroll", scroll = 1, x = 1, y = 1 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
     lt.assertEquals(events[1].scroll, 1)
@@ -86,8 +82,7 @@ end
 function suite:test_scroll_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<65;1;1M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "scroll", scroll = -1, x = 1, y = 1 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
     lt.assertEquals(events[1].scroll, -1)
@@ -100,8 +95,7 @@ end
 function suite:test_mouse_move()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<32;15;8M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "move", button = 1, x = 15, y = 8 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type, "move")
     lt.assertEquals(events[1].x,    15)
@@ -115,8 +109,9 @@ end
 function suite:test_shift_modifier()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<4;5;5M")   -- btn=0 + shift(4)
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr {
+        type = "down", button = 1, x = 5, y = 5, shift = true,
+    })
     lt.assertEquals(#events, 1)
     lt.assertTrue(events[1].shift)
     lt.assertFalse(events[1].meta)
@@ -127,8 +122,9 @@ end
 function suite:test_meta_modifier()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<8;5;5M")   -- btn=0 + meta(8)
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr {
+        type = "down", button = 1, x = 5, y = 5, meta = true,
+    })
     lt.assertEquals(#events, 1)
     lt.assertFalse(events[1].shift)
     lt.assertTrue(events[1].meta)
@@ -139,8 +135,9 @@ end
 function suite:test_ctrl_modifier()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<16;5;5M")  -- btn=0 + ctrl(16)
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr {
+        type = "down", button = 1, x = 5, y = 5, ctrl = true,
+    })
     lt.assertEquals(#events, 1)
     lt.assertFalse(events[1].shift)
     lt.assertFalse(events[1].meta)
@@ -159,8 +156,7 @@ function suite:test_mouse_not_forwarded_to_useInput()
         return tui.Text { width = 10, height = 1, "" }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<0;1;1M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
     lt.assertFalse(got_key, "mouse event must not reach useInput")
     h:unmount()
 end
@@ -228,8 +224,7 @@ function suite:test_x10_button_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     -- left button (0) at col=10 (10+32=42=0x2A), row=5 (5+32=37=0x25)
-    input_mod.dispatch("\x1b[M\x20\x2a\x25")
-    h:_paint()
+    h:dispatch(mouse_helpers.x10 { type = "down", button = 1, x = 10, y = 5 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 1)
@@ -241,9 +236,7 @@ end
 function suite:test_x10_release()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    -- X10 release = btn bits 0-1 == 3 → 3+32=35=0x23
-    input_mod.dispatch("\x1b[M\x23\x21\x21")
-    h:_paint()
+    h:dispatch(mouse_helpers.x10 { type = "up", x = 1, y = 1 })
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type, "up")
     -- X10 release does not carry button identity

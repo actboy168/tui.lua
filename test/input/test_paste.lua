@@ -3,6 +3,7 @@
 
 local lt        = require "ltest"
 local input_mod = require "tui.internal.input"
+local input_helpers = require "tui.testing.input"
 
 local suite = lt.test "input_paste"
 
@@ -17,7 +18,7 @@ function suite:test_single_chunk_paste()
     local received = {}
     input_mod.subscribe_paste(function(text) received[#received + 1] = text end)
 
-    input_mod.dispatch("\x1b[200~hello world\x1b[201~")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~hello world\x1b[201~"))
 
     lt.assertEquals(#received, 1)
     lt.assertEquals(received[1], "hello world")
@@ -29,10 +30,10 @@ function suite:test_multi_chunk_paste()
     local received = {}
     input_mod.subscribe_paste(function(text) received[#received + 1] = text end)
 
-    input_mod.dispatch("\x1b[200~foo")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~foo"))
     lt.assertEquals(#received, 0, "paste_end not yet seen")
 
-    input_mod.dispatch("bar\x1b[201~")
+    input_mod.dispatch(input_helpers.raw("bar\x1b[201~"))
     lt.assertEquals(#received, 1)
     lt.assertEquals(received[1], "foobar")
 end
@@ -49,7 +50,7 @@ function suite:test_pasting_suppresses_key_events()
         paste_seen[#paste_seen + 1] = text
     end)
 
-    input_mod.dispatch("\x1b[200~abc\x1b[201~")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~abc\x1b[201~"))
 
     -- Only a single paste event, no individual char events.
     lt.assertEquals(#paste_seen, 1)
@@ -65,11 +66,11 @@ function suite:test_unsubscribe()
     reset()
     local count = 0
     local unsub = input_mod.subscribe_paste(function() count = count + 1 end)
-    input_mod.dispatch("\x1b[200~x\x1b[201~")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~x\x1b[201~"))
     lt.assertEquals(count, 1)
 
     unsub()
-    input_mod.dispatch("\x1b[200~y\x1b[201~")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~y\x1b[201~"))
     lt.assertEquals(count, 1, "handler called after unsubscribe")
 end
 
@@ -81,13 +82,13 @@ function suite:test_reset_clears_paste_state()
     input_mod.subscribe_paste(function(text) received[#received + 1] = text end)
 
     -- Start a paste but don't finish it.
-    input_mod.dispatch("\x1b[200~partial")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~partial"))
     lt.assertEquals(#received, 0)
 
     -- Reset mid-paste, then dispatch a complete new paste.
     input_mod._reset()
     input_mod.subscribe_paste(function(text) received[#received + 1] = text end)
-    input_mod.dispatch("\x1b[200~fresh\x1b[201~")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~fresh\x1b[201~"))
 
     lt.assertEquals(#received, 1)
     lt.assertEquals(received[1], "fresh")
@@ -99,8 +100,20 @@ function suite:test_multiline_paste()
     local received = {}
     input_mod.subscribe_paste(function(text) received[#received + 1] = text end)
 
-    input_mod.dispatch("\x1b[200~line1\nline2\x1b[201~")
+    input_mod.dispatch(input_helpers.raw("\x1b[200~line1\nline2\x1b[201~"))
 
     lt.assertEquals(#received, 1)
     lt.assertEquals(received[1], "line1\nline2")
+end
+
+function suite:test_multichunk_paste_via_helper_normalized_bytes()
+    reset()
+    local received = {}
+    input_mod.subscribe_paste(function(text) received[#received + 1] = text end)
+
+    input_mod.dispatch(input_helpers.posix("\x1b[200~mid"))
+    input_mod.dispatch(input_helpers.posix("dle\x1b[201~"))
+
+    lt.assertEquals(#received, 1)
+    lt.assertEquals(received[1], "middle")
 end

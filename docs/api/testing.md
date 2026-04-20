@@ -1,6 +1,6 @@
 # 测试套件
 
-对应源码 `tui/testing.lua`，提供离屏渲染、输入模拟、快照测试等功能。
+对应源码 `tui/testing.lua` 与 `tui/testing/` 子模块，提供离屏渲染、输入模拟、快照测试等功能。
 
 ```lua
 local testing = require "tui.testing"
@@ -90,8 +90,12 @@ h:press("ctrl+c")       -- Ctrl+C
 h:press("shift+enter")  -- Shift+Enter
 h:press("up")           -- 方向键
 
--- 发送原始字节序列
-h:dispatch("\x1b[13;2u")  -- Kitty风格的Shift+Enter
+-- 发送通过 helper 构造的输入字节
+h:dispatch(testing.input.raw("\x1b[13;2u"))  -- Kitty风格的 Shift+Enter
+h:dispatch(testing.input.paste("hello\n"))   -- bracketed paste
+h:dispatch(testing.mouse.sgr {
+    type = "down", button = 1, x = 5, y = 3,
+})
 
 -- 发送已解析的按键事件（绕过 ANSI 解析器）
 h:dispatch_event({
@@ -116,6 +120,14 @@ h:dispatch_event({
 | `f1` - `f12` | 功能键 |
 | `ctrl+<字母>` | Ctrl 组合键（如 `ctrl+c`、`^c`） |
 | `shift+<键名>` | Shift 组合键 |
+
+### 输入测试约定
+
+- **普通组件/集成测试**：优先使用 `testing.input` / `testing.mouse` 构造输入，而不是在测试里直接拼协议字节。
+- **平台夹具测试**：Windows 输入归一化统一走 `testing.input.windows { ... }`。
+- **paste 测试**：优先使用 `testing.input.paste(text)` 或 `h:paste(text)`。
+- **mouse 测试**：优先使用 `testing.mouse.sgr(...)`、`testing.mouse.x10(...)`，或者 `h:mouse(...)`。
+- **保留字节字面量的场景**：只限 parser / ANSI / 协议常量专项测试，例如 `keys.parse()`、Kitty Keyboard、ANSI builder、OSC 输出断言。
 
 ### IME 输入模拟
 
@@ -249,6 +261,33 @@ local b = testing.mount_bare(App)
 ---
 
 ## 模块级工具函数
+
+### 输入 / 鼠标 helper
+
+```lua
+local bytes = testing.input.resolve_key("shift+up")
+local paste = testing.input.paste("hello")
+local win   = testing.input.windows {
+    { vk = 0xE5, char = "" },
+    { vk = 0,    char = "中" },
+}
+
+local sgr = testing.mouse.sgr {
+    type = "scroll", scroll = -1, x = 1, y = 1,
+}
+```
+
+| Helper | 用途 |
+|--------|------|
+| `testing.input.raw(bytes)` | 标记“原始输入字节”并走统一归一化入口 |
+| `testing.input.posix(bytes)` | 标记 POSIX 来源输入 |
+| `testing.input.windows(events)` | Windows 键事件夹具 → 归一化字节 |
+| `testing.input.parse(spec)` | 归一化后直接喂给 `keys.parse()` |
+| `testing.input.paste(text)` | 构造 bracketed paste 序列 |
+| `testing.input.resolve_key(name)` | 生成 `press()` 同款命名键字节 |
+| `testing.mouse.sgr(spec)` | 构造 SGR 鼠标协议字节 |
+| `testing.mouse.x10(spec)` | 构造 legacy X10 鼠标协议字节 |
+| `testing.mouse.harness(...)` | 构造与 `h:mouse(...)` 一致的字节 |
 
 ### capture_stderr
 

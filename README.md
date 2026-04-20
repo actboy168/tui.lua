@@ -60,7 +60,7 @@ tui.render(App)
 |------|----------|------|
 | [核心 API](docs/api/core.md) | `tui/init.lua` | 组件、Hooks、工具函数完整签名 |
 | [高级控件](docs/api/extra.md) | `tui/extra/` | TextInput、Select、Spinner 等交互组件 |
-| [测试套件](docs/api/testing.md) | `tui/testing.lua` | 离屏渲染、输入模拟、快照测试 |
+| [测试套件](docs/api/testing.md) | `tui/testing.lua`, `tui/testing/` | 离屏渲染、输入模拟、快照测试 |
 
 ## 许可证
 

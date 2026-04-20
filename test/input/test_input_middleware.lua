@@ -5,6 +5,8 @@ local lt        = require "ltest"
 local testing   = require "tui.testing"
 local tui       = require "tui"
 local input_mod = require "tui.internal.input"
+local input_helpers = require "tui.testing.input"
+local mouse_helpers = require "tui.testing.mouse"
 
 local suite = lt.test "input_middleware"
 
@@ -120,7 +122,7 @@ function suite:test_middleware_sees_assembled_paste_event()
         return tui.Text { width = 10, height = 1, "" }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[200~hello\x1b[201~")
+    input_mod.dispatch(input_helpers.paste("hello"))
     h:_paint()
     -- Middleware must see exactly one "paste" event
     local paste_count = 0
@@ -143,7 +145,7 @@ function suite:test_middleware_does_not_intercept_paste_accumulation()
         return tui.Text { width = 10, height = 1, "" }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[200~hello\x1b[201~")
+    input_mod.dispatch(input_helpers.paste("hello"))
     h:_paint()
     -- paste_start / paste_end should NOT appear in middleware (consumed before chain)
     for _, name in ipairs(mw_names) do
@@ -169,8 +171,7 @@ function suite:test_middleware_sees_mouse_events_before_bus()
         return tui.Text { width = 10, height = 1, "" }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<0;1;1M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
     lt.assertEquals(#mw_types, 1)
     lt.assertEquals(#bus_types, 1)
     lt.assertEquals(mw_types[1], "down")
@@ -190,8 +191,7 @@ function suite:test_middleware_can_consume_mouse_before_bus()
         return tui.Text { width = 10, height = 1, "" }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
-    input_mod.dispatch("\x1b[<0;1;1M")
-    h:_paint()
+    h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
     lt.assertFalse(bus_called, "middleware consumed mouse; bus must not fire")
     h:unmount()
 end

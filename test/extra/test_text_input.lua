@@ -8,6 +8,7 @@ local lt        = require "ltest"
 local tui       = require "tui"
 local TextInput = require "tui.extra.text_input".TextInput
 local testing   = require "tui.testing"
+local input_helpers = require "tui.testing.input"
 
 -- Local mirror of text_input.lua's to_chars for asserting grapheme counts.
 local function to_chars(s)
@@ -1713,7 +1714,7 @@ function suite:test_paste_into_empty_input()
         }
     end
     local h = testing.render(App, { cols = 40, rows = 1 })
-    h:dispatch("\x1b[200~hello world\x1b[201~")
+    h:dispatch(input_helpers.paste("hello world"))
     lt.assertEquals(value, "hello world")
     h:unmount()
 end
@@ -1731,7 +1732,7 @@ function suite:test_paste_inserts_at_caret_middle()
     end
     local h = testing.render(App, { cols = 40, rows = 1 })
     h:press("left")  -- move caret before 'c'
-    h:dispatch("\x1b[200~b\x1b[201~")
+    h:dispatch(input_helpers.paste("b"))
     lt.assertEquals(value, "abc")
     h:unmount()
 end
@@ -1749,7 +1750,7 @@ function suite:test_paste_multiline()
     end
     local h = testing.render(App, { cols = 40, rows = 1 })
     -- TextInput is single-line: newlines in pasted text are replaced with spaces.
-    h:dispatch("\x1b[200~line1\nline2\x1b[201~")
+    h:dispatch(input_helpers.paste("line1\nline2"))
     lt.assertEquals(value, "line1 line2")
     h:unmount()
 end
