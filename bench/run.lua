@@ -14,6 +14,7 @@
 --   luamake lua bench/run.lua --rounds 20      # override round count
 --   luamake lua bench/run.lua --threshold 0.3  # 30% regression threshold (default 0.25)
 
+package.path = "3rd/json/?.lua;" .. package.path
 local json         = require "json"
 local bench_render = require "bench.bench_render"
 

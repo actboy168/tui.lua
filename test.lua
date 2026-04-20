@@ -1,4 +1,5 @@
 -- test.lua — entry point for `luamake test` (equivalent to `luamake lua test.lua`).
+package.path = "3rd/ltest/?.lua;" .. package.path
 local lt = require "ltest"
 local fs = require "bee.filesystem"
 
