@@ -13,26 +13,19 @@
 --   tui.configureScheduler{ now=fn, sleep=fn }  -- swap scheduler backend
 --                                                  (call before tui.render)
 
-local element    = require "tui.element"
-local layout     = require "tui.layout"
-local renderer   = require "tui.renderer"
-local screen_mod = require "tui.screen"
-local reconciler = require "tui.reconciler"
-local scheduler  = require "tui.scheduler"
-local hooks      = require "tui.hooks"
-local input_mod  = require "tui.input"
-local resize_mod = require "tui.resize"
-local focus_mod  = require "tui.focus"
-local static_mod = require "tui.builtin.static"
-local text_input = require "tui.builtin.text_input"
-local textarea   = require "tui.builtin.textarea"
-local cursor_mod = require "tui.builtin.cursor"
-local spinner_mod = require "tui.builtin.spinner"
-local select_mod = require "tui.builtin.select"
-local progress_mod = require "tui.builtin.progress_bar"
-local newline_mod = require "tui.builtin.newline"
-local ansi       = require "tui.ansi"
-local text_mod   = require "tui.text"
+local element    = require "tui.internal.element"
+local layout     = require "tui.internal.layout"
+local renderer   = require "tui.internal.renderer"
+local screen_mod = require "tui.internal.screen"
+local reconciler = require "tui.internal.reconciler"
+local scheduler  = require "tui.internal.scheduler"
+local hooks      = require "tui.internal.hooks"
+local input_mod  = require "tui.internal.input"
+local resize_mod = require "tui.internal.resize"
+local focus_mod  = require "tui.internal.focus"
+local cursor_mod = require "tui.internal.cursor"
+local ansi       = require "tui.internal.ansi"
+local text_mod   = require "tui.internal.text"
 local tui_core   = require "tui_core"
 local platform   = require "tui.platform"
 
@@ -70,18 +63,10 @@ end
 -- Expose scheduler configuration for production integrators.
 M.configureScheduler = scheduler.configure
 
--- Host elements
+-- Host elements (core)
 M.Box            = element.Box
 M.Text           = element.Text
 M.ErrorBoundary  = element.ErrorBoundary
-M.Static         = static_mod.Static
-M.TextInput      = text_input.TextInput
-M.Textarea       = textarea.Textarea
-M.Spinner        = spinner_mod.Spinner
-M.Select         = select_mod.Select
-M.ProgressBar    = progress_mod.ProgressBar
-M.Newline        = newline_mod.Newline
-M.Spacer         = newline_mod.Spacer
 
 -- Component factory helper
 --- Create a component factory from a render function. Two usage modes:
@@ -129,6 +114,7 @@ M.usePaste       = hooks.usePaste
 M.useFocus        = hooks.useFocus
 M.useFocusManager = hooks.useFocusManager
 M.useDeclaredCursor = cursor_mod.useDeclaredCursor
+M.useMeasure     = hooks.useMeasure
 M.useErrorBoundary = hooks.useErrorBoundary
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
@@ -140,6 +126,7 @@ M.clearTimer  = scheduler.clearTimer
 M.intrinsicSize = layout.intrinsic_size
 
 -- Text utilities
+M.iterChars     = text_mod.iterChars
 M.displayWidth   = text_mod.display_width
 M.wrap           = text_mod.wrap
 M.wrapHard       = text_mod.wrap_hard

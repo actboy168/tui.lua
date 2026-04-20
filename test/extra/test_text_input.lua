@@ -1,25 +1,20 @@
--- test/test_text_input.lua — unit tests for <TextInput> component.
+-- test/extra/test_text_input.lua — unit tests for <TextInput> component.
 --
 -- Drives the component offscreen via tui.testing: type a key → auto-render →
 -- inspect the produced tree and (for onSubmit) the collected callback
 -- invocations.
 
-local lt      = require "ltest"
-local tui     = require "tui"
-local testing = require "tui.testing"
-
-local wcwidth = require "tui_core".wcwidth
+local lt        = require "ltest"
+local tui       = require "tui"
+local TextInput = require "tui.extra.text_input".TextInput
+local testing   = require "tui.testing"
 
 -- Local mirror of text_input.lua's to_chars for asserting grapheme counts.
 local function to_chars(s)
     local chars = {}
     if not s or s == "" then return chars end
-    local n, i = #s, 1
-    while i <= n do
-        local ch, _, ni = wcwidth.grapheme_next(s, i)
-        if ch == "" then break end
+    for ch, _ in tui.iterChars(s) do
         chars[#chars + 1] = ch
-        i = ni
     end
     return chars
 end
@@ -31,7 +26,7 @@ function suite:test_initial_empty_with_placeholder()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 placeholder = "type here",
@@ -51,7 +46,7 @@ function suite:test_char_insertion_updates_value()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -68,7 +63,7 @@ function suite:test_cjk_insertion_updates_value()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -87,7 +82,7 @@ function suite:test_backspace_deletes_last_char()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -104,7 +99,7 @@ function suite:test_left_arrow_moves_caret_and_insert_in_middle()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -123,7 +118,7 @@ function suite:test_enter_triggers_onsubmit()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted = v end,
@@ -141,7 +136,7 @@ function suite:test_unfocused_ignores_input()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 focus = false,
@@ -159,7 +154,7 @@ function suite:test_cursor_offset_tracks_caret_column()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -180,7 +175,7 @@ function suite:test_cursor_absolute_position_at_caret()
         local v, setV = tui.useState("hello")
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+            TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -200,7 +195,7 @@ function suite:test_cursor_advances_on_type_and_backspace()
         local v, setV = tui.useState("")
         return tui.Box {
             width = 30, height = 1,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+            TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 1 })
@@ -225,7 +220,7 @@ function suite:test_cursor_inside_bordered_padded_box()
         return tui.Box {
             width = 20, height = 3,
             borderStyle = "round", paddingX = 1,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+            TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 3 })
@@ -244,7 +239,7 @@ function suite:test_mask_hides_chars_but_preserves_width()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 mask = "*",
@@ -267,7 +262,7 @@ function suite:test_backspace_removes_cluster()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -285,7 +280,7 @@ function suite:test_flag_is_single_cluster()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -312,7 +307,7 @@ function suite:test_large_sequential_typing()
     local function App()
         return tui.Box {
             width = 1000, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -334,7 +329,7 @@ function suite:test_backspace_on_empty_noop()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v; fired = fired + 1 end,
             },
@@ -355,7 +350,7 @@ function suite:test_left_arrow_over_wide_char_moves_one_cluster()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -385,7 +380,7 @@ function suite:test_delete_removes_cluster_forward()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -404,7 +399,7 @@ function suite:test_right_arrow_moves_caret()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -429,7 +424,7 @@ function suite:test_right_arrow_over_wide_char()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -455,7 +450,7 @@ function suite:test_right_arrow_at_end_noop()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v; fired = fired + 1 end,
             },
@@ -476,7 +471,7 @@ function suite:test_home_and_end()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -499,7 +494,7 @@ function suite:test_delete_on_empty_noop()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v; fired = fired + 1 end,
             },
@@ -520,7 +515,7 @@ function suite:test_delete_at_end_noop()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v; fired = fired + 1 end,
             },
@@ -539,7 +534,7 @@ function suite:test_caret_clamped_on_value_shrink()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -564,7 +559,7 @@ function suite:test_placeholder_hidden_when_focused()
         local v, setV = tui.useState("")
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = setV,
                 placeholder = "type here",
@@ -587,7 +582,7 @@ function suite:test_placeholder_shown_when_unfocused()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 placeholder = "type here",
@@ -610,7 +605,7 @@ function suite:test_horizontal_scroll_keeps_caret_visible()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 width = 5,
@@ -633,7 +628,7 @@ function suite:test_typing_past_width_scrolls()
         local v, setV = tui.useState("")
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true, width = 5 },
+            TextInput { value = v, onChange = setV, autoFocus = true, width = 5 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -650,7 +645,7 @@ function suite:test_mask_with_cjk_chars()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 mask = "*",
@@ -672,7 +667,7 @@ function suite:test_enter_on_empty_fires_onsubmit()
         local v, setV = tui.useState("")
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = setV,
                 onSubmit = function(val) submitted = val end,
@@ -691,7 +686,7 @@ function suite:test_width_prop_constrains_render()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 width = 5,
@@ -714,7 +709,7 @@ function suite:test_left_at_start_noop()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v; fired = fired + 1 end,
             },
@@ -735,7 +730,7 @@ function suite:test_insert_after_home_right_right()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -756,7 +751,7 @@ function suite:test_delete_in_middle()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -776,7 +771,7 @@ function suite:test_backspace_in_middle()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -797,7 +792,7 @@ function suite:test_key_sequence_home_delete_end_backspace()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -837,7 +832,7 @@ function suite:test_ime_single_cjk_via_dispatch()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -856,7 +851,7 @@ function suite:test_ime_multi_cjk_via_dispatch()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -875,7 +870,7 @@ function suite:test_ime_multi_cjk_via_type_works()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -896,7 +891,7 @@ function suite:test_ime_combining_mark_via_type()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -920,7 +915,7 @@ function suite:test_ime_flag_emoji_via_type()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -941,7 +936,7 @@ function suite:test_ime_insert_cjk_in_middle()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -961,7 +956,7 @@ function suite:test_ime_insert_cjk_at_start()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -980,7 +975,7 @@ function suite:test_ime_single_cjk_dispatch_cursor()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1000,7 +995,7 @@ function suite:test_ime_mixed_ascii_cjk_via_type()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1021,7 +1016,7 @@ function suite:test_ime_multi_ascii_via_dispatch()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1039,7 +1034,7 @@ function suite:test_ime_bulk_dispatch_then_backspace()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1058,7 +1053,7 @@ function suite:test_ime_mixed_ascii_cjk_via_dispatch()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1095,7 +1090,7 @@ function suite:test_ime_consecutive_commits()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1118,7 +1113,7 @@ function suite:test_ime_commit_then_backspace()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1138,7 +1133,7 @@ function suite:test_ime_commit_then_left_then_insert()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1158,7 +1153,7 @@ function suite:test_ime_commit_in_narrow_window_scrolls()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 width = 5,
@@ -1182,7 +1177,7 @@ function suite:test_ime_two_phase_commit()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1208,7 +1203,7 @@ function suite:test_ime_commit_in_middle_with_wide_chars()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1239,7 +1234,7 @@ function suite:test_ime_commit_flag_in_middle()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1266,7 +1261,7 @@ function suite:test_ime_commit_then_submit()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted = v end,
@@ -1287,7 +1282,7 @@ function suite:test_ime_after_backspace_replace()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1318,7 +1313,7 @@ function suite:test_caret_clamped_to_zero_on_empty_value()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1343,7 +1338,7 @@ function suite:test_caret_clamped_on_shrink_to_one_char()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1367,7 +1362,7 @@ function suite:test_caret_clamped_on_shrink_with_wide_chars()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1392,7 +1387,7 @@ function suite:test_caret_clamped_on_progressive_shrink()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1423,7 +1418,7 @@ function suite:test_caret_in_middle_clamped_when_value_shrinks_below()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1452,7 +1447,7 @@ function suite:test_caret_after_select_all_delete()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1482,7 +1477,7 @@ function suite:test_type_after_caret_clamp_from_shrink()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1508,7 +1503,7 @@ function suite:test_backspace_wide_char_caret_offset()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1538,7 +1533,7 @@ function suite:test_delete_wide_char_caret_offset_unchanged()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1566,7 +1561,7 @@ function suite:test_caret_stays_when_value_grows_externally()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1592,7 +1587,7 @@ function suite:test_caret_valid_after_external_wide_char_replacement()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1615,7 +1610,7 @@ function suite:test_caret_at_home_unaffected_by_shrink()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1639,7 +1634,7 @@ function suite:test_cursor_integer_after_caret_clamp()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = v,
                 onChange = function(new_v) v = new_v end,
             },
@@ -1664,7 +1659,7 @@ function suite:test_multi_input_focused_cursor_wins()
             width = 30, height = 3,
             tui.Box {
                 height = 1,
-                tui.TextInput {
+                TextInput {
                     focusId = "input1",
                     autoFocus = true,  -- input1 gets focus
                     value = value1,
@@ -1673,7 +1668,7 @@ function suite:test_multi_input_focused_cursor_wins()
             },
             tui.Box {
                 height = 1,
-                tui.TextInput {
+                TextInput {
                     focusId = "input2",
                     value = value2,
                     onChange = function(v) value2 = v end,
@@ -1711,7 +1706,7 @@ function suite:test_paste_into_empty_input()
     local function App()
         return tui.Box {
             width = 40, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1728,7 +1723,7 @@ function suite:test_paste_inserts_at_caret_middle()
     local function App()
         return tui.Box {
             width = 40, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },
@@ -1746,7 +1741,7 @@ function suite:test_paste_multiline()
     local function App()
         return tui.Box {
             width = 40, height = 1,
-            tui.TextInput {
+            TextInput {
                 value = value,
                 onChange = function(v) value = v end,
             },

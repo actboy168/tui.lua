@@ -2,6 +2,7 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local extra   = require "tui.extra"
 local testing = require "tui.testing"
 
 local suite = lt.test "harness_csi"
@@ -46,7 +47,7 @@ function suite:test_cursor_coords_are_integers_simple()
         local v, setV = tui.useState("")
         return tui.Box {
             width = 40, height = 3,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+            extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
     local h = testing.render(App, { cols = 40, rows = 3 })
@@ -71,7 +72,7 @@ function suite:test_cursor_coords_are_integers_nested_flex()
             },
             tui.Box { key = "grow", flexGrow = 1 },
             tui.Box { key = "input", borderStyle = "round", paddingX = 1,
-                tui.TextInput { value = v, onChange = setV, autoFocus = true },
+                extra.TextInput { value = v, onChange = setV, autoFocus = true },
             },
         }
     end
@@ -91,7 +92,7 @@ function suite:test_no_cursor_when_input_disabled()
         local v, setV = tui.useState("")
         return tui.Box {
             width = 40, height = 3,
-            tui.TextInput { value = v, onChange = setV, focus = false },
+            extra.TextInput { value = v, onChange = setV, focus = false },
         }
     end
     local h = testing.render(App, { cols = 40, rows = 3 })
@@ -110,7 +111,7 @@ function suite.test_csi_rejects_float_coords()
         return tui.Box {
             width = 10,
             height = 5,
-            tui.TextInput { value = "test", focus = true }
+            extra.TextInput { value = "test", focus = true }
         }
     end, { cols = 20, rows = 10 })
     -- focus=true implies autoFocus=true; isFocused state takes effect on

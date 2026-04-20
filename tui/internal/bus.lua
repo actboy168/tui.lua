@@ -4,7 +4,7 @@
 -- duplicated across tui.input (broadcast channel) and tui.resize.
 --
 -- Usage:
---   local bus = require "tui.bus"
+--   local bus = require "tui.internal.bus"
 --   local b = bus.new()
 --
 --   local unsub = b.subscribe(fn)   -- register; returns unsubscribe closure

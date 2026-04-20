@@ -6,6 +6,7 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local extra = require "tui.extra"
 local testing = require "tui.testing"
 
 local suite = lt.test "resize"
@@ -81,7 +82,7 @@ function suite:test_focused_element_clipped_after_shrink()
     local function App()
         return tui.Box {
             width = 30, height = 1,
-            tui.TextInput {
+            extra.TextInput {
                 value = value,
                 onChange = function(v) value = v end,
                 focusId = "only",

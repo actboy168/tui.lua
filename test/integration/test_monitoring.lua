@@ -3,6 +3,7 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local extra = require "tui.extra"
 
 local suite = lt.test "monitoring"
 
@@ -44,7 +45,7 @@ function suite:test_metrics_dashboard()
                     width = 15, height = 5,
                     tui.Text { key = "cpu_label", "CPU" },
                     tui.Text { key = "cpu_value", ("%d%%"):format(metrics.cpu) },
-                    tui.ProgressBar {
+                    extra.ProgressBar {
                         key = "cpu_bar",
                         value = metrics.cpu / 100,
                         width = 12,
@@ -57,7 +58,7 @@ function suite:test_metrics_dashboard()
                     width = 15, height = 5,
                     tui.Text { key = "mem_label", "Memory" },
                     tui.Text { key = "mem_value", ("%d%%"):format(metrics.memory) },
-                    tui.ProgressBar {
+                    extra.ProgressBar {
                         key = "mem_bar",
                         value = metrics.memory / 100,
                         width = 12,
@@ -127,13 +128,13 @@ function suite:test_log_stream_viewer()
                 key = "header",
                 borderStyle = "single",
                 tui.Text { key = "title", "Log Stream" },
-                isStreaming and tui.Spinner {
+                isStreaming and extra.Spinner {
                     key = "spinner",
                     type = "dots",
                     label = "Live"
                 } or tui.Text { key = "paused", "Paused" }
             },
-            tui.Static {
+            extra.Static {
                 key = "logs",
                 items = logs,
                 render = function(log)
@@ -194,8 +195,8 @@ function suite:test_multi_panel_dashboard()
                 width = 15,
                 borderStyle = "single",
                 tui.Text { key = "title", "Panels" },
-                tui.Newline { key = "nl" },
-                tui.Static {
+                extra.Newline { key = "nl" },
+                extra.Static {
                     key = "panel_list",
                     items = panels,
                     render = function(p, i)
@@ -213,7 +214,7 @@ function suite:test_multi_panel_dashboard()
                 flexGrow = 1,
                 borderStyle = "single",
                 tui.Text { key = "title", panels[activePanel].title },
-                tui.Newline { key = "nl" },
+                extra.Newline { key = "nl" },
                 tui.Text { key = "content", panels[activePanel].content },
             }
         }
@@ -254,7 +255,7 @@ function suite:test_status_indicators()
                 borderStyle = "double",
                 tui.Text { "Service Status" }
             },
-            tui.Static {
+            extra.Static {
                 key = "services",
                 items = services,
                 render = function(svc)

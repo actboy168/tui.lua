@@ -1,8 +1,8 @@
 -- test/input/test_ime.lua — unit & integration tests for IME support.
 local lt       = require "ltest"
 local tui      = require "tui"
+local extra = require "tui.extra"
 local testing  = require "tui.testing"
-local ansi_mod = require "tui.ansi"
 
 local test_ime = lt.test "ime"
 
@@ -14,7 +14,7 @@ function test_ime:test_ime_pos_after_paint()
     local function App()
         local v, setV = tui.useState("")
         value, setValue = v, setV
-        return tui.TextInput { value = v, onChange = setV, width = 20 }
+        return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
     local h = testing.render(App)
 
@@ -35,7 +35,7 @@ function test_ime:test_ime_pos_updates_after_typing()
     local function App()
         local v, setV = tui.useState("")
         setValue = setV
-        return tui.TextInput { value = v, onChange = setV, width = 20 }
+        return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
     local h = testing.render(App)
 
@@ -57,7 +57,7 @@ function test_ime:test_composing_then_confirm()
     local function App()
         local v, setV = tui.useState("")
         lastValue = v
-        return tui.TextInput { value = v, onChange = setV, width = 20 }
+        return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
     local h = testing.render(App)
 
@@ -79,7 +79,7 @@ function test_ime:test_composing_cancel_by_escape()
     local function App()
         local v, setV = tui.useState("")
         lastValue = v
-        return tui.TextInput { value = v, onChange = setV, width = 20 }
+        return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
     local h = testing.render(App)
 
@@ -97,7 +97,7 @@ end
 function test_ime:test_composing_shown_at_caret()
     local function App()
         local v, setV = tui.useState("ab")
-        return tui.TextInput { value = v, onChange = setV, width = 20 }
+        return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
     local h = testing.render(App)
 
@@ -125,8 +125,8 @@ function test_ime:test_composing_cleared_on_focus_loss()
         lastValue = v1
         return tui.Box {
             flexDirection = "column",
-            tui.TextInput { value = v1, onChange = setV1, width = 20, focusId = "first" },
-            tui.TextInput { value = v2, onChange = setV2, width = 20, focusId = "second" },
+            extra.TextInput { value = v1, onChange = setV1, width = 20, focusId = "first" },
+            extra.TextInput { value = v2, onChange = setV2, width = 20, focusId = "second" },
         }
     end
     local h = testing.render(App)
@@ -172,7 +172,7 @@ function test_ime:test_physical_cursor_matches_ime_position()
     -- should be identical — IME candidate window follows the physical cursor.
     local function App()
         local v, setV = tui.useState("")
-        return tui.TextInput { value = v, onChange = setV, width = 20, autoFocus = true }
+        return extra.TextInput { value = v, onChange = setV, width = 20, autoFocus = true }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- autoFocus sets isFocused state on the next paint.
@@ -191,7 +191,7 @@ function test_ime:test_physical_cursor_tracks_typing()
     -- After typing, both cursor() and ime_pos() advance in lockstep.
     local function App()
         local v, setV = tui.useState("")
-        return tui.TextInput { value = v, onChange = setV, width = 20, autoFocus = true }
+        return extra.TextInput { value = v, onChange = setV, width = 20, autoFocus = true }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- autoFocus sets isFocused state on the next paint; the first
@@ -217,7 +217,7 @@ function test_ime:test_physical_cursor_inside_bordered_box()
         return tui.Box {
             width = 20, height = 3,
             borderStyle = "round", paddingX = 1,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+            extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 3 })
@@ -244,7 +244,7 @@ function test_ime:test_physical_cursor_with_cjk_chars()
         local v, setV = tui.useState("\228\184\173")  -- "中": 2 columns
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+            extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -270,7 +270,7 @@ function test_ime:test_physical_cursor_integer_coords_only()
         local v, setV = tui.useState("hello")
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput { value = v, onChange = setV, autoFocus = true },
+            extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })

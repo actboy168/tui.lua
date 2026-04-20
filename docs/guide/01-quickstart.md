@@ -54,6 +54,9 @@ luamake lua hello.lua
 ```lua
 local tui = require "tui"
 
+-- 加载扩展组件
+local extra = require "tui.extra"
+
 local function Counter()
     local count, setCount = tui.useState(0)
 
@@ -72,7 +75,7 @@ local function Counter()
         padding = 2,
         tui.Text { bold = true, "计数器" },
         tui.Text { "当前值: " .. count },
-        tui.Newline {},
+        extra.Newline {},
         tui.Text { dim = true, "↑ 增加  ↓ 减少  q 退出" }
     }
 end

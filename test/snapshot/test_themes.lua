@@ -5,6 +5,7 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local extra = require "tui.extra"
 
 local suite = lt.test "themes"
 
@@ -208,12 +209,12 @@ function suite:test_progress_bar_colors()
         return tui.Box {
             flexDirection = "column",
             width = 25, height = 10,
-            tui.ProgressBar { key = "red", value = 0.5, width = 20, color = "red" },
-            tui.ProgressBar { key = "green", value = 0.5, width = 20, color = "green" },
-            tui.ProgressBar { key = "blue", value = 0.5, width = 20, color = "blue" },
-            tui.ProgressBar { key = "yellow", value = 0.5, width = 20, color = "yellow" },
-            tui.ProgressBar { key = "cyan", value = 0.5, width = 20, color = "cyan" },
-            tui.ProgressBar { key = "magenta", value = 0.5, width = 20, color = "magenta" },
+            extra.ProgressBar { key = "red", value = 0.5, width = 20, color = "red" },
+            extra.ProgressBar { key = "green", value = 0.5, width = 20, color = "green" },
+            extra.ProgressBar { key = "blue", value = 0.5, width = 20, color = "blue" },
+            extra.ProgressBar { key = "yellow", value = 0.5, width = 20, color = "yellow" },
+            extra.ProgressBar { key = "cyan", value = 0.5, width = 20, color = "cyan" },
+            extra.ProgressBar { key = "magenta", value = 0.5, width = 20, color = "magenta" },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 12 })
@@ -226,10 +227,10 @@ function suite:test_spinner_colors()
         return tui.Box {
             flexDirection = "column",
             width = 20, height = 10,
-            tui.Spinner { key = "red", type = "dots", color = "red", label = "Red" },
-            tui.Spinner { key = "green", type = "dots", color = "green", label = "Green" },
-            tui.Spinner { key = "blue", type = "dots", color = "blue", label = "Blue" },
-            tui.Spinner { key = "yellow", type = "dots", color = "yellow", label = "Yellow" },
+            extra.Spinner { key = "red", type = "dots", color = "red", label = "Red" },
+            extra.Spinner { key = "green", type = "dots", color = "green", label = "Green" },
+            extra.Spinner { key = "blue", type = "dots", color = "blue", label = "Blue" },
+            extra.Spinner { key = "yellow", type = "dots", color = "yellow", label = "Yellow" },
         }
     end
     local h = testing.render(App, { cols = 25, rows = 12 })
@@ -249,7 +250,7 @@ function suite:test_input_styling()
                 borderStyle = "single",
                 borderColor = "blue",
                 paddingX = 1,
-                tui.TextInput {
+                extra.TextInput {
                     key = "input1",
                     value = value1,
                     onChange = setValue1,
@@ -260,7 +261,7 @@ function suite:test_input_styling()
                 borderStyle = "round",
                 borderColor = "green",
                 paddingX = 1,
-                tui.TextInput {
+                extra.TextInput {
                     key = "input2",
                     value = value2,
                     onChange = setValue2,
@@ -290,7 +291,7 @@ function suite:test_full_panel_theme()
                 width = 20, height = 15,
                 paddingX = 1,
                 tui.Text { key = "title", color = "cyan", "Sidebar" },
-                tui.Newline { key = "nl" },
+                extra.Newline { key = "nl" },
                 tui.Text { key = "i1", "Item 1" },
                 tui.Text { key = "i2", "Item 2" },
                 tui.Text { key = "i3", "Item 3" },
@@ -313,8 +314,8 @@ function suite:test_full_panel_theme()
                     flexGrow = 1,
                     paddingX = 1, paddingY = 1,
                     tui.Text { key = "ct", "Main content area" },
-                    tui.Newline { key = "nl" },
-                    tui.Spinner { key = "spinner", type = "dots", color = "yellow", label = "Loading" }
+                    extra.Newline { key = "nl" },
+                    extra.Spinner { key = "spinner", type = "dots", color = "yellow", label = "Loading" }
                 },
                 tui.Box {
                     key = "footer",
@@ -322,7 +323,7 @@ function suite:test_full_panel_theme()
                     borderColor = "yellow",
                     height = 3,
                     paddingX = 1,
-                    tui.ProgressBar { key = "pb", value = 0.6, width = 30, color = "cyan" }
+                    extra.ProgressBar { key = "pb", value = 0.6, width = 30, color = "cyan" }
                 },
             },
         }
@@ -346,7 +347,7 @@ function suite:test_alert_styles()
                 paddingX = 1,
                 tui.Text { color = "white", "ERROR: Something went wrong!" }
             },
-            tui.Newline { key = "nl1" },
+            extra.Newline { key = "nl1" },
             tui.Box {
                 key = "warn",
                 borderStyle = "round",
@@ -355,7 +356,7 @@ function suite:test_alert_styles()
                 paddingX = 1,
                 tui.Text { color = "yellow", "WARNING: Check your input" }
             },
-            tui.Newline { key = "nl2" },
+            extra.Newline { key = "nl2" },
             tui.Box {
                 key = "success",
                 borderStyle = "round",

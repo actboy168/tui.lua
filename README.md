@@ -302,11 +302,11 @@ tui.TextInput {
 ### 手动控制焦点
 
 ```lua
-local focus = require "tui.focus"
+local focusMgr = tui.useFocusManager()
 
-focus.focus("inputId")   -- 聚焦指定元素
-focus.focus_next()       -- 下一个
-focus.focus_prev()       -- 上一个
+focusMgr.focus("inputId")       -- 聚焦指定元素
+focusMgr.focusNext()            -- 下一个
+focusMgr.focusPrevious()        -- 上一个
 ```
 
 ## 表单示例

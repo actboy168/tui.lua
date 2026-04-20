@@ -1,7 +1,7 @@
 -- test/test_sgr.lua — coverage for tui.sgr (resolve_color, pack_bytes, pack_props).
 
 local lt  = require "ltest"
-local sgr = require "tui.sgr"
+local sgr = require "tui.internal.sgr"
 
 local suite = lt.test "sgr"
 

@@ -1,23 +1,23 @@
 -- test/test_element.lua — smoke tests for tui.element factories.
-local lt      = require "ltest"
-local element = require "tui.element"
+local lt  = require "ltest"
+local tui = require "tui"
 
 local test_element = lt.test "element"
 
 function test_element:test_box_kind()
-    local b = element.Box {}
+    local b = tui.Box {}
     lt.assertEquals(b.kind, "box")
 end
 
 function test_element:test_text_kind()
-    local t = element.Text { "hi" }
+    local t = tui.Text { "hi" }
     lt.assertEquals(t.kind, "text")
     lt.assertEquals(t.text, "hi")
 end
 
 function test_element:test_box_splits_props_and_children()
-    local child = element.Text { "x" }
-    local b = element.Box {
+    local child = tui.Text { "x" }
+    local b = tui.Box {
         padding = 1,
         child,
     }
@@ -27,6 +27,6 @@ function test_element:test_box_splits_props_and_children()
 end
 
 function test_element:test_text_joins_string_children()
-    local t = element.Text { "hello", " ", "world" }
+    local t = tui.Text { "hello", " ", "world" }
     lt.assertEquals(t.text, "hello world")
 end

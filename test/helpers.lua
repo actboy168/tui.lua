@@ -1,6 +1,7 @@
 -- test/helpers.lua — shared test utilities
 
-local tui = require "tui"
+local tui   = require "tui"
+local extra = require "tui.extra"
 
 local M = {}
 
@@ -50,14 +51,14 @@ function M.make_chat_app(reply_text)
             flexDirection = "column",
             width  = size.cols,
             height = size.rows,
-            tui.Static { items = history, render = fmt, key = "history" },
+            extra.Static { items = history, render = fmt, key = "history" },
             streaming and tui.Text { ("[bot] %s"):format(streaming.target:sub(1, streaming.shown)), key = "stream" } or nil,
             tui.Box { flexGrow = 1, key = "spacer" },
             tui.Box {
                 borderStyle = "round",
                 paddingX = 1,
                 key = "prompt",
-                tui.TextInput {
+                extra.TextInput {
                     value    = input,
                     onChange = setInput,
                     onSubmit = submit,

@@ -1,10 +1,10 @@
 -- Simple instrumented benchmark: per-phase timing within the normal loop.
 -- time.monotonic() returns milliseconds.
-local element    = require "tui.element"
-local layout     = require "tui.layout"
-local renderer   = require "tui.renderer"
-local screen_mod = require "tui.screen"
-local reconciler = require "tui.reconciler"
+
+local layout     = require "tui.internal.layout"
+local renderer   = require "tui.internal.renderer"
+local screen_mod = require "tui.internal.screen"
+local reconciler = require "tui.internal.reconciler"
 local tui        = require "tui"
 local time       = require "bee.time"
 
@@ -18,7 +18,7 @@ local screen = screen_mod.new(40, 24)
 
 local function one_frame()
     local t = reconciler.render(state, App, ah)
-    if not t then t = element.Box {} end
+    if not t then t = tui.Box {} end
     if t.kind == "box" then
         t.props = t.props or {}
         t.props.width  = t.props.width  or 40
@@ -42,7 +42,7 @@ for i = 1, N do
 
     t0 = time.monotonic()
     local t = reconciler.render(state, App, ah)
-    if not t then t = element.Box {} end
+    if not t then t = tui.Box {} end
     if t.kind == "box" then
         t.props = t.props or {}
         t.props.width  = t.props.width  or 40

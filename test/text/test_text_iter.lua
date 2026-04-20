@@ -1,13 +1,13 @@
--- test/test_text_iter.lua — coverage for tui.text.iter (iter_chars closure).
+-- test/test_text_iter.lua — coverage for tui.tui.iterChars (iter_chars closure).
 
 local lt   = require "ltest"
-local text = require "tui.text"
+local tui = require "tui"
 
 local suite = lt.test "text_iter"
 
 function suite:test_ascii_chars()
     local chars = {}
-    for ch, w in text.iter("abc") do
+    for ch, w in tui.iterChars("abc") do
         chars[#chars + 1] = { ch, w }
     end
     lt.assertEquals(chars, {
@@ -19,7 +19,7 @@ end
 
 function suite:test_cjk_wide_chars()
     local chars = {}
-    for ch, w in text.iter("\xe4\xb8\xad") do  -- 中
+    for ch, w in tui.iterChars("\xe4\xb8\xad") do  -- 中
         chars[#chars + 1] = { ch, w }
     end
     lt.assertEquals(chars, {
@@ -29,7 +29,7 @@ end
 
 function suite:test_empty_string()
     local found = false
-    for _ in text.iter("") do
+    for _ in tui.iterChars("") do
         found = true
     end
     lt.assertEquals(found, false)
@@ -38,7 +38,7 @@ end
 function suite:test_combining_mark_attaches_to_base()
     -- e + combining acute (U+0301) should form one grapheme cluster
     local chars = {}
-    for ch, w in text.iter("e\xcc\x81") do
+    for ch, w in tui.iterChars("e\xcc\x81") do
         chars[#chars + 1] = { ch, w }
     end
     lt.assertEquals(#chars, 1)
@@ -47,7 +47,7 @@ end
 
 function suite:test_newline_delivered_as_cluster()
     local chars = {}
-    for ch, w in text.iter("a\nb") do
+    for ch, w in tui.iterChars("a\nb") do
         chars[#chars + 1] = { ch, w }
     end
     lt.assertEquals(#chars, 3)
@@ -57,7 +57,7 @@ end
 
 function suite:test_mixed_ascii_and_cjk()
     local chars = {}
-    for ch, w in text.iter("a\xe4\xb8\xadb") do  -- a中b
+    for ch, w in tui.iterChars("a\xe4\xb8\xadb") do  -- a中b
         chars[#chars + 1] = { ch, w }
     end
     lt.assertEquals(#chars, 3)

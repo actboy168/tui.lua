@@ -9,7 +9,7 @@
 local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
-local input   = require "tui.input"
+local input   = require "tui.internal.input"
 
 local suite = lt.test "memory"
 

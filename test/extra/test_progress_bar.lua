@@ -1,8 +1,9 @@
--- test/test_progress_bar.lua — <ProgressBar> component behavior.
+-- test/extra/test_progress_bar.lua — <ProgressBar> component behavior.
 
-local lt      = require "ltest"
-local tui     = require "tui"
-local testing = require "tui.testing"
+local lt          = require "ltest"
+local tui         = require "tui"
+local ProgressBar = require "tui.extra.progress_bar".ProgressBar
+local testing     = require "tui.testing"
 
 local suite = lt.test "progress_bar"
 
@@ -15,7 +16,7 @@ function suite:test_zero_is_all_empty()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.ProgressBar { value = 0, width = 10 },
+            ProgressBar { value = 0, width = 10 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -31,7 +32,7 @@ function suite:test_one_is_all_fill()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.ProgressBar { value = 1, width = 10 },
+            ProgressBar { value = 1, width = 10 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -47,7 +48,7 @@ function suite:test_half_is_half_and_half()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.ProgressBar { value = 0.5, width = 10 },
+            ProgressBar { value = 0.5, width = 10 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -62,8 +63,8 @@ function suite:test_value_clamps_out_of_range()
     local function App()
         return tui.Box {
             width = 20, height = 2, flexDirection = "column",
-            tui.ProgressBar { value = 2.0, width = 10 },
-            tui.ProgressBar { value = -1,  width = 10 },
+            ProgressBar { value = 2.0, width = 10 },
+            ProgressBar { value = -1,  width = 10 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 2 })
@@ -77,7 +78,7 @@ function suite:test_custom_chars()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.ProgressBar {
+            ProgressBar {
                 value = 0.3, width = 10,
                 chars = { fill = "#", empty = "-" },
             },
@@ -95,7 +96,7 @@ function suite:test_nil_value_is_zero()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.ProgressBar { width = 5 },
+            ProgressBar { width = 5 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -109,7 +110,7 @@ function suite:test_default_width()
     local function App()
         return tui.Box {
             width = 40, height = 1,
-            tui.ProgressBar { value = 0.5 },
+            ProgressBar { value = 0.5 },
         }
     end
     local h = testing.render(App, { cols = 40, rows = 1 })

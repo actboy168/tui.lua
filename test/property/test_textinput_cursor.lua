@@ -11,6 +11,7 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local extra = require "tui.extra"
 local testing = require "tui.testing"
 local pbt     = require "test.property.pbt"
 
@@ -88,7 +89,7 @@ function suite:test_cursor_within_bounds_random_value()
             local function App()
                 return tui.Box {
                     width = cols, height = rows,
-                    tui.TextInput {
+                    extra.TextInput {
                         value = v,
                         onChange = function(nv) v = nv end,
                         width = width_prop,
@@ -132,7 +133,7 @@ function suite:test_cursor_within_bounds_with_border()
             local function App()
                 local props = {
                     width = cols, height = rows,
-                    tui.TextInput {
+                    extra.TextInput {
                         value = v,
                         onChange = function(nv) v = nv end,
                         width = width_prop,
@@ -172,7 +173,7 @@ function suite:test_cursor_within_bounds_after_navigation()
             local function App()
                 return tui.Box {
                     width = cols, height = rows,
-                    tui.TextInput {
+                    extra.TextInput {
                         value = v,
                         onChange = function(nv) v = nv end,
                         width = width_prop,
@@ -220,7 +221,7 @@ function suite:test_cursor_within_bounds_auto_width()
             local function App()
                 return tui.Box {
                     width = cols, height = rows,
-                    tui.TextInput {
+                    extra.TextInput {
                         value = v,
                         onChange = function(nv) v = nv end,
                     },

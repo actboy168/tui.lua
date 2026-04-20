@@ -233,13 +233,14 @@ tui.useFocus {
 
 ### 焦点管理
 
-```lua
-local focus = require "tui.focus"
+使用 `useFocusManager` hook：
 
-focus.focus("inputId")       -- 聚焦指定元素
-focus.focus_next()           -- 下一个
-focus.focus_prev()           -- 上一个
-focus.get_focused_id()       -- 获取当前焦点 ID
+```lua
+local focusMgr = tui.useFocusManager()
+
+focusMgr.focus("inputId")       -- 聚焦指定元素
+focusMgr.focusNext()            -- 下一个
+focusMgr.focusPrevious()        -- 上一个
 ```
 
 ## 总结

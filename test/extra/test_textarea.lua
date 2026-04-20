@@ -1,11 +1,12 @@
--- test/text/test_textarea.lua — unit tests for <Textarea> component.
+-- test/extra/test_textarea.lua — unit tests for <Textarea> component.
 --
 -- Drives the component offscreen via tui.testing: dispatch input bytes →
 -- auto-render → inspect onChange callbacks and cursor position.
 
-local lt      = require "ltest"
-local tui     = require "tui"
-local testing = require "tui.testing"
+local lt       = require "ltest"
+local tui      = require "tui"
+local Textarea = require "tui.extra.textarea".Textarea
+local testing  = require "tui.testing"
 
 local suite = lt.test "textarea"
 
@@ -46,7 +47,7 @@ function suite:test_initial_value_shown()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -60,7 +61,7 @@ function suite:test_char_insertion()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -80,7 +81,7 @@ function suite:test_enter_submits()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea {
+            Textarea {
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted[#submitted + 1] = v end,
@@ -100,7 +101,7 @@ function suite:test_shift_enter_inserts_newline()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -121,7 +122,7 @@ function suite:test_newline_cursor_on_last_line()
     local function App()
         return tui.Box {
             width = 20, height = 10,
-            tui.Textarea { value = value, onChange = function(v) value = v end },
+            Textarea { value = value, onChange = function(v) value = v end },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 10 })
@@ -145,7 +146,7 @@ function suite:test_scroll_when_taller_than_terminal()
     local function App()
         return tui.Box {
             width = 20, height = 5,
-            tui.Textarea { value = value, onChange = function(v) value = v end },
+            Textarea { value = value, onChange = function(v) value = v end },
         }
     end
     -- Terminal is only 5 rows; type 7 lines.
@@ -182,7 +183,7 @@ function suite:test_scroll_taller_than_terminal_with_border()
             flexDirection = "column",
             tui.Box {
                 borderStyle = "single",
-                tui.Textarea { value = value, onChange = function(v) value = v end },
+                Textarea { value = value, onChange = function(v) value = v end },
             },
         }
     end
@@ -218,7 +219,7 @@ function suite:test_backspace_merges_lines()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -240,7 +241,7 @@ function suite:test_up_down_navigation()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea {
+            Textarea {
                 value = value,
                 onChange = function(v) value = v; calls[#calls + 1] = v end,
                 height = 4,
@@ -266,7 +267,7 @@ function suite:test_paste_singleline()
     local function App()
         return tui.Box {
             width = 40, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 40, rows = 4 })
@@ -280,7 +281,7 @@ function suite:test_paste_multiline()
     local function App()
         return tui.Box {
             width = 40, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 40, rows = 4 })
@@ -294,7 +295,7 @@ function suite:test_paste_into_existing_text()
     local function App()
         return tui.Box {
             width = 40, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 40, rows = 4 })
@@ -310,7 +311,7 @@ function suite:test_paste_multiline_into_existing_text()
     local function App()
         return tui.Box {
             width = 40, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 40, rows = 4 })
@@ -331,7 +332,7 @@ function suite:test_delete_merges_next_line()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -353,7 +354,7 @@ function suite:test_ctrl_enter_submit()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea {
+            Textarea {
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted[#submitted + 1] = v end,
@@ -365,7 +366,7 @@ function suite:test_ctrl_enter_submit()
     -- Ctrl+Enter should call onSubmit and NOT change the value.
     -- The testing harness cannot inject ctrl+enter via :press, so we use the
     -- lower-level _dispatch_event API that bypasses key parsing.
-    local input_mod = require "tui.input"
+    local input_mod = require "tui.internal.input"
     input_mod._dispatch_event({ name = "enter", ctrl = true, meta = false, shift = false, input = "\r", raw = "\r" })
     h:_paint()
     lt.assertEquals(#submitted, 1)
@@ -385,7 +386,7 @@ function suite:test_shift_enter_inserts_newline_via_csi_u()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea {
+            Textarea {
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted[#submitted + 1] = v end,
@@ -409,7 +410,7 @@ function suite:test_ctrl_enter_submit_via_csi_u()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea {
+            Textarea {
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted[#submitted + 1] = v end,
@@ -439,7 +440,7 @@ function suite:test_vscode_shift_enter_inserts_newline()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea {
+            Textarea {
                 value = value,
                 onChange = function(v) value = v end,
                 onSubmit = function(v) submitted[#submitted + 1] = v end,
@@ -473,7 +474,7 @@ function suite:test_up_snaps_to_display_column()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -498,7 +499,7 @@ function suite:test_split_esc_right_arrow()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -516,7 +517,7 @@ function suite:test_split_esc_up_arrow()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -533,7 +534,7 @@ function suite:test_split_esc_bracket_then_final()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
@@ -555,7 +556,7 @@ function suite:test_sticky_x_through_short_line()
     local function App()
         return tui.Box {
             width = 20, height = 4,
-            tui.Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 4 })

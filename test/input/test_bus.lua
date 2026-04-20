@@ -1,7 +1,7 @@
 -- test/input/test_bus.lua — unit tests for tui.bus (make_subscription_bus).
 
 local lt  = require "ltest"
-local bus = require "tui.bus"
+local bus = require "tui.internal.bus"
 
 local suite = lt.test "bus"
 

@@ -3,7 +3,7 @@
 local lt         = require "ltest"
 local tui        = require "tui"
 local testing    = require "tui.testing"
-local reconciler = require "tui.reconciler"
+local reconciler = require "tui.internal.reconciler"
 
 local suite = lt.test "reconciler_and_hooks"
 
@@ -227,7 +227,7 @@ end
 
 -- useInput: handler receives parsed events; subscribe/unsubscribe lifecycle.
 function suite:test_use_input_subscribes_and_unsubscribes()
-    local input_mod = require "tui.input"
+    local input_mod = require "tui.internal.input"
 
     local got = {}
     local mounted = true

@@ -1,8 +1,8 @@
 -- test/unit/test_input_dispatch.lua — unit tests for tui/input.lua dispatch
 
 local lt    = require "ltest"
-local input = require "tui.input"
-local focus = require "tui.focus"
+local input = require "tui.internal.input"
+local focus = require "tui.internal.focus"
 
 local suite = lt.test "input_dispatch"
 

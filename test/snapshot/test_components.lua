@@ -6,6 +6,7 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local extra = require "tui.extra"
 
 local suite = lt.test "components"
 
@@ -163,7 +164,7 @@ function suite:test_text_truncation()
 end
 
 -- ============================================================================
--- TextInput component snapshots
+-- extra.TextInput component snapshots
 -- ============================================================================
 
 function suite:test_textinput_empty()
@@ -171,7 +172,7 @@ function suite:test_textinput_empty()
         local value, setValue = tui.useState("")
         return tui.Box {
             width = 20, height = 3,
-            tui.TextInput {
+            extra.TextInput {
                 value = value,
                 onChange = setValue,
                 width = 18,
@@ -188,7 +189,7 @@ function suite:test_textinput_with_value()
         local value, setValue = tui.useState("hello")
         return tui.Box {
             width = 20, height = 3,
-            tui.TextInput {
+            extra.TextInput {
                 value = value,
                 onChange = setValue,
                 width = 18,
@@ -205,7 +206,7 @@ function suite:test_textinput_with_placeholder()
         local value, setValue = tui.useState("")
         return tui.Box {
             width = 20, height = 3,
-            tui.TextInput {
+            extra.TextInput {
                 value = value,
                 onChange = setValue,
                 placeholder = "Type here...",
@@ -225,7 +226,7 @@ function suite:test_textinput_in_border()
             borderStyle = "round",
             width = 22, height = 5,
             paddingX = 1,
-            tui.TextInput {
+            extra.TextInput {
                 value = value,
                 onChange = setValue,
             }
@@ -241,7 +242,7 @@ function suite:test_textinput_typed()
         local value, setValue = tui.useState("")
         return tui.Box {
             width = 20, height = 3,
-            tui.TextInput {
+            extra.TextInput {
                 value = value,
                 onChange = setValue,
                 width = 18,
@@ -255,14 +256,14 @@ function suite:test_textinput_typed()
 end
 
 -- ============================================================================
--- Spinner component snapshots
+-- extra.Spinner component snapshots
 -- ============================================================================
 
 function suite:test_spinner_dots()
     local App = function()
         return tui.Box {
             width = 15, height = 3,
-            tui.Spinner { type = "dots" }
+            extra.Spinner { type = "dots" }
         }
     end
     local h = testing.render(App, { cols = 20, rows = 5 })
@@ -274,7 +275,7 @@ function suite:test_spinner_line()
     local App = function()
         return tui.Box {
             width = 15, height = 3,
-            tui.Spinner { type = "line" }
+            extra.Spinner { type = "line" }
         }
     end
     local h = testing.render(App, { cols = 20, rows = 5 })
@@ -286,7 +287,7 @@ function suite:test_spinner_with_label()
     local App = function()
         return tui.Box {
             width = 20, height = 3,
-            tui.Spinner { type = "dots", label = "Loading..." }
+            extra.Spinner { type = "dots", label = "Loading..." }
         }
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
@@ -298,7 +299,7 @@ function suite:test_spinner_colored()
     local App = function()
         return tui.Box {
             width = 20, height = 3,
-            tui.Spinner { type = "dots", color = "yellow", label = "Working" }
+            extra.Spinner { type = "dots", color = "yellow", label = "Working" }
         }
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
@@ -307,14 +308,14 @@ function suite:test_spinner_colored()
 end
 
 -- ============================================================================
--- ProgressBar component snapshots
+-- extra.ProgressBar component snapshots
 -- ============================================================================
 
 function suite:test_progress_empty()
     local App = function()
         return tui.Box {
             width = 20, height = 3,
-            tui.ProgressBar { value = 0, width = 15 }
+            extra.ProgressBar { value = 0, width = 15 }
         }
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
@@ -326,7 +327,7 @@ function suite:test_progress_half()
     local App = function()
         return tui.Box {
             width = 20, height = 3,
-            tui.ProgressBar { value = 0.5, width = 15 }
+            extra.ProgressBar { value = 0.5, width = 15 }
         }
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
@@ -338,7 +339,7 @@ function suite:test_progress_full()
     local App = function()
         return tui.Box {
             width = 20, height = 3,
-            tui.ProgressBar { value = 1, width = 15 }
+            extra.ProgressBar { value = 1, width = 15 }
         }
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
@@ -350,7 +351,7 @@ function suite:test_progress_colored()
     local App = function()
         return tui.Box {
             width = 20, height = 3,
-            tui.ProgressBar { value = 0.7, width = 15, color = "green" }
+            extra.ProgressBar { value = 0.7, width = 15, color = "green" }
         }
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
@@ -362,7 +363,7 @@ function suite:test_progress_custom_chars()
     local App = function()
         return tui.Box {
             width = 20, height = 3,
-            tui.ProgressBar {
+            extra.ProgressBar {
                 value = 0.6,
                 width = 15,
                 chars = { fill = "=", empty = "-" }
@@ -375,7 +376,7 @@ function suite:test_progress_custom_chars()
 end
 
 -- ============================================================================
--- Static component snapshots
+-- extra.Static component snapshots
 -- ============================================================================
 
 function suite:test_static_list()
@@ -387,7 +388,7 @@ function suite:test_static_list()
         }
         return tui.Box {
             width = 15, height = 5,
-            tui.Static {
+            extra.Static {
                 items = items,
                 render = function(item)
                     return tui.Text { item.name }
@@ -404,7 +405,7 @@ function suite:test_static_empty()
     local App = function()
         return tui.Box {
             width = 15, height = 3,
-            tui.Static {
+            extra.Static {
                 items = {},
                 render = function(item)
                     return tui.Text { item.name }
@@ -418,7 +419,7 @@ function suite:test_static_empty()
 end
 
 -- ============================================================================
--- Newline/Spacer component snapshots
+-- extra.Newline/extra.Spacer component snapshots
 -- ============================================================================
 
 function suite:test_newline()
@@ -426,7 +427,7 @@ function suite:test_newline()
         return tui.Box {
             width = 15, height = 5,
             tui.Text { key = "l1", "Line 1" },
-            tui.Newline { key = "nl" },
+            extra.Newline { key = "nl" },
             tui.Text { key = "l2", "Line 2" },
         }
     end
@@ -441,7 +442,7 @@ function suite:test_spacer()
             flexDirection = "column",
             width = 15, height = 7,
             tui.Text { key = "top", "Top" },
-            tui.Spacer { key = "spacer" },
+            extra.Spacer { key = "spacer" },
             tui.Text { key = "bottom", "Bottom" },
         }
     end
@@ -451,7 +452,7 @@ function suite:test_spacer()
 end
 
 -- ============================================================================
--- Select component snapshots
+-- extra.Select component snapshots
 -- ============================================================================
 
 function suite:test_select_single()
@@ -463,7 +464,7 @@ function suite:test_select_single()
         }
         return tui.Box {
             width = 20, height = 7,
-            tui.Select {
+            extra.Select {
                 items = items,
                 onSelect = function() end,
             }
@@ -483,7 +484,7 @@ function suite:test_select_with_initial_index()
         }
         return tui.Box {
             width = 20, height = 7,
-            tui.Select {
+            extra.Select {
                 items = items,
                 initialIndex = 2,
                 onSelect = function() end,

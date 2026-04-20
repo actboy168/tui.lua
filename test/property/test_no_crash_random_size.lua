@@ -5,6 +5,7 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local extra = require "tui.extra"
 local testing = require "tui.testing"
 local pbt     = require "test.property.pbt"
 
@@ -41,7 +42,7 @@ table.insert(SHAPES, function(rng)
     local v = "test"
     return function()
         return tui.Box {
-            tui.TextInput {
+            extra.TextInput {
                 value = v,
                 onChange = function(nv) v = nv end,
             },

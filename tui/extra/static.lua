@@ -14,7 +14,7 @@
 -- already on screen do NOT produce ANSI output on subsequent paints: previous
 -- rows compare equal in tui/screen.lua and get skipped.
 
-local element = require "tui.element"
+local tui     = require "tui"
 
 local M = {}
 
@@ -23,9 +23,8 @@ local function StaticImpl(props)
     local items  = props.items  or {}
     local render = props.render or function() return nil end
 
-    local hooks = require "tui.hooks"
     -- Persistent cache: { [i] = { item = items[i], el = rendered_element } }
-    local ref, _ = hooks.useState({ cache = {}, n = 0 })
+    local ref, _ = tui.useState({ cache = {}, n = 0 })
 
     -- Determine from which index we need to (re)render. Default: nothing new.
     -- If any cached slot's item identity differs from the current items[i],
@@ -45,7 +44,7 @@ local function StaticImpl(props)
     -- Render any new items from invalidate_from..#items.
     for i = invalidate_from, #items do
         local el = render(items[i], i)
-        if type(el) == "string" then el = element.Text { el } end
+        if type(el) == "string" then el = tui.Text { el } end
         ref.cache[i] = { item = items[i], el = el }
     end
     ref.n = #items
@@ -81,7 +80,7 @@ local function StaticImpl(props)
 
     -- Place children after props.
     for _, c in ipairs(children) do box_props[#box_props + 1] = c end
-    return element.Box(box_props)
+    return tui.Box(box_props)
 end
 
 -- Public factory: wraps the implementation as a component element so the

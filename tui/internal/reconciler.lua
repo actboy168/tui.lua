@@ -14,7 +14,7 @@
 --   * a host element tree to tui.render(Box{...})
 -- A function is wrapped as a 0-prop component instance.
 
-local hooks = require "tui.hooks"
+local hooks = require "tui.internal.hooks"
 
 local M = {}
 
@@ -328,7 +328,7 @@ local function get_boundary_reset(inst)
         if inst.caught_error == nil then return end
         inst.caught_error = nil
         inst.dirty = true
-        if not scheduler_mod then scheduler_mod = require "tui.scheduler" end
+        if not scheduler_mod then scheduler_mod = require "tui.internal.scheduler" end
         scheduler_mod.requestRedraw()
     end
     return inst._reset

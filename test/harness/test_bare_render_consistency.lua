@@ -6,8 +6,7 @@
 local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
-local hooks   = require "tui.hooks"
-local element = require "tui.element"
+
 
 local suite = lt.test "bare_render_consistency"
 
@@ -22,9 +21,9 @@ end
 function suite:test_useState_setter_updates_tree()
     local refs = {}
     local App = function()
-        local val, setVal = hooks.useState(0)
+        local val, setVal = tui.useState(0)
         refs.setVal = setVal
-        return element.Text { tostring(val) }
+        return tui.Text { tostring(val) }
     end
 
     -- Bare
@@ -53,16 +52,16 @@ function suite:test_useEffect_fires_on_mount()
     local count_harness = 0
 
     local App1 = function()
-        hooks.useEffect(function() count_bare = count_bare + 1 end, {})
-        return element.Text { "x" }
+        tui.useEffect(function() count_bare = count_bare + 1 end, {})
+        return tui.Text { "x" }
     end
     local b = testing.mount_bare(App1)
     lt.assertEquals(count_bare, 1)
     b:unmount()
 
     local App2 = function()
-        hooks.useEffect(function() count_harness = count_harness + 1 end, {})
-        return element.Text { "x" }
+        tui.useEffect(function() count_harness = count_harness + 1 end, {})
+        return tui.Text { "x" }
     end
     local h = testing.render(App2)
     lt.assertEquals(count_harness, 1)
@@ -74,10 +73,10 @@ function suite:test_useEffect_cleanup_on_unmount()
     local harness_cleaned = false
 
     local App1 = function()
-        hooks.useEffect(function()
+        tui.useEffect(function()
             return function() bare_cleaned = true end
         end, {})
-        return element.Text { "x" }
+        return tui.Text { "x" }
     end
     local b = testing.mount_bare(App1)
     lt.assertEquals(bare_cleaned, false)
@@ -85,10 +84,10 @@ function suite:test_useEffect_cleanup_on_unmount()
     lt.assertEquals(bare_cleaned, true)
 
     local App2 = function()
-        hooks.useEffect(function()
+        tui.useEffect(function()
             return function() harness_cleaned = true end
         end, {})
-        return element.Text { "x" }
+        return tui.Text { "x" }
     end
     local h = testing.render(App2)
     lt.assertEquals(harness_cleaned, false)
@@ -107,9 +106,9 @@ function suite:test_useReducer_dispatch_updates_tree()
     end
 
     local App = function()
-        local count, dispatch = hooks.useReducer(reducer, 0)
+        local count, dispatch = tui.useReducer(reducer, 0)
         refs.dispatch = dispatch
-        return element.Text { tostring(count) }
+        return tui.Text { tostring(count) }
     end
 
     -- Bare
@@ -136,10 +135,10 @@ end
 function suite:test_useRef_persists_across_renders()
     local refs = {}
     local App = function()
-        local ref = hooks.useRef(0)
+        local ref = tui.useRef(0)
         refs.ref = ref
         ref.current = ref.current + 1
-        return element.Text { tostring(ref.current) }
+        return tui.Text { tostring(ref.current) }
     end
 
     -- Bare
@@ -167,14 +166,14 @@ function suite:test_useMemo_caches_until_deps_change()
 
     local function make_app(key)
         return function()
-            local d, setD = hooks.useState(1)
+            local d, setD = tui.useState(1)
             refs[key] = refs[key] or {}
             refs[key].setD = setD
-            local val = hooks.useMemo(function()
+            local val = tui.useMemo(function()
                 compute_counts[key] = compute_counts[key] + 1
                 return d * 10
             end, { d })
-            return element.Text { tostring(val) }
+            return tui.Text { tostring(val) }
         end
     end
 
@@ -206,15 +205,15 @@ end
 -- useContext
 
 function suite:test_useContext_same_value_in_both_modes()
-    local ctx = hooks.createContext("default")
+    local ctx = tui.createContext("default")
 
     local Inner = function()
-        local val = hooks.useContext(ctx)
-        return element.Text { val }
+        local val = tui.useContext(ctx)
+        return tui.Text { val }
     end
 
     local App = function()
-        return ctx.Provider { value = "hello", element.Box { Inner } }
+        return ctx.Provider { value = "hello", tui.Box { Inner } }
     end
 
     -- Bare
@@ -237,10 +236,10 @@ function suite:test_dispatch_same_bytes()
 
     local function make_app(keys_table)
         return function()
-            hooks.useInput(function(_, key)
+            tui.useInput(function(_, key)
                 if key then keys_table[#keys_table + 1] = key.name end
             end)
-            return element.Text { "x" }
+            return tui.Text { "x" }
         end
     end
 
@@ -264,12 +263,12 @@ function suite:test_type_same_chars()
 
     local function make_app(chars_table)
         return function()
-            hooks.useInput(function(_, key)
+            tui.useInput(function(_, key)
                 if key and key.input then
                     chars_table[#chars_table + 1] = key.input
                 end
             end)
-            return element.Text { "x" }
+            return tui.Text { "x" }
         end
     end
 
@@ -290,17 +289,17 @@ end
 function suite:test_focus_next_advances_same()
     -- Components need unique keys when siblings
     local A = function()
-        hooks.useFocus()
-        return element.Text { "A" }
+        tui.useFocus()
+        return tui.Text { "A" }
     end
     local B = function()
-        hooks.useFocus()
-        return element.Text { "B" }
+        tui.useFocus()
+        return tui.Text { "B" }
     end
     local CompA = tui.component(A)
     local CompB = tui.component(B)
     local App = function()
-        return element.Box {
+        return tui.Box {
             CompA { key = "a" },
             CompB { key = "b" },
         }
@@ -328,7 +327,7 @@ end
 
 function suite:test_advance_updates_clock_same()
     local App = function()
-        return element.Text { "x" }
+        return tui.Text { "x" }
     end
 
     local b = testing.mount_bare(App)
@@ -350,9 +349,9 @@ end
 
 function suite:test_same_tree_kind_and_text()
     local App = function()
-        return element.Box {
-            element.Text { "hello" },
-            element.Text { "world" },
+        return tui.Box {
+            tui.Text { "hello" },
+            tui.Text { "world" },
         }
     end
 
@@ -379,19 +378,19 @@ function suite:test_unmount_runs_effect_cleanups()
     local harness_cleanups = 0
 
     local App1 = function()
-        hooks.useEffect(function()
+        tui.useEffect(function()
             return function() bare_cleanups = bare_cleanups + 1 end
         end, {})
-        return element.Text { "x" }
+        return tui.Text { "x" }
     end
     local b = testing.mount_bare(App1)
     b:unmount()
 
     local App2 = function()
-        hooks.useEffect(function()
+        tui.useEffect(function()
             return function() harness_cleanups = harness_cleanups + 1 end
         end, {})
-        return element.Text { "x" }
+        return tui.Text { "x" }
     end
     local h = testing.render(App2)
     h:unmount()

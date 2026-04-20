@@ -6,6 +6,7 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local extra = require "tui.extra"
 
 local suite = lt.test "boundary_sizes"
 
@@ -83,7 +84,7 @@ function suite:test_narrow_input()
         local value, setValue = tui.useState("hi")
         return tui.Box {
             width = 10, height = 3,
-            tui.TextInput {
+            extra.TextInput {
                 value = value,
                 onChange = setValue,
             }
@@ -98,7 +99,7 @@ function suite:test_narrow_spinner()
     local App = function()
         return tui.Box {
             width = 10, height = 3,
-            tui.Spinner { type = "line" }
+            extra.Spinner { type = "line" }
         }
     end
     local h = testing.render(App, { cols = 10, rows = 3 })
@@ -110,7 +111,7 @@ function suite:test_narrow_progress()
     local App = function()
         return tui.Box {
             width = 10, height = 3,
-            tui.ProgressBar { value = 0.5, width = 8 }
+            extra.ProgressBar { value = 0.5, width = 8 }
         }
     end
     local h = testing.render(App, { cols = 10, rows = 3 })

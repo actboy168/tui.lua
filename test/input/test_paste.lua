@@ -2,7 +2,7 @@
 -- tui.input and the subscribe_paste API.
 
 local lt        = require "ltest"
-local input_mod = require "tui.input"
+local input_mod = require "tui.internal.input"
 
 local suite = lt.test "input_paste"
 

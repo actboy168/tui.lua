@@ -3,7 +3,7 @@ local lt = require "ltest"
 local fs = require "bee.filesystem"
 
 -- Register tui.* modules for coverage tracking (no-op without --coverage).
-local <const> COVERAGE_EXCLUDE = { testing = true }
+local COVERAGE_EXCLUDE = { testing = true }
 
 for entry in fs.pairs("tui") do
     local name = entry:filename():string()

@@ -3,7 +3,7 @@
 local lt        = require "ltest"
 local tui_core  = require "tui_core"
 local keys      = tui_core.keys
-local input_mod = require "tui.input"
+local input_mod = require "tui.internal.input"
 
 local suite = lt.test "keys_parse"
 

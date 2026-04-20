@@ -4,7 +4,7 @@
 -- dimensions differ from the last observed pair, we fire subscribers.
 -- useWindowSize (in hooks.lua) subscribes here to drive re-renders.
 
-local bus_mod = require "tui.bus"
+local bus_mod = require "tui.internal.bus"
 
 local M = {}
 

@@ -7,6 +7,7 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local extra = require "tui.extra"
 local testing = require "tui.testing"
 
 local suite = lt.test "focus"
@@ -194,7 +195,7 @@ function suite:test_textinput_autofocus_default()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.TextInput {
+            extra.TextInput {
                 value    = value,
                 onChange = function(v) value = v end,
             },
@@ -215,12 +216,12 @@ function suite:test_two_textinputs_tab_routes()
         return tui.Box {
             flexDirection = "column",
             width = 20, height = 2,
-            tui.TextInput {
+            extra.TextInput {
                 focusId  = "inA",
                 value    = a,
                 onChange = function(v) a = v end,
             },
-            tui.TextInput {
+            extra.TextInput {
                 focusId  = "inB",
                 value    = b,
                 onChange = function(v) b = v end,
@@ -276,7 +277,7 @@ function suite:test_tab_order_stable_across_rerenders()
     -- length would balloon.
     for _ = 1, 3 do bump(); h:rerender() end
 
-    local entries = require("tui.focus")._entries()
+    local entries = require("tui.internal.focus")._entries()
     lt.assertEquals(#entries, 2, "chain must not grow under rerenders, got " .. #entries)
     lt.assertEquals(entries[1].id, "p")
     lt.assertEquals(entries[2].id, "q")
@@ -324,7 +325,7 @@ function suite:test_duplicate_focus_id_raises()
         "error should name the offending id")
 
     -- clean up module state so later tests aren't contaminated
-    require("tui.focus")._reset()
+    require("tui.internal.focus")._reset()
 end
 
 -- ---------------------------------------------------------------------------
@@ -357,7 +358,7 @@ function suite:test_inactive_entry_is_skipped_by_tab()
     h:press("shift+tab"); lt.assertEquals(h:focus_id(), "a")
 
     -- Explicit focus(id) still lands on an inactive entry (user intent).
-    require("tui.focus").focus("b")
+    require("tui.internal.focus").focus("b")
     lt.assertEquals(h:focus_id(), "b")
     h:unmount()
 end
@@ -465,7 +466,7 @@ function suite:test_id_hot_update_resubscribes()
     end
 
     local h = testing.render(App, { cols = 1, rows = 3 })
-    local focus_mod = require "tui.focus"
+    local focus_mod = require "tui.internal.focus"
     local ids = function()
         local out = {}
         for _, e in ipairs(focus_mod._entries()) do out[#out + 1] = e.id end
@@ -490,14 +491,14 @@ function suite:test_textinput_disabled_is_inactive_entry()
         return tui.Box {
             flexDirection = "column",
             width = 20, height = 3,
-            tui.TextInput { focusId = "top",    value = "",                  key = "top" },
-            tui.TextInput { focusId = "middle", value = "", focus = false, key = "middle" },
-            tui.TextInput { focusId = "bottom", value = "",                  key = "bottom" },
+            extra.TextInput { focusId = "top",    value = "",                  key = "top" },
+            extra.TextInput { focusId = "middle", value = "", focus = false, key = "middle" },
+            extra.TextInput { focusId = "bottom", value = "",                  key = "bottom" },
         }
     end
 
     local h = testing.render(App, { cols = 20, rows = 3 })
-    local focus_mod = require "tui.focus"
+    local focus_mod = require "tui.internal.focus"
     -- All three are in the chain (stable hook call order).
     lt.assertEquals(#focus_mod._entries(), 3)
     -- First active one autoFocuses (TextInput default).

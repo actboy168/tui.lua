@@ -1,9 +1,10 @@
--- test/test_spinner.lua — <Spinner> component behavior.
+-- test/extra/test_spinner.lua — <Spinner> component behavior.
 
 local lt        = require "ltest"
 local tui       = require "tui"
+local Spinner   = require "tui.extra.spinner".Spinner
 local testing   = require "tui.testing"
-local scheduler = require "tui.scheduler"
+local scheduler = require "tui.internal.scheduler"
 
 local suite = lt.test "spinner"
 
@@ -18,7 +19,7 @@ function suite:test_default_first_frame()
     local function App()
         return tui.Box {
             width = 10, height = 1,
-            tui.Spinner {},
+            Spinner {},
         }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
@@ -32,7 +33,7 @@ function suite:test_frame_advances_on_interval()
     local function App()
         return tui.Box {
             width = 10, height = 1,
-            tui.Spinner { type = "line" },
+            Spinner { type = "line" },
         }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
@@ -49,7 +50,7 @@ function suite:test_frame_wraps_around()
     local function App()
         return tui.Box {
             width = 10, height = 1,
-            tui.Spinner { type = "line" },
+            Spinner { type = "line" },
         }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
@@ -64,7 +65,7 @@ function suite:test_label_appended()
     local function App()
         return tui.Box {
             width = 20, height = 1,
-            tui.Spinner { type = "line", label = "loading" },
+            Spinner { type = "line", label = "loading" },
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
@@ -77,7 +78,7 @@ function suite:test_custom_frames()
     local function App()
         return tui.Box {
             width = 10, height = 1,
-            tui.Spinner { frames = { "A", "B", "C" }, interval = 50 },
+            Spinner { frames = { "A", "B", "C" }, interval = 50 },
         }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
@@ -96,7 +97,7 @@ function suite:test_type_and_frames_conflict()
     local ok, err = pcall(function()
         local function App()
             return tui.Box {
-                tui.Spinner { type = "dots", frames = { "X" } },
+                Spinner { type = "dots", frames = { "X" } },
             }
         end
         testing.render(App, { cols = 10, rows = 1 }):unmount()
@@ -111,7 +112,7 @@ function suite:test_unknown_type_errors()
     local ok, err = pcall(function()
         local function App()
             return tui.Box {
-                tui.Spinner { type = "no-such-thing" },
+                Spinner { type = "no-such-thing" },
             }
         end
         testing.render(App, { cols = 10, rows = 1 }):unmount()
@@ -126,7 +127,7 @@ function suite:test_conditional_mount_clears_timer()
     local function App()
         return tui.Box {
             width = 10, height = 1,
-            show and tui.Spinner { type = "line" } or nil,
+            show and Spinner { type = "line" } or nil,
         }
     end
     local h = testing.render(App, { cols = 10, rows = 1 })

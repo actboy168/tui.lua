@@ -107,12 +107,33 @@ tui.Text {
 }
 ```
 
+### ErrorBoundary
+
+错误边界。
+
+```lua
+tui.ErrorBoundary {
+    fallback = function(error) -> element,
+    children
+}
+```
+
+## 扩展组件
+
+扩展组件位于 `tui.extra`，需要显式加载：
+
+```lua
+local extra = require "tui.extra"
+extra.TextInput { ... }
+```
+
 ### TextInput
 
 文本输入组件。
 
 ```lua
-tui.TextInput {
+local extra = require "tui.extra"
+extra.TextInput {
     value = string,
     onChange = function(value),
     onSubmit = function(),
@@ -125,17 +146,35 @@ tui.TextInput {
 }
 ```
 
+### Textarea
+
+多行文本编辑器。
+
+```lua
+local extra = require "tui.extra"
+extra.Textarea {
+    value = string,
+    onChange = function(value),
+    onSubmit = function(),
+    placeholder = string,
+    width = number,
+    minHeight = number,
+    maxHeight = number,
+}
+```
+
 ### Select
 
 选项列表。
 
 ```lua
-tui.Select {
+local extra = require "tui.extra"
+extra.Select {
     items = { { label, value }, ... },
     onSelect = function(item),
     onHighlight = function(item),
     limit = number,          -- 显示行数
-    indicator = string,      -- 选中指示器，默认 ">"
+    indicator = string,      -- 选中指示器，默认 "❯"
 }
 ```
 
@@ -144,7 +183,8 @@ tui.Select {
 加载动画。
 
 ```lua
-tui.Spinner {
+local extra = require "tui.extra"
+extra.Spinner {
     type = "dots" | "line" | "pointer" | "simple",
     label = string,
     frames = { string },     -- 自定义帧
@@ -157,7 +197,8 @@ tui.Spinner {
 进度条。
 
 ```lua
-tui.ProgressBar {
+local extra = require "tui.extra"
+extra.ProgressBar {
     value = number,          -- 0.0 ~ 1.0
     width = number,
     color = string,
@@ -173,37 +214,21 @@ tui.ProgressBar {
 静态列表。
 
 ```lua
-tui.Static {
+local extra = require "tui.extra"
+extra.Static {
     items = { ... },
     render = function(item, index) -> element,
 }
 ```
 
-### ErrorBoundary
+### Newline / Spacer
 
-错误边界。
-
-```lua
-tui.ErrorBoundary {
-    fallback = function(error) -> element,
-    children
-}
-```
-
-### Newline
-
-换行。
+换行和弹性空间。
 
 ```lua
-tui.Newline {}
-```
-
-### Spacer
-
-弹性空间。
-
-```lua
-tui.Spacer {}
+local extra = require "tui.extra"
+extra.Newline { count = 1 }  -- 换行
+extra.Spacer {}              -- 弹性空间
 ```
 
 ## Hooks
@@ -368,20 +393,32 @@ local truncated = tui.truncateMiddle(str, width)  -- 截断（中间...）
 local size = tui.intrinsicSize(element)       -- 计算元素固有尺寸
 ```
 
-## 焦点模块
+## 焦点管理
+
+使用 `useFocusManager` hook：
 
 ```lua
-local focus = require "tui.focus"
+local focusMgr = tui.useFocusManager()
 
-focus.enable()
-focus.disable()
-focus.isEnabled(): boolean
+focusMgr.enableFocus()      -- 启用焦点系统
+focusMgr.disableFocus()     -- 禁用焦点系统
 
-focus.focus(id: string)
-focus.focusNext()
-focus.focusPrevious()
-focus.getFocusedId(): string?
-focus.getFocusedEntry(): table?
+focusMgr.focus(id: string)           -- 聚焦指定元素
+focusMgr.focusNext()                 -- 下一个可聚焦元素
+focusMgr.focusPrevious()             -- 上一个可聚焦元素
+```
+
+使用 `useFocus` hook 创建可聚焦组件：
+
+```lua
+local focus = tui.useFocus {
+    id = "myInput",
+    autoFocus = true,
+    on_input = function(input, key) ... end
+}
+
+-- focus.isFocused  - 是否有焦点
+-- focus.focus()    - 主动获取焦点
 ```
 
 ## 测试工具

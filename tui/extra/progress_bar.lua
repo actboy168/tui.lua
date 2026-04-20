@@ -15,7 +15,7 @@
 --            display-column glyph. Defaults are U+2588 FULL BLOCK and
 --            U+2591 LIGHT SHADE.
 
-local element = require "tui.element"
+local tui = require "tui"
 
 local M = {}
 
@@ -54,7 +54,7 @@ local function ProgressBarImpl(props)
     local text_props = { bar }
     if props.color then text_props.color = props.color
     elseif props.color == nil then text_props.color = "cyan" end
-    return element.Text(text_props)
+    return tui.Text(text_props)
 end
 
 function M.ProgressBar(props)

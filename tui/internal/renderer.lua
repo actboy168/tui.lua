@@ -14,7 +14,7 @@
 -- inherited value for itself and its subtree.
 
 local screen_c = require "tui_core".screen
-local sgr      = require "tui.sgr"
+local sgr      = require "tui.internal.sgr"
 
 local M = {}
 

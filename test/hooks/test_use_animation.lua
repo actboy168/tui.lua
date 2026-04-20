@@ -3,7 +3,7 @@
 local lt        = require "ltest"
 local tui       = require "tui"
 local testing   = require "tui.testing"
-local scheduler = require "tui.scheduler"
+local scheduler = require "tui.internal.scheduler"
 
 local suite = lt.test "use_animation"
 

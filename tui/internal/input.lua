@@ -18,8 +18,8 @@
 -- mirrors Ink's behavior for non-focus keys.
 
 local tui_core  = require "tui_core"
-local focus_mod = require "tui.focus"
-local bus_mod   = require "tui.bus"
+local focus_mod = require "tui.internal.focus"
+local bus_mod   = require "tui.internal.bus"
 local keys      = tui_core.keys
 
 local M = {}
@@ -88,7 +88,7 @@ M.subscribe = _broadcast.subscribe
 M.subscribe_paste = _paste_bus.subscribe
 
 --- debug_log: when non-nil, each dispatch() call appends a line to this file.
--- Enable from Lua before tui.render:  require("tui.input")._debug_log = "input_debug.txt"
+-- Enable from Lua before tui.render:  require("tui.internal.input")._debug_log = "input_debug.txt"
 M._debug_log = nil
 
 local function _dbg(msg)

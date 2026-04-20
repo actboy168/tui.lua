@@ -18,8 +18,7 @@
 --
 -- Passing both `type` and `frames` is an error (ambiguous intent).
 
-local element = require "tui.element"
-local hooks   = require "tui.hooks"
+local tui     = require "tui"
 
 local M = {}
 
@@ -60,7 +59,7 @@ local function SpinnerImpl(props)
     props = props or {}
     local frames, interval = resolve(props)
 
-    local anim = hooks.useAnimation {
+    local anim = tui.useAnimation {
         interval = interval,
         isActive = true,
     }
@@ -73,7 +72,7 @@ local function SpinnerImpl(props)
 
     local text_props = { text }
     if props.color ~= nil then text_props.color = props.color end
-    return element.Text(text_props)
+    return tui.Text(text_props)
 end
 
 function M.Spinner(props)

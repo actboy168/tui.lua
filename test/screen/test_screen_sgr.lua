@@ -9,7 +9,7 @@
 -- same — pack() returns the two uint8 bytes screen.put now expects.
 
 local lt       = require "ltest"
-local screen   = require "tui.screen"
+local screen   = require "tui.internal.screen"
 local tui_core = require "tui_core"
 
 local suite = lt.test "screen_sgr"

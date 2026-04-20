@@ -7,7 +7,7 @@
 -- trigger a spurious exit.
 
 local lt        = require "ltest"
-local input_mod = require "tui.input"
+local input_mod = require "tui.internal.input"
 local tui       = require "tui"
 local testing   = require "tui.testing"
 

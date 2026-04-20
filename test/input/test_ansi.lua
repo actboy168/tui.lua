@@ -1,6 +1,6 @@
 -- test/input/test_ansi.lua — tests for terminal detection, CI/TTY, and ansi sequences.
 local lt       = require "ltest"
-local ansi     = require "tui.ansi"
+local ansi     = require "tui.internal.ansi"
 
 local test_ansi = lt.test "ansi"
 

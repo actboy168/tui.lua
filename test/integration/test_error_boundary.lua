@@ -166,7 +166,7 @@ end
 -- rather than masquerading as a routine render error behind fallback.
 
 function suite:test_fatal_error_bypasses_boundary()
-    local reconciler = require "tui.reconciler"
+    local reconciler = require "tui.internal.reconciler"
     local function Bad_fn() reconciler.fatal("something broke") end
     local Bad = tui.component(Bad_fn)
     local function App()
@@ -211,16 +211,15 @@ end
 -- 9. Post-commit errors from useEffect body bubble to the nearest boundary.
 --
 -- Effects run after the tree has been expanded/committed, so the Boundary's
--- render-time pcall cannot catch them. hooks._flush_effects routes the error
+-- render-time pcall cannot catch them. tui._flush_effects routes the error
 -- onto the instance's captured nearest_boundary, marks it dirty, and asks
 -- the scheduler for a redraw. The harness stabilization loop picks up the
 -- dirty flag and repaints — second pass observes caught_error and swaps in
 -- the fallback.
 
 function suite:test_useeffect_body_throw_caught_by_boundary()
-    local hooks = require "tui.hooks"
     local function Bad_fn()
-        hooks.useEffect(function() error("effect-boom", 0) end, {})
+        tui.useEffect(function() error("effect-boom", 0) end, {})
         return tui.Text { "BAD" }
     end
     local Bad = tui.component(Bad_fn)
@@ -245,10 +244,9 @@ end
 -- 10. useEffect cleanup errors on unmount / re-run bubble to boundary too.
 
 function suite:test_useeffect_cleanup_throw_caught_by_boundary()
-    local hooks = require "tui.hooks"
     local phase = { "first" }
     local function Child_fn()
-        hooks.useEffect(function()
+        tui.useEffect(function()
             return function() error("cleanup-boom", 0) end
         end, { phase[1] })
         return tui.Text { "C" }
@@ -278,9 +276,8 @@ end
 --     harness surfaces this as a regular Lua error out of :rerender().
 
 function suite:test_useeffect_throw_without_boundary_propagates()
-    local hooks = require "tui.hooks"
     local function Bad_fn()
-        hooks.useEffect(function() error("loose-effect", 0) end, {})
+        tui.useEffect(function() error("loose-effect", 0) end, {})
         return tui.Text { "X" }
     end
     local Bad = tui.component(Bad_fn)
@@ -295,10 +292,9 @@ function suite:test_useeffect_throw_without_boundary_propagates()
 end
 
 function suite:test_boundary_caught_error_is_sticky()
-    local hooks = require "tui.hooks"
     local armed = { true }  -- first mount throws; after we disarm, Bad returns clean
     local function Bad_fn()
-        hooks.useEffect(function()
+        tui.useEffect(function()
             if armed[1] then error("first-only", 0) end
         end, {})
         return tui.Text { "OK" }
@@ -355,9 +351,8 @@ end
 --     nearest boundary on the focused component's instance.
 
 function suite:test_usefocus_on_input_throw_caught_by_boundary()
-    local hooks = require "tui.hooks"
     local function Bad_fn()
-        hooks.useFocus {
+        tui.useFocus {
             autoFocus = true,
             on_input = function() error("focus-boom", 0) end,
         }
@@ -541,7 +536,7 @@ function suite:test_fallback_function_that_throws_degrades_to_empty()
 end
 
 function suite:test_fallback_function_with_fatal_still_propagates()
-    local reconciler = require "tui.reconciler"
+    local reconciler = require "tui.internal.reconciler"
     local function Bad_fn() error("normal", 0) end
     local Bad = tui.component(Bad_fn)
     local function App()
@@ -564,11 +559,10 @@ end
 --     state; useful when fallback=element can't carry err itself.
 
 function suite:test_useerrorboundary_sees_caught_error()
-    local hooks = require "tui.hooks"
     -- Flag-flipping state so the fallback tree can observe a tripped boundary.
     local seen_err_in_fb
     local function FbView_fn()
-        local eb = hooks.useErrorBoundary()
+        local eb = tui.useErrorBoundary()
         seen_err_in_fb = eb.caught_error
         return tui.Text { "fb" }
     end
@@ -594,11 +588,10 @@ end
 --     function's reset does.
 
 function suite:test_useerrorboundary_reset_clears_boundary()
-    local hooks = require "tui.hooks"
     local armed = { true }
     local captured
     local function FbView_fn()
-        local eb = hooks.useErrorBoundary()
+        local eb = tui.useErrorBoundary()
         captured = eb
         return tui.Text { "fb  " }
     end
@@ -630,10 +623,9 @@ end
 --     reset + nil caught_error (won't crash).
 
 function suite:test_useerrorboundary_without_ancestor_is_noop()
-    local hooks = require "tui.hooks"
     local seen
     local function View()
-        seen = hooks.useErrorBoundary()
+        seen = tui.useErrorBoundary()
         return tui.Text { "v" }
     end
 

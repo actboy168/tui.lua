@@ -6,7 +6,7 @@
 -- cell buffer + diff algorithm in isolation.
 
 local lt     = require "ltest"
-local screen = require "tui.screen"
+local screen = require "tui.internal.screen"
 
 local suite = lt.test "screen_diff"
 

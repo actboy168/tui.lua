@@ -38,7 +38,7 @@ local function iter_chars(s)
         return ch, cw
     end
 end
-M.iter = iter_chars
+M.iterChars = iter_chars
 
 function M.display_width(s)
     return wcwidth.string_width(s or "")

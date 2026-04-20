@@ -13,7 +13,9 @@
 --   * calling tui.hooks._end_render() after the fn returns
 --   * invoking queued effects after commit via _flush_effects(instance)
 
-local scheduler = require "tui.scheduler"
+local scheduler = require "tui.internal.scheduler"
+
+local _SOURCE = debug.getinfo(1, "S").source
 
 local M = {}
 
@@ -156,7 +158,7 @@ end
 -- the recovery signal.
 local reconciler_mod   -- lazy require to avoid init cycle
 local function ensure_reconciler()
-    reconciler_mod = reconciler_mod or require "tui.reconciler"
+    reconciler_mod = reconciler_mod or require "tui.internal.reconciler"
     return reconciler_mod
 end
 
@@ -287,8 +289,7 @@ local function detect_plain_function_hook()
     for lvl = 3, 30 do
         local info = debug.getinfo(lvl, "S")
         if not info then break end
-        local src = info.source or ""
-        if not src:find("[/\\]tui[/\\]hooks%.lua$") then
+        if info.source ~= _SOURCE then
             user_lvl = lvl
             break
         end
@@ -500,7 +501,7 @@ end
 -- the render tree without creating a component instance.
 local element_mod   -- lazy require to avoid init cycle with element.lua
 function M.createContext(default_value)
-    element_mod = element_mod or require "tui.element"
+    element_mod = element_mod or require "tui.internal.element"
     local ctx = {
         _kind    = "tui_context",
         _default = default_value,
@@ -640,7 +641,7 @@ end
 local input_mod -- lazy-loaded to avoid a static require cycle
 
 function M.useInput(fn)
-    if not input_mod then input_mod = require "tui.input" end
+    if not input_mod then input_mod = require "tui.internal.input" end
     local ref = useLatestRef(fn)
     assert(current, "useInput called outside of a component render")
     local inst = current
@@ -658,7 +659,7 @@ end
 -- sends the closing ESC[201~ marker.
 
 function M.usePaste(fn)
-    if not input_mod then input_mod = require "tui.input" end
+    if not input_mod then input_mod = require "tui.internal.input" end
     local ref = useLatestRef(fn)
     assert(current, "usePaste called outside of a component render")
     local inst = current
@@ -703,7 +704,7 @@ local focus_mod
 
 function M.useFocus(opts)
     opts = opts or {}
-    if not focus_mod then focus_mod = require "tui.focus" end
+    if not focus_mod then focus_mod = require "tui.internal.focus" end
 
     local isFocused, setFocused = M.useState(false)
     local onInputRef = useLatestRef(opts.on_input)
@@ -811,7 +812,7 @@ end
 
 function M.useFocusManager()
     assert(current, "useFocusManager called outside of a component render")
-    if not focus_mod then focus_mod = require "tui.focus" end
+    if not focus_mod then focus_mod = require "tui.internal.focus" end
     return {
         enableFocus   = focus_mod.enable,
         disableFocus  = focus_mod.disable,
@@ -828,7 +829,7 @@ end
 local resize_mod
 
 function M.useWindowSize()
-    if not resize_mod then resize_mod = require "tui.resize" end
+    if not resize_mod then resize_mod = require "tui.internal.resize" end
     local w0, h0 = resize_mod.current()
     local size, setSize = M.useState({ cols = w0 or 80, rows = h0 or 24 })
     M.useEffect(function()

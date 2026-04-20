@@ -37,9 +37,7 @@
 -- (items empty then filled), re-rendering with new items is fine — the
 -- highlight is clamped to the new list's bounds by a defensive useEffect.
 
-local element = require "tui.element"
-local hooks   = require "tui.hooks"
-local text    = require "tui.text"
+local tui     = require "tui"
 
 local M = {}
 
@@ -87,13 +85,13 @@ local function default_render(item, ctx, props)
     -- Pad non-selected rows by the indicator's *display width*, not its
     -- byte length — the indicator may contain multi-byte glyphs like "❯"
     -- which encode as 3 bytes but occupy 1 column.
-    local pad = string.rep(" ", text.display_width(indicator))
+    local pad = string.rep(" ", tui.displayWidth(indicator))
     local prefix = ctx.isSelected and indicator or pad
     local text_props = { prefix .. item.label }
     if ctx.isSelected and props.highlightColor then
         text_props.color = props.highlightColor
     end
-    return element.Text(text_props)
+    return tui.Text(text_props)
 end
 
 local function SelectImpl(props)
@@ -106,11 +104,11 @@ local function SelectImpl(props)
     if initial_idx < 1 then initial_idx = 1 end
     if n > 0 and initial_idx > n then initial_idx = n end
 
-    local highlight, setHighlight = hooks.useState(initial_idx)
+    local highlight, setHighlight = tui.useState(initial_idx)
 
     -- Keep latest callbacks and item array in a ref so the keyboard handler
     -- always sees fresh references without re-subscribing to useFocus.
-    local ctx = hooks.useRef {}
+    local ctx = tui.useRef {}
     ctx.current.items     = items
     ctx.current.highlight = highlight
     ctx.current.onSelect  = props.onSelect
@@ -118,7 +116,7 @@ local function SelectImpl(props)
     ctx.current.setH      = setHighlight
 
     -- Clamp highlight if items shrank underneath us.
-    hooks.useEffect(function()
+    tui.useEffect(function()
         if n == 0 then
             if highlight ~= 1 then setHighlight(1) end
         elseif highlight > n then
@@ -128,7 +126,7 @@ local function SelectImpl(props)
 
     local disabled = props.isDisabled and true or false
 
-    hooks.useFocus {
+    tui.useFocus {
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
         isActive  = not disabled,
@@ -166,7 +164,7 @@ local function SelectImpl(props)
     }
 
     if n == 0 then
-        return element.Box { flexDirection = "column" }
+        return tui.Box { flexDirection = "column" }
     end
 
     local first, last = window_bounds(n, highlight, props.limit)
@@ -187,7 +185,7 @@ local function SelectImpl(props)
         local el
         if renderItem then
             el = renderItem(item.raw, { isSelected = is_sel, index = i })
-            if type(el) == "string" then el = element.Text { el } end
+            if type(el) == "string" then el = tui.Text { el } end
         else
             el = default_render(item, { isSelected = is_sel, index = i }, effective)
         end
@@ -205,7 +203,7 @@ local function SelectImpl(props)
 
     local box = { flexDirection = "column", flexShrink = 0 }
     for _, c in ipairs(children) do box[#box + 1] = c end
-    return element.Box(box)
+    return tui.Box(box)
 end
 
 function M.Select(props)

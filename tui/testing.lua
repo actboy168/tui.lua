@@ -25,18 +25,17 @@
 -- The fake terminal lives on each harness instance (`h._terminal`). No
 -- global state is touched. ltest parallel runner is safe.
 
-local element    = require "tui.element"
-local layout     = require "tui.layout"
-local renderer   = require "tui.renderer"
-local screen_mod = require "tui.screen"
-local reconciler = require "tui.reconciler"
-local scheduler  = require "tui.scheduler"
-local input_mod  = require "tui.input"
-local resize_mod = require "tui.resize"
-local focus_mod  = require "tui.focus"
-local ansi_mod   = require "tui.ansi"
-local hooks      = require "tui.hooks"
-local tui_core   = require "tui_core"
+local element    = require "tui.internal.element"
+local layout     = require "tui.internal.layout"
+local renderer   = require "tui.internal.renderer"
+local screen_mod = require "tui.internal.screen"
+local reconciler = require "tui.internal.reconciler"
+local scheduler  = require "tui.internal.scheduler"
+local input_mod  = require "tui.internal.input"
+local resize_mod = require "tui.internal.resize"
+local focus_mod  = require "tui.internal.focus"
+local ansi_mod   = require "tui.internal.ansi"
+local hooks      = require "tui.internal.hooks"
 
 local M = {}
 

@@ -1,7 +1,8 @@
--- test/test_select.lua — <Select> component behavior.
+-- test/extra/test_select.lua — <Select> component behavior.
 
-local lt      = require "ltest"
-local tui     = require "tui"
+local lt     = require "ltest"
+local tui    = require "tui"
+local Select = require "tui.extra.select".Select
 local testing = require "tui.testing"
 
 local suite = lt.test "select"
@@ -24,7 +25,7 @@ function suite:test_initial_highlight_and_default_indicator()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select { items = { "alpha", "beta", "gamma" } },
+            Select { items = { "alpha", "beta", "gamma" } },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
@@ -40,7 +41,7 @@ function suite:test_down_moves_highlight_and_fires_onchange()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select {
+            Select {
                 items    = { "a", "b", "c" },
                 onChange = function(item, idx) changes[#changes + 1] = { item.value, idx } end,
                 onSelect = function(item, idx) selects[#selects + 1] = { item.value, idx } end,
@@ -62,7 +63,7 @@ function suite:test_up_wraps_to_last()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select { items = { "a", "b", "c" } },
+            Select { items = { "a", "b", "c" } },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
@@ -76,7 +77,7 @@ function suite:test_down_wraps_to_first()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select { items = { "a", "b", "c" }, initialIndex = 3 },
+            Select { items = { "a", "b", "c" }, initialIndex = 3 },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
@@ -90,7 +91,7 @@ function suite:test_home_end_jump()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select { items = { "a", "b", "c" }, initialIndex = 2 },
+            Select { items = { "a", "b", "c" }, initialIndex = 2 },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
@@ -107,7 +108,7 @@ function suite:test_enter_fires_onselect()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select {
+            Select {
                 items    = { "a", "b", "c" },
                 onSelect = function(item, idx) selected = { item.value, idx } end,
             },
@@ -127,7 +128,7 @@ function suite:test_disabled_ignores_keys()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select {
+            Select {
                 items      = { "a", "b", "c" },
                 isDisabled = true,
                 onChange   = function() changes = changes + 1 end,
@@ -147,7 +148,7 @@ function suite:test_empty_items_no_error()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select { items = {} },
+            Select { items = {} },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
@@ -164,7 +165,7 @@ function suite:test_table_items_value_distinct_from_label()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select {
+            Select {
                 items    = {
                     { label = "Alpha", value = "A" },
                     { label = "Beta",  value = "B" },
@@ -187,7 +188,7 @@ function suite:test_limit_window_scrolls()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select {
+            Select {
                 items = { "a", "b", "c", "d", "e" },
                 limit = 3,
             },
@@ -217,7 +218,7 @@ function suite:test_render_item_override()
     local function App()
         return tui.Box {
             width = 30, height = 2, flexDirection = "column",
-            tui.Select {
+            Select {
                 items = { "a", "b" },
                 renderItem = function(item, ctx)
                     return tui.Text {
@@ -242,7 +243,7 @@ function suite:test_items_shrink_clamps_highlight()
     local function App()
         return tui.Box {
             width = 30, height = 4, flexDirection = "column",
-            tui.Select { items = items, initialIndex = 4 },
+            Select { items = items, initialIndex = 4 },
         }
     end
     local h = testing.render(App, { cols = 30, rows = 4 })
@@ -263,7 +264,7 @@ function suite:test_unknown_key_is_noop()
     local function App()
         return tui.Box {
             width = 30, height = 2, flexDirection = "column",
-            tui.Select {
+            Select {
                 items    = { "a", "b" },
                 onChange = function() changes = changes + 1 end,
             },
@@ -282,7 +283,7 @@ function suite:test_bulk_dispatch_two_downs()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select {
+            Select {
                 items    = { "a", "b", "c" },
                 onChange = function(item, idx) changes[#changes + 1] = idx end,
             },
@@ -304,7 +305,7 @@ function suite:test_bulk_dispatch_home_then_down()
     local function App()
         return tui.Box {
             width = 30, height = 3, flexDirection = "column",
-            tui.Select {
+            Select {
                 items        = { "a", "b", "c" },
                 initialIndex = 3,
                 onChange     = function(item, idx) changes[#changes + 1] = idx end,

@@ -1,7 +1,8 @@
--- test/test_static.lua — unit tests for <Static> component.
+-- test/extra/test_static.lua — unit tests for <Static> component.
 
-local lt      = require "ltest"
-local tui     = require "tui"
+local lt     = require "ltest"
+local tui    = require "tui"
+local Static = require "tui.extra.static".Static
 local testing = require "tui.testing"
 
 local suite = lt.test "static"
@@ -12,7 +13,7 @@ function suite:test_static_initial_items_render()
         return tui.Box {
             width = 20, height = 5,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items,
                 render = function(s) return tui.Text { s } end,
             },
@@ -30,7 +31,7 @@ function suite:test_static_appending_items_produces_incremental_diff()
         return tui.Box {
             width = 20, height = 5,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items,
                 render = function(s) return tui.Text { s } end,
             },
@@ -54,7 +55,7 @@ function suite:test_static_no_change_produces_zero_diff()
         return tui.Box {
             width = 20, height = 5,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items,
                 render = function(s) return tui.Text { s } end,
             },
@@ -76,7 +77,7 @@ function suite:test_static_preserves_item_identity_when_cached()
         return tui.Box {
             width = 20, height = 5,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items,
                 render = function(s)
                     render_calls = render_calls + 1
@@ -102,7 +103,7 @@ function suite:test_static_clear_then_reappend()
         return tui.Box {
             width = 20, height = 10,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items,
                 render = function(s)
                     render_calls = render_calls + 1
@@ -138,7 +139,7 @@ function suite:test_static_render_error_caught_by_boundary()
             tui.Box {
                 width = 8, height = 3,
                 flexDirection = "column",
-                tui.Static {
+                Static {
                     items = items,
                     render = function(s)
                         if s == "boom" then error("render blew up", 0) end
@@ -164,7 +165,7 @@ function suite:test_static_large_list_append_then_unmount()
         return tui.Box {
             width = 8, height = 1000,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items,
                 render = function(s)
                     render_calls = render_calls + 1
@@ -190,7 +191,7 @@ function suite:test_static_large_list_append_then_unmount()
         return tui.Box {
             width = 8, height = 2,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items2,
                 render = function(s)
                     calls2 = calls2 + 1
@@ -217,7 +218,7 @@ function suite:test_static_items_identity_stable_no_rerender()
         return tui.Box {
             width = 8, height = 4,
             flexDirection = "column",
-            tui.Static {
+            Static {
                 items = items,
                 render = function(it)
                     render_calls = render_calls + 1

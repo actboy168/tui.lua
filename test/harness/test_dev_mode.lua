@@ -2,7 +2,6 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
-local hooks   = require "tui.hooks"
 local testing = require "tui.testing"
 
 local suite = lt.test "dev_mode"

@@ -24,9 +24,7 @@
 -- Cursor position is a UTF-8 character index (1..#chars+1), not a byte
 -- offset. Conversions to display columns go through wcwidth.
 
-local element  = require "tui.element"
-local cursor   = require "tui.builtin.cursor"
-local text_mod = require "tui.text"
+local tui      = require "tui"
 
 local M = {}
 
@@ -37,7 +35,7 @@ local M = {}
 local function to_chars(s)
     local chars = {}
     if not s or s == "" then return chars end
-    for ch, _ in text_mod.iter(s) do
+    for ch, _ in tui.iterChars(s) do
         chars[#chars + 1] = ch
     end
     return chars
@@ -50,7 +48,7 @@ end
 -- Display width of chars[1..i] prefix.
 local function prefix_width(chars, i)
     local w = 0
-    for k = 1, i do w = w + (text_mod.display_width(chars[k])) end
+    for k = 1, i do w = w + (tui.displayWidth(chars[k])) end
     return w
 end
 
@@ -85,7 +83,7 @@ local function make_window(chars, caret, width, mask)
     local visible = {}
     local used = 0
     for i = start, #masked do
-        local cw = text_mod.display_width(masked[i])
+        local cw = tui.displayWidth(masked[i])
         if used + cw > width then break end
         visible[#visible + 1] = masked[i]
         used = used + cw
@@ -98,7 +96,6 @@ end
 
 local function TextInputImpl(props)
     props = props or {}
-    local hooks = require "tui.hooks"
 
     local value       = props.value or ""
     local onChange    = props.onChange
@@ -118,15 +115,15 @@ local function TextInputImpl(props)
     -- schedule the persisted clamp via useEffect (moving the setCaret out
     -- of render-time satisfies the dev-mode render-phase setState guard).
     local chars = to_chars(value)
-    local caret_state, setCaret = hooks.useState(#chars)
+    local caret_state, setCaret = tui.useState(#chars)
     local caret_clamped = caret_state
     if caret_clamped > #chars then caret_clamped = #chars end
-    hooks.useEffect(function()
+    tui.useEffect(function()
         if caret_state > #chars then setCaret(#chars) end
     end, { caret_state, #chars })
 
     -- Keep a ref to latest props so the useFocus callback sees fresh value.
-    local ctxRef, _ = hooks.useState({})
+    local ctxRef, _ = tui.useState({})
     ctxRef.chars    = chars
     ctxRef.caret    = caret_clamped
     ctxRef.onChange = onChange
@@ -140,9 +137,9 @@ local function TextInputImpl(props)
     -- handle pre-edit display internally and only send the final confirmed
     -- text. Terminals that support protocols like kitty may send composing
     -- sequences, which keys.parse will translate into composing events.
-    local composing, setComposing = hooks.useState("")
+    local composing, setComposing = tui.useState("")
 
-    local f = hooks.useFocus {
+    local f = tui.useFocus {
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
         isActive  = not disabled,
@@ -241,7 +238,7 @@ local function TextInputImpl(props)
 
     -- Clear composing state when focus is lost so that a stale pre-edit
     -- string does not linger when the input regains focus later.
-    hooks.useEffect(function()
+    tui.useEffect(function()
         if not focus_flag and composing ~= "" then
             setComposing("")
         end
@@ -253,7 +250,7 @@ local function TextInputImpl(props)
     -- passes a flex-grown child so we try to render the whole value.
     local show_placeholder = (#chars == 0) and not focus_flag and placeholder ~= ""
     local render_width = width or math.max(prefix_width(chars, #chars) + 1,
-                                           text_mod.display_width(placeholder))
+                                           tui.displayWidth(placeholder))
     if render_width < 1 then render_width = 1 end
 
     local visible, caret_col
@@ -277,7 +274,7 @@ local function TextInputImpl(props)
     end
 
     -- Build the Text child; user may apply styling via a wrapper Box.
-    local text_el = element.Text { width = render_width, wrap = "nowrap", visible }
+    local text_el = tui.Text { width = render_width, wrap = "nowrap", visible }
 
     -- Single-writer cursor model: only the focused TextInput declares its
     -- cursor position via useDeclaredCursor(). The tagger writes _cursor_offset
@@ -288,7 +285,7 @@ local function TextInputImpl(props)
     -- stale cursor rendering when focus transitions between components.
     -- The useFocus isFocused state updates asynchronously via effect, which
     -- can cause one frame of incorrect cursor display after focus changes.
-    local declareCursor = cursor.useDeclaredCursor {
+    local declareCursor = tui.useDeclaredCursor {
         x = caret_col,
         y = 0,
         active = focus_flag and not disabled,

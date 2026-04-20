@@ -26,9 +26,7 @@
 --   Home / End               — beginning / end of current line
 --   Ctrl+Home / Ctrl+End     — top / bottom of document
 
-local element  = require "tui.element"
-local cursor   = require "tui.builtin.cursor"
-local text_mod = require "tui.text"
+local tui      = require "tui"
 
 local M = {}
 
@@ -39,14 +37,14 @@ local M = {}
 local function to_chars(s)
     local chars = {}
     if not s or s == "" then return chars end
-    for ch, _ in text_mod.iter(s) do
+    for ch, _ in tui.iterChars(s) do
         chars[#chars + 1] = ch
     end
     return chars
 end
 
 local function char_width(ch)
-    return text_mod.display_width(ch)
+    return tui.displayWidth(ch)
 end
 
 -- Display width of chars[1..i] prefix (0-based, i chars).
@@ -66,7 +64,7 @@ local function parse_lines(value)
     if not value or value == "" then
         return { {} }
     end
-    for ch, _ in text_mod.iter(value) do
+    for ch, _ in tui.iterChars(value) do
         if ch == "\n" then
             lines[#lines + 1] = cur
             cur = {}
@@ -141,7 +139,6 @@ end
 -- ---------------------------------------------------------------------------
 local function TextareaImpl(props)
     props = props or {}
-    local hooks = require "tui.hooks"
 
     local value       = props.value or ""
     local onChange    = props.onChange
@@ -170,27 +167,27 @@ local function TextareaImpl(props)
     -- parent fills the terminal). Use this as the scroll window so that
     -- clamp_scroll keeps the cursor within the visible area. Falls back to
     -- vis_height on the first frame before the measurement is available.
-    local measureRef, measured_size = hooks.useMeasure()
+    local measureRef, measured_size = tui.useMeasure()
     local scroll_window = (measured_size.h > 0) and measured_size.h or vis_height
 
     -- Persistent state: cursor (1-based line/col), scroll top (0-based),
     -- and preferred_x for sticky Up/Down column (nil = use current position).
-    local caret_line,  setCaretLine  = hooks.useState(nlines)
-    local caret_col,   setCaretCol   = hooks.useState(#lines_now[nlines])
-    local scroll_top,  setScrollTop  = hooks.useState(0)
-    local preferred_x, setPreferredX = hooks.useState(nil)
+    local caret_line,  setCaretLine  = tui.useState(nlines)
+    local caret_col,   setCaretCol   = tui.useState(#lines_now[nlines])
+    local scroll_top,  setScrollTop  = tui.useState(0)
+    local preferred_x, setPreferredX = tui.useState(nil)
 
     -- Clamp caret to valid range after external value change.
     local cl = math.min(math.max(caret_line, 1), nlines)
     local cc = math.min(math.max(caret_col, 0), #lines_now[cl])
 
-    hooks.useEffect(function()
+    tui.useEffect(function()
         if caret_line ~= cl then setCaretLine(cl) end
         if caret_col  ~= cc then setCaretCol(cc)  end
     end, { caret_line, caret_col, cl, cc })
 
     -- Keep a ref to live values for the on_input closure.
-    local ctx, _ = hooks.useState({})
+    local ctx, _ = tui.useState({})
     ctx.lines       = lines_now
     ctx.cl          = cl
     ctx.cc          = cc
@@ -202,7 +199,7 @@ local function TextareaImpl(props)
     ctx.scroll_window = scroll_window
 
     -- Sync scroll_top if it changed.
-    hooks.useEffect(function()
+    tui.useEffect(function()
         if scroll_top ~= ctx.st then setScrollTop(ctx.st) end
     end, { ctx.st, scroll_top })
 
@@ -254,7 +251,7 @@ local function TextareaImpl(props)
         if new_st ~= ctx.st then setScrollTop(new_st); ctx.st = new_st end
     end
 
-    local f = hooks.useFocus {
+    local f = tui.useFocus {
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
         isActive  = not disabled,
@@ -273,7 +270,7 @@ local function TextareaImpl(props)
 
                 -- Split `text` into graphemes, handling embedded newlines.
                 local to_insert = {}  -- list of {type="char",ch=...} or {type="nl"}
-                for ch, _ in text_mod.iter(text) do
+                for ch, _ in tui.iterChars(text) do
                     if ch == "\n" then
                         to_insert[#to_insert + 1] = { t = "nl" }
                     else
@@ -450,9 +447,9 @@ local function TextareaImpl(props)
         else
             text_str = ""
         end
-        local row_el = element.Text { key = tostring(r + 1), width = width, wrap = "nowrap", text_str }
+        local row_el = tui.Text { key = tostring(r + 1), width = width, wrap = "nowrap", text_str }
         if r == cursor_row then
-            local declareCursor = cursor.useDeclaredCursor {
+            local declareCursor = tui.useDeclaredCursor {
                 x      = cursor_col,
                 y      = 0,
                 active = focus_flag and not disabled,
@@ -462,7 +459,7 @@ local function TextareaImpl(props)
         row_elements[r + 1] = row_el
     end
 
-    return element.Box {
+    return tui.Box {
         ref = measureRef,
         flexDirection = "column",
         width = width,

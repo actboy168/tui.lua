@@ -100,18 +100,21 @@ focus.focus()    -- 方法：主动获取焦点
 
 ## 手动控制焦点
 
+在组件中使用 `useFocusManager` hook：
+
 ```lua
-local focus = require "tui.focus"
+local function MyComponent()
+    local focusMgr = tui.useFocusManager()
 
--- 聚焦指定元素
-focus.focus("myInputId")
+    -- 聚焦指定元素
+    focusMgr.focus("myInputId")
 
--- 导航
-focus.focus_next()   -- 下一个
-focus.focus_prev()   -- 上一个
+    -- 导航
+    focusMgr.focusNext()      -- 下一个
+    focusMgr.focusPrevious()  -- 上一个
 
--- 获取当前焦点
-local id = focus.get_focused_id()
+    return tui.Box { ... }
+end
 ```
 
 ## 禁用焦点元素

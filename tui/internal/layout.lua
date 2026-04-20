@@ -14,7 +14,7 @@
 
 local yoga     = require "yoga"
 local tui_core = require "tui_core"
-local text_mod = require "tui.text"
+local text_mod = require "tui.internal.text"
 
 local wcwidth = tui_core.wcwidth
 

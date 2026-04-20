@@ -1,4 +1,6 @@
-# 内置组件
+# 核心组件
+
+tui.lua 核心组件无需额外加载，直接使用 `tui.Xxx` 访问。
 
 ## Text - 文本
 
@@ -43,13 +45,47 @@ tui.Box {
 }
 ```
 
+## ErrorBoundary - 错误边界
+
+捕获子树错误：
+
+```lua
+tui.ErrorBoundary {
+    fallback = function(error)
+        return tui.Box {
+            borderStyle = "single",
+            borderColor = "red",
+            tui.Text { color = "red", "错误: " .. error }
+        }
+    end,
+
+    RiskyComponent {}
+}
+```
+
+---
+
+# 扩展组件
+
+扩展组件位于 `tui/extra/` 目录，需要显式加载：
+
+```lua
+local extra = require "tui.extra"
+
+-- 使用
+extra.TextInput { ... }
+extra.Spinner { ... }
+```
+
 ## TextInput - 文本输入
 
 ```lua
+local extra = require "tui.extra"
+
 local function Form()
     local value, setValue = tui.useState("")
 
-    return tui.TextInput {
+    return extra.TextInput {
         value = value,
         onChange = setValue,
         onSubmit = function()
@@ -74,9 +110,28 @@ end
 | `mask` | string | 掩码字符（如密码输入） |
 | `autoFocus` | boolean | 自动获得焦点 |
 
+## Textarea - 多行文本输入
+
+```lua
+local extra = require "tui.extra"
+
+extra.Textarea {
+    value = text,
+    onChange = setText,
+    onSubmit = function()
+        print("提交:", text)
+    end,
+    placeholder = "输入多行文本...",
+    minHeight = 3,
+    maxHeight = 10,
+}
+```
+
 ## Select - 选择列表
 
 ```lua
+local extra = require "tui.extra"
+
 local function Menu()
     local items = {
         { label = "选项1", value = 1 },
@@ -84,7 +139,7 @@ local function Menu()
         { label = "选项3", value = 3 },
     }
 
-    return tui.Select {
+    return extra.Select {
         items = items,
         limit = 5,              -- 显示行数限制
         indicator = ">",        -- 选中指示器
@@ -107,17 +162,19 @@ end
 ## Spinner - 加载动画
 
 ```lua
+local extra = require "tui.extra"
+
 -- 默认类型
-tui.Spinner { label = "加载中..." }
+extra.Spinner { label = "加载中..." }
 
 -- 指定类型
-tui.Spinner {
+extra.Spinner {
     type = "dots",      -- dots | line | pointer | simple
     label = "处理中"
 }
 
 -- 自定义帧
-tui.Spinner {
+extra.Spinner {
     frames = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
     interval = 80,
     label = "加载中"
@@ -136,11 +193,13 @@ tui.Spinner {
 ## ProgressBar - 进度条
 
 ```lua
+local extra = require "tui.extra"
+
 -- 基础用法
-tui.ProgressBar { value = 0.5 }  -- 50%
+extra.ProgressBar { value = 0.5 }  -- 50%
 
 -- 完整配置
-tui.ProgressBar {
+extra.ProgressBar {
     value = 0.75,
     width = 40,
     color = "green",
@@ -156,7 +215,9 @@ tui.ProgressBar {
 渲染大量静态内容：
 
 ```lua
-tui.Static {
+local extra = require "tui.extra"
+
+extra.Static {
     items = { "行1", "行2", "行3" },
     render = function(item, index)
         return tui.Text {
@@ -170,10 +231,12 @@ tui.Static {
 ## Newline - 换行
 
 ```lua
+local extra = require "tui.extra"
+
 tui.Box {
     flexDirection = "column",
     tui.Text { "第一行" },
-    tui.Newline {},      -- 空行
+    extra.Newline {},      -- 空行
     tui.Text { "第二行" }
 }
 ```
@@ -181,33 +244,19 @@ tui.Box {
 ## Spacer - 弹性空间
 
 ```lua
+local extra = require "tui.extra"
+
 tui.Box {
     flexDirection = "row",
     tui.Text { "左侧" },
-    tui.Spacer {},       -- 推开两侧
+    extra.Spacer {},       -- 推开两侧
     tui.Text { "右侧" }
 }
 ```
 
-## ErrorBoundary - 错误边界
+---
 
-捕获子树错误：
-
-```lua
-tui.ErrorBoundary {
-    fallback = function(error)
-        return tui.Box {
-            borderStyle = "single",
-            borderColor = "red",
-            tui.Text { color = "red", "错误: " .. error }
-        }
-    end,
-
-    RiskyComponent {}
-}
-```
-
-## 自定义组件
+# 自定义组件
 
 创建可复用组件：
 
@@ -221,7 +270,6 @@ local function Card(props)
         width = props.width or 30,
 
         tui.Text { bold = true, props.title },
-        tui.Newline {},
         tui.Text { props.children }
     }
 end
@@ -248,9 +296,13 @@ end)
 Card { title = "标题" }
 ```
 
-## 组件组合示例
+---
+
+# 组件组合示例
 
 ```lua
+local extra = require "tui.extra"
+
 local function App()
     return tui.Box {
         flexDirection = "column",
@@ -262,7 +314,7 @@ local function App()
             tui.Text { bold = true, "用户管理系统" }
         },
 
-        tui.Newline {},
+        extra.Newline {},
 
         -- 表单
         tui.Box {
@@ -270,19 +322,19 @@ local function App()
             gap = 1,
 
             tui.Text { "用户名:" },
-            tui.TextInput {
+            extra.TextInput {
                 placeholder = "输入用户名",
                 width = 30
             },
 
             tui.Text { "邮箱:" },
-            tui.TextInput {
+            extra.TextInput {
                 placeholder = "输入邮箱",
                 width = 30
             }
         },
 
-        tui.Newline {},
+        extra.Newline {},
 
         -- 按钮行
         tui.Box {

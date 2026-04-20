@@ -3,7 +3,7 @@
 -- Newline { count = n } — creates vertical space by rendering n empty lines.
 -- Spacer { } — creates flexible empty space that expands to fill available area.
 
-local element = require "tui.element"
+local tui = require "tui"
 
 local M = {}
 
@@ -17,7 +17,7 @@ function M.Newline(t)
     if count < 1 then count = 1 end
     -- Render as a Box with fixed height, no children.
     -- The Box will occupy the specified number of rows.
-    return element.Box {
+    return tui.Box {
         key = key,
         height = count,
         flexShrink = 0,
@@ -32,7 +32,7 @@ function M.Spacer(t)
     local key = t.key
     -- Spacer expands to fill available space.
     -- In a row: grows horizontally. In a column: grows vertically.
-    return element.Box {
+    return tui.Box {
         key = key,
         flexGrow = 1,
     }

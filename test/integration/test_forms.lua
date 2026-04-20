@@ -3,6 +3,7 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local extra = require "tui.extra"
 
 local suite = lt.test "forms"
 
@@ -25,12 +26,12 @@ function suite:test_login_form_submit()
             flexDirection = "column",
             width = 40, height = 12,
             tui.Text { key = "title", "Login Form" },
-            tui.Newline { key = "nl1" },
+            extra.Newline { key = "nl1" },
             tui.Box {
                 key = "user_row",
                 flexDirection = "row",
                 tui.Text { key = "user_label", "Username: " },
-                tui.TextInput {
+                extra.TextInput {
                     key = "user_input",
                     value = username,
                     onChange = setUsername,
@@ -42,7 +43,7 @@ function suite:test_login_form_submit()
                 key = "pass_row",
                 flexDirection = "row",
                 tui.Text { key = "pass_label", "Password: " },
-                tui.TextInput {
+                extra.TextInput {
                     key = "pass_input",
                     value = password,
                     onChange = setPassword,
@@ -50,7 +51,7 @@ function suite:test_login_form_submit()
                     width = 20,
                 }
             },
-            tui.Newline { key = "nl2" },
+            extra.Newline { key = "nl2" },
             tui.Text { key = "hint", "Press Enter in either field to submit" },
         }
     end
@@ -83,12 +84,12 @@ function suite:test_login_form_full_flow()
             flexDirection = "column",
             width = 40, height = 12,
             tui.Text { key = "title", "Login Form" },
-            tui.Newline { key = "nl1" },
+            extra.Newline { key = "nl1" },
             tui.Box {
                 key = "user_row",
                 flexDirection = "row",
                 tui.Text { key = "user_label", "Username: " },
-                tui.TextInput {
+                extra.TextInput {
                     key = "user_input",
                     value = username,
                     onChange = setUsername,
@@ -99,7 +100,7 @@ function suite:test_login_form_full_flow()
                 key = "pass_row",
                 flexDirection = "row",
                 tui.Text { key = "pass_label", "Password: " },
-                tui.TextInput {
+                extra.TextInput {
                     key = "pass_input",
                     value = password,
                     onChange = setPassword,
@@ -166,7 +167,7 @@ function suite:test_wizard_form_navigation()
             return tui.Box {
                 width = 40, height = 10,
                 tui.Text { key = "title", "Step 1/3: Personal Info" },
-                tui.TextInput {
+                extra.TextInput {
                     key = "name_input",
                     value = data.name or "",
                     onChange = function(v) updateField("name", v) end,
@@ -174,14 +175,14 @@ function suite:test_wizard_form_navigation()
                     placeholder = "Name",
                     width = 30,
                 },
-                tui.Newline { key = "nl" },
+                extra.Newline { key = "nl" },
                 tui.Text { key = "hint", "Enter: Next" },
             }
         elseif step == 2 then
             return tui.Box {
                 width = 40, height = 10,
                 tui.Text { key = "title", "Step 2/3: Contact Info" },
-                tui.TextInput {
+                extra.TextInput {
                     key = "email_input",
                     value = data.email or "",
                     onChange = function(v) updateField("email", v) end,
@@ -189,7 +190,7 @@ function suite:test_wizard_form_navigation()
                     placeholder = "Email",
                     width = 30,
                 },
-                tui.Newline { key = "nl" },
+                extra.Newline { key = "nl" },
                 tui.Text { key = "hint", "Enter: Next" },
             }
         else
@@ -198,7 +199,7 @@ function suite:test_wizard_form_navigation()
                 tui.Text { key = "title", "Step 3/3: Review" },
                 tui.Text { key = "name", ("Name: %s"):format(data.name or "") },
                 tui.Text { key = "email", ("Email: %s"):format(data.email or "") },
-                tui.Newline { key = "nl" },
+                extra.Newline { key = "nl" },
                 tui.Text { key = "hint", "Press Enter to submit" },
             }
         end
@@ -250,7 +251,7 @@ function suite:test_form_with_validation()
         return tui.Box {
             width = 40, height = 8,
             tui.Text { key = "title", "Email Form" },
-            tui.TextInput {
+            extra.TextInput {
                 key = "email_input",
                 value = email,
                 onChange = setEmail,
@@ -296,7 +297,7 @@ function suite:test_form_with_select()
         return tui.Box {
             width = 30, height = 10,
             tui.Text { key = "label", "Select an option:" },
-            tui.Select {
+            extra.Select {
                 key = "select",
                 items = items,
                 onSelect = function(item)

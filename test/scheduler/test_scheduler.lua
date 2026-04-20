@@ -1,7 +1,7 @@
 -- test/test_scheduler.lua — scheduler backend injection + timer semantics.
 
 local lt        = require "ltest"
-local scheduler = require "tui.scheduler"
+local scheduler = require "tui.internal.scheduler"
 
 -- Fake backend: deterministic virtual clock, no real sleeping.
 local function make_fake_backend()

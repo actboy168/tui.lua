@@ -1,6 +1,7 @@
 -- test/input/test_newline.lua — tests for Newline and Spacer components.
 local lt = require "ltest"
 local tui = require "tui"
+local extra = require "tui.extra"
 local testing = require "tui.testing"
 
 local test_newline = lt.test "newline"
@@ -14,7 +15,7 @@ function test_newline:test_newline_default_count()
         return tui.Box {
             flexDirection = "column",
             tui.Text { key = "first", "first" },
-            tui.Newline { key = "nl" },
+            extra.Newline { key = "nl" },
             tui.Text { key = "second", "second" },
         }
     end
@@ -35,7 +36,7 @@ function test_newline:test_newline_with_count()
         return tui.Box {
             flexDirection = "column",
             tui.Text { key = "first", "first" },
-            tui.Newline { key = "nl", count = 2 },
+            extra.Newline { key = "nl", count = 2 },
             tui.Text { key = "second", "second" },
         }
     end
@@ -57,7 +58,7 @@ function test_newline:test_newline_in_row_layout()
         return tui.Box {
             flexDirection = "row",
             tui.Text { key = "left", "left" },
-            tui.Newline { key = "nl" },
+            extra.Newline { key = "nl" },
             tui.Text { key = "right", "right" },
         }
     end
@@ -81,7 +82,7 @@ function test_newline:test_spacer_fills_space()
             flexDirection = "column",
             height = 5,
             tui.Text { key = "top", "top" },
-            tui.Spacer { key = "spacer" },
+            extra.Spacer { key = "spacer" },
             tui.Text { key = "bottom", "bottom" },
         }
     end
@@ -106,7 +107,7 @@ function test_newline:test_spacer_in_row()
             flexDirection = "row",
             width = 20,
             tui.Text { key = "a", "A" },
-            tui.Spacer { key = "spacer" },
+            extra.Spacer { key = "spacer" },
             tui.Text { key = "b", "B" },
         }
     end
@@ -127,8 +128,8 @@ function test_newline:test_spacer_multiple()
             flexDirection = "column",
             height = 5,
             tui.Text { key = "top", "top" },
-            tui.Spacer { key = "s1" },
-            tui.Spacer { key = "s2" },
+            extra.Spacer { key = "s1" },
+            extra.Spacer { key = "s2" },
             tui.Text { key = "bottom", "bottom" },
         }
     end
@@ -152,8 +153,8 @@ function test_newline:test_newline_and_spacer_combined()
             flexDirection = "column",
             height = 6,
             tui.Text { key = "header", "header" },
-            tui.Newline { key = "nl", count = 1 },
-            tui.Spacer { key = "spacer" },
+            extra.Newline { key = "nl", count = 1 },
+            extra.Spacer { key = "spacer" },
             tui.Text { key = "footer", "footer" },
         }
     end
