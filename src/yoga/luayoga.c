@@ -507,14 +507,61 @@ lsetRight(lua_State *L, YGNodeRef node) {
 
 // --- node_set_box_props / node_set_text_props helpers ---
 
-// coerce_table_to_string: replace the table at stack top with "v1 v2 ..." string.
+// Named-key edge expansion for padding/margin tables like { left=1, right=2 }.
+// If the table has any named keys, expand them and return true (caller should
+// pop the table and skip the scalar setter).  Otherwise return false.
+struct named_edge { const char *key; setfunc fn; };
+static const struct named_edge padding_edges[] = {
+	{ "top",    lsetPaddingTop    },
+	{ "bottom", lsetPaddingBottom },
+	{ "left",   lsetPaddingLeft   },
+	{ "right",  lsetPaddingRight  },
+	{ "x",      lsetPaddingX      },
+	{ "y",      lsetPaddingY      },
+};
+static const struct named_edge margin_edges[] = {
+	{ "top",    lsetMarginTop    },
+	{ "bottom", lsetMarginBottom },
+	{ "left",   lsetMarginLeft   },
+	{ "right",  lsetMarginRight  },
+	{ "x",      lsetMarginX      },
+	{ "y",      lsetMarginY      },
+};
+
+static int
+expand_named_edges(lua_State *L, YGNodeRef node, int tbl, const struct named_edge *edges, int n) {
+	int expanded = 0;
+	for (int i = 0; i < n; i++) {
+		if (lua_getfield(L, tbl, edges[i].key) != LUA_TNIL) {
+			edges[i].fn(L, node);
+			expanded = 1;
+		}
+		lua_pop(L, 1);
+	}
+	return expanded;
+}
+
+// coerce_table_to_string: replace the table at stack position tbl with "v1 v2 ..." string.
 // Used so margin={1,2} can be passed as the string "1 2" to setFourNumber.
-static void
-coerce_table_to_string(lua_State *L) {
+// Returns 1 if the table was expanded via named keys (caller pops the table),
+// or 0 if it was coerced to a string (caller proceeds with scalar setter).
+static int
+coerce_or_expand_table(lua_State *L, int tbl, YGNodeRef node, const char *prop_key) {
+	// Check for named keys first (padding/margin only).
+	if (strcmp(prop_key, "padding") == 0) {
+		if (expand_named_edges(L, node, tbl, padding_edges,
+				(int)(sizeof(padding_edges)/sizeof(padding_edges[0]))))
+			return 1;
+	} else if (strcmp(prop_key, "margin") == 0) {
+		if (expand_named_edges(L, node, tbl, margin_edges,
+				(int)(sizeof(margin_edges)/sizeof(margin_edges[0]))))
+			return 1;
+	}
+	// Array-style table: coerce to "v1 v2 ..." string.
 	luaL_Buffer b;
 	luaL_buffinit(L, &b);
 	for (int j = 1; ; j++) {
-		lua_rawgeti(L, -1, j);
+		lua_rawgeti(L, tbl, j);
 		if (lua_type(L, -1) == LUA_TNIL) { lua_pop(L, 1); break; }
 		if (j > 1) luaL_addchar(&b, ' ');
 		size_t len;
@@ -523,7 +570,8 @@ coerce_table_to_string(lua_State *L) {
 		lua_pop(L, 1);
 	}
 	luaL_pushresult(&b);
-	lua_replace(L, -2);
+	lua_replace(L, tbl);
+	return 0;
 }
 
 // Static setter array for all box-layout props (matches layout.lua's PASSTHROUGH_KEYS
@@ -592,7 +640,12 @@ lnodeSetBoxProps(lua_State *L) {
 	for (int i = 0; i < N_BOX_SETTERS; i++) {
 		int vtype = lua_getfield(L, 2, box_setter_list[i].key);
 		if (vtype == LUA_TTABLE) {
-			coerce_table_to_string(L);
+			int tbl = lua_gettop(L);
+			if (coerce_or_expand_table(L, tbl, node, box_setter_list[i].key)) {
+				// Named-key table was expanded into individual edge calls.
+				lua_pop(L, 1);
+				continue;
+			}
 			vtype = LUA_TSTRING;
 		}
 		if (vtype != LUA_TNIL)
