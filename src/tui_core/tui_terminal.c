@@ -10,6 +10,10 @@
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 
+#ifndef ENABLE_MOUSE_INPUT
+#  define ENABLE_MOUSE_INPUT 0x0010
+#endif
+
 /* ── 输出 ─────────────────────────────────────────────────────── */
 
 static int
@@ -324,6 +328,7 @@ l_test_normalize_input(lua_State *L) {
 static DWORD s_orig_in_mode  = 0;
 static DWORD s_orig_out_mode = 0;
 static int   s_raw_saved     = 0;
+static DWORD s_last_mouse_buttons = 0;
 
 static int
 l_set_raw(lua_State *L) {
@@ -340,16 +345,27 @@ l_set_raw(lua_State *L) {
         }
         DWORD raw_in = s_orig_in_mode
             & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
-        raw_in |= ENABLE_WINDOW_INPUT;
+        raw_in |= ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT;
         SetConsoleMode(hin, raw_in);
     } else {
         if (s_raw_saved) {
             SetConsoleMode(hin,  s_orig_in_mode);
             SetConsoleMode(hout, s_orig_out_mode);
             s_raw_saved = 0;
+            s_last_mouse_buttons = 0;
         }
     }
     return 0;
+}
+
+/* ── 将原生 MOUSE_EVENT 转换为 SGR 扩展鼠标序列 ─────────────── */
+static void
+append_sgr_mouse(char *buf, int *len, int max_len, int pb, int px, int py, int release) {
+    if (*len + 32 > max_len) return;
+    int n = snprintf(buf + *len, max_len - *len,
+                     release ? "\x1b[<%d;%d;%dm" : "\x1b[<%d;%d;%dM",
+                     pb, px, py);
+    if (n > 0) *len += n;
 }
 
 /* ── l_read_raw：非阻塞，ReadConsoleInputW + 正确 IME 过滤 ─────── */
@@ -361,6 +377,7 @@ l_set_raw(lua_State *L) {
  *   3. uChar.UnicodeChar != 0：文本输入（含 IME 最终确认的汉字）。
  *      IME 确认后产生的字符事件，vk 通常为 0 或非 0xE5，wch 为目标字符。
  *   4. uChar.UnicodeChar == 0：功能键，通过 vk 映射到 ANSI escape。
+ *   5. MOUSE_EVENT：转换为 SGR 扩展鼠标序列，供 keys.parse 统一解析。
  */
 static int
 l_read_raw(lua_State *L) {
@@ -377,6 +394,59 @@ l_read_raw(lua_State *L) {
     if (!ReadConsoleInputW(hin, recs, 64, &nread) || nread == 0)
         return 0;
 
+    char buf[512];
+    int len = 0;
+
+    for (DWORD i = 0; i < nread && len < (int)sizeof(buf) - 8; i++) {
+        INPUT_RECORD *src = &recs[i];
+
+        /* ── MOUSE_EVENT → SGR 序列 ───────────────────────────────── */
+        if (src->EventType == MOUSE_EVENT) {
+            MOUSE_EVENT_RECORD *me = &src->Event.MouseEvent;
+            DWORD btn   = me->dwButtonState;
+            DWORD flags = me->dwEventFlags;
+            int   px    = me->dwMousePosition.X + 1;
+            int   py    = me->dwMousePosition.Y + 1;
+            DWORD mods  = me->dwControlKeyState;
+
+            int pb_mod = 0;
+            if (mods & SHIFT_PRESSED)                   pb_mod += 4;
+            if (mods & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) pb_mod += 8;
+            if (mods & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) pb_mod += 16;
+
+            if (flags == MOUSE_WHEELED) {
+                short delta = (short)(btn >> 16);
+                int pb = (delta > 0) ? 64 : 65;
+                pb += pb_mod;
+                append_sgr_mouse(buf, &len, sizeof(buf), pb, px, py, 0);
+            } else if (flags == 0 || flags == DOUBLE_CLICK) {
+                DWORD changed = btn ^ s_last_mouse_buttons;
+                /* release first (more natural order) */
+                for (int b = 0; b < 3; b++) {
+                    if ((changed & (1 << b)) && !(btn & (1 << b))) {
+                        int sgr_btn = (b == 0) ? 0 : (b == 1) ? 2 : 1;
+                        append_sgr_mouse(buf, &len, sizeof(buf), sgr_btn + pb_mod, px, py, 1);
+                    }
+                }
+                for (int b = 0; b < 3; b++) {
+                    if ((changed & (1 << b)) && (btn & (1 << b))) {
+                        int sgr_btn = (b == 0) ? 0 : (b == 1) ? 2 : 1;
+                        append_sgr_mouse(buf, &len, sizeof(buf), sgr_btn + pb_mod, px, py, 0);
+                    }
+                }
+                s_last_mouse_buttons = btn;
+            } else if (flags == MOUSE_MOVED) {
+                int pb = 32 + pb_mod;
+                if (btn & 0x01)      pb += 0;  /* left drag */
+                else if (btn & 0x04) pb += 1;  /* middle drag */
+                else if (btn & 0x02) pb += 2;  /* right drag */
+                else                 pb += 3;  /* hover (no buttons) */
+                append_sgr_mouse(buf, &len, sizeof(buf), pb, px, py, 0);
+            }
+            continue;
+        }
+    }
+
     memset(krecs, 0, sizeof(krecs));
     for (DWORD i = 0; i < nread; i++) {
         INPUT_RECORD *src = &recs[i];
@@ -389,8 +459,8 @@ l_read_raw(lua_State *L) {
         dst->control = (uint32_t)src->Event.KeyEvent.dwControlKeyState;
     }
 
-    char buf[512];
-    int len = append_key_records(krecs, (size_t)nread, buf, (int)sizeof(buf));
+    int key_len = append_key_records(krecs, (size_t)nread, buf + len, (int)sizeof(buf) - len);
+    len += key_len;
 
     if (len == 0) return 0;
     lua_pushlstring(L, buf, len);

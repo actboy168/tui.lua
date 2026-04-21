@@ -453,7 +453,36 @@ local function text_input_impl(props)
     }
     declareCursor(text_el)
 
-    return text_el
+    -- Mouse support: wrap the Text element in a Box so the framework's
+    -- hit-test can dispatch onClick events to this component.
+    local onClick
+    if not disabled then
+        onClick = function(ev)
+            -- Click to focus
+            if not focus_flag then
+                focus_handle.focus()
+            end
+            -- Click to move cursor: localCol is the 0-based column offset
+            -- relative to the handler Box (provided by hit_test.dispatch_click).
+            local local_col = ev.localCol
+            if local_col < 0 then local_col = 0 end
+            -- Convert display column to character index
+            local new_caret = core.col_to_char_index(chars, local_col, mask)
+            if new_caret ~= nil then
+                ctx_ref.set_caret(new_caret)
+                ctx_ref.set_anchor(nil)
+                ctx_ref.caret = new_caret
+                ctx_ref.anchor = nil
+            end
+        end
+    end
+
+    return tui.Box {
+        width  = render_width,
+        height = 1,
+        onClick = onClick,
+        text_el,
+    }
 end
 
 -- Public factory. `key` (if any) is hoisted to the element for reconciler

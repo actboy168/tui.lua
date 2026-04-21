@@ -27,6 +27,7 @@ local cursor_mod = require "tui.internal.cursor"
 local ansi       = require "tui.internal.ansi"
 local text_mod   = require "tui.internal.text"
 local clipboard  = require "tui.internal.clipboard"
+local hit_test   = require "tui.internal.hit_test"
 local tui_core   = require "tui_core"
 
 local terminal = tui_core.terminal
@@ -299,6 +300,11 @@ function M.render(root, opts)
     -- Track last display cursor position for clean exit (see teardown below).
     local last_display_y = nil
 
+    -- Auto-enable mouse mode when the tree contains onClick/onScroll handlers.
+    -- Managed as a persistent level-1 request that is held while any handler
+    -- exists in the tree and released when none remain.
+    local _mouse_auto_release = nil
+
     local function paint(term)
         local w, h = terminal.get_size()
         local cw, ch = screen_mod.size(screen_state)
@@ -310,6 +316,19 @@ function M.render(root, opts)
             screen_mod.invalidate(screen_state)
         end
         local tree = produce_tree(rec_state, root, app_handle, w, h, interactive)
+        -- Store the laid-out tree for mouse hit testing before painting
+        -- (painting may modify elements in-place, but rects are stable).
+        hit_test.set_tree(tree)
+        -- Auto-enable mouse mode when the tree has click/scroll handlers.
+        -- This ensures components like TextInput/Textarea work without the
+        -- user needing to call useMouse manually.
+        local needs_mouse = interactive and hit_test.has_mouse_props(tree)
+        if needs_mouse and not _mouse_auto_release then
+            _mouse_auto_release = input_mod.request_mouse_level(1)
+        elseif not needs_mouse and _mouse_auto_release then
+            _mouse_auto_release()
+            _mouse_auto_release = nil
+        end
         screen_mod.clear(screen_state)
         renderer.paint(tree, screen_state)
 
@@ -372,6 +391,17 @@ function M.render(root, opts)
         return should_exit
     end
 
+    -- Hit-test hook: called by input._process_event for mouse events
+    -- before they are broadcast to useMouse subscribers.
+    input_mod.set_hit_test_handler(function(ev)
+        if ev.type == "down" and ev.button == 1 then
+            return hit_test.dispatch_click(ev.x, ev.y)
+        elseif ev.type == "scroll" then
+            return hit_test.dispatch_scroll(ev.x, ev.y, ev.scroll)
+        end
+        return false
+    end)
+
     local ok, err = pcall(function()
         scheduler._reset()
         scheduler.run {
@@ -386,6 +416,8 @@ function M.render(root, opts)
     -- level refs here via useEffect cleanup, then _reset zeroes everything).
     reconciler.shutdown(rec_state)
     input_mod._reset()
+    hit_test.clear_tree()
+    _mouse_auto_release = nil  -- already released by _reset, just drop the ref
     resize_mod._reset()
     focus_mod._reset()
 

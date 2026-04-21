@@ -2003,6 +2003,117 @@ function suite:test_delete_wide_char_caret_offset_unchanged()
     h:unmount()
 end
 
+-- =========================================================================
+-- Mouse click tests (via testing.load_app)
+-- =========================================================================
+--
+-- Uses test/apps/text_input_app.lua (two TextInput fields) to test mouse
+-- interactions end-to-end through the hit-test pipeline.
+
+local function find_clickable_boxes(tree)
+    local out = {}
+    local function walk(e)
+        if not e then return end
+        if e.kind == "box" and e.props and type(e.props.onClick) == "function" then
+            out[#out + 1] = e
+        end
+        if e.children then
+            for _, c in ipairs(e.children) do walk(c) end
+        end
+    end
+    walk(tree)
+    return out
+end
+
+-- Click on an unfocused TextInput to focus it, then type.
+function suite:test_click_focuses_textinput()
+    testing.capture_stderr(function()
+        local App = testing.load_app("test/apps/text_input_app.lua")
+        local h   = testing.render(App, { cols = 40, rows = 5 })
+
+        -- Find all clickable Boxes; the two TextInputs each have one.
+        local boxes = find_clickable_boxes(h:tree())
+        lt.assertTrue(#boxes >= 2, "should find at least 2 clickable Boxes")
+
+        -- Click the second TextInput.
+        local box2 = boxes[2]
+        local r = box2.rect
+        h:mouse("down", 1, r.x + 1, r.y + 1)
+        h:mouse("up", 1, r.x + 1, r.y + 1)
+
+        -- Type into the now-focused second TextInput.
+        h:type("hi")
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("hi", 1, true), nil,
+            "should see typed text in second field after click-focus")
+        h:unmount()
+    end)
+end
+
+-- Click on a TextInput at a specific column to position the caret,
+-- then type to verify insertion at the clicked position.
+function suite:test_click_positions_cursor_in_textinput()
+    testing.capture_stderr(function()
+        local App = testing.load_app("test/apps/text_input_app.lua")
+        local h   = testing.render(App, { cols = 40, rows = 5 })
+
+        -- Type some text first (autoFocus is on the first field).
+        h:type("hello")
+
+        -- Find the first TextInput's clickable Box.
+        local boxes = find_clickable_boxes(h:tree())
+        lt.assertTrue(#boxes >= 1)
+        local box = boxes[1]
+        local r = box.rect
+
+        -- Click at column offset 2 (3rd cell) to move the cursor between 'e' and 'l'.
+        local click_x = r.x + 1 + 2
+        local click_y = r.y + 1
+        h:mouse("down", 1, click_x, click_y)
+        h:mouse("up", 1, click_x, click_y)
+
+        -- Type at the new cursor position → "heXllo"
+        h:type("X")
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("heXllo", 1, true), nil,
+            "cursor should be repositioned by click; got: " .. (frame:match("[^\n]+") or ""))
+        h:unmount()
+    end)
+end
+
+-- Click on one TextInput, then click another to switch focus.
+function suite:test_click_switches_focus_between_textinputs()
+    testing.capture_stderr(function()
+        local App = testing.load_app("test/apps/text_input_app.lua")
+        local h   = testing.render(App, { cols = 40, rows = 5 })
+
+        -- Type into the first TextInput (autoFocus).
+        h:type("user")
+
+        -- Click on the second TextInput.
+        local boxes = find_clickable_boxes(h:tree())
+        lt.assertTrue(#boxes >= 2)
+        local r2 = boxes[2].rect
+        h:mouse("down", 1, r2.x + 1, r2.y + 1)
+        h:mouse("up", 1, r2.x + 1, r2.y + 1)
+
+        -- Type into the second field.
+        h:type("pw")
+
+        -- Click back on the first TextInput (at the end of "user" = col 4).
+        local r1 = boxes[1].rect
+        h:mouse("down", 1, r1.x + 1 + 4, r1.y + 1)
+        h:mouse("up", 1, r1.x + 1 + 4, r1.y + 1)
+
+        -- Type at end of first field.
+        h:type("1")
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("user1", 1, true), nil,
+            "should type at end of first field after click-back")
+        h:unmount()
+    end)
+end
+
 -- Value externally changed to a longer string: caret stays at previous position without going out of bounds.
 function suite:test_caret_stays_when_value_grows_externally()
     local v = "ab"

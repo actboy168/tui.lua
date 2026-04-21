@@ -117,6 +117,9 @@ local function textarea_impl(props)
     ctx.value       = value
     ctx.scroll_window = scroll_window
     ctx.set_anchor = set_selection_anchor
+    ctx.set_caret_line = set_caret_line
+    ctx.set_caret_col = set_caret_col
+    ctx.set_scroll_top = set_scroll_top
     ctx.clipboard   = clipboard
     ctx.features = features
     ctx.keymap = keymap
@@ -682,11 +685,61 @@ local function textarea_impl(props)
         row_elements[r + 1] = row_el
     end
 
+    -- Mouse support: add onClick and onScroll to the outer Box.
+    -- localCol/localRow are 0-based offsets relative to the handler Box,
+    -- provided by hit_test.dispatch_click / dispatch_scroll.
+    local onClick
+    if not disabled then
+        onClick = function(ev)
+            -- Click to focus
+            if not focus_flag then
+                focus_handle.focus()
+            end
+            -- Click to move cursor
+            local local_row = ev.localRow
+            local local_col = ev.localCol
+            if local_row < 0 then local_row = 0 end
+            if local_col < 0 then local_col = 0 end
+            -- Convert local row to line index (1-based)
+            local target_line = st + local_row + 1
+            if target_line > #lines_now then target_line = #lines_now end
+            if target_line < 1 then target_line = 1 end
+            -- Convert display column to char index for that line
+            local line_chars = lines_now[target_line]
+            local target_col = core.col_to_char_index(line_chars, local_col, nil)
+            ctx.set_caret_line(target_line)
+            ctx.set_caret_col(target_col)
+            ctx.set_anchor(nil)
+            ctx.cl = target_line
+            ctx.cc = target_col
+            ctx.anchor = nil
+        end
+    end
+
+    local onScroll
+    if not disabled then
+        onScroll = function(ev)
+            if not focus_flag then
+                focus_handle.focus()
+            end
+            -- Scroll: direction 1 = scroll_up (wheel up, viewport moves up, st decreases)
+            --         direction -1 = scroll_down (wheel down, viewport moves down, st increases)
+            local new_st = st - ev.direction
+            new_st = math.max(0, math.min(new_st, nlines - scroll_window))
+            if new_st ~= st then
+                set_scroll_top(new_st)
+                ctx.st = new_st
+            end
+        end
+    end
+
     return tui.Box {
         ref = measureRef,
         flexDirection = "column",
         width = width,
         height = vis_height,
+        onClick = onClick,
+        onScroll = onScroll,
         table.unpack(row_elements),
     }
 end

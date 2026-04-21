@@ -1006,3 +1006,164 @@ function suite:test_windows_ime_confirm_space_not_inserted()
     lt.assertEquals(value, "中午中午")
     h:unmount()
 end
+
+-- =========================================================================
+-- Mouse click tests (via testing.load_app)
+-- =========================================================================
+--
+-- Uses chat.lua (which has a Textarea) to test mouse interactions
+-- end-to-end through the hit-test pipeline.
+
+local function find_clickable_box(tree)
+    local function walk(e)
+        if not e then return nil end
+        if e.kind == "box" and e.props and type(e.props.onClick) == "function" then
+            return e
+        end
+        for _, c in ipairs(e.children or {}) do
+            local r = walk(c)
+            if r then return r end
+        end
+    end
+    return walk(tree)
+end
+
+local function find_scrollable_box(tree)
+    local function walk(e)
+        if not e then return nil end
+        if e.kind == "box" and e.props and type(e.props.onScroll) == "function" then
+            return e
+        end
+        for _, c in ipairs(e.children or {}) do
+            local r = walk(c)
+            if r then return r end
+        end
+    end
+    return walk(tree)
+end
+
+-- Click on the Textarea to focus it, then type to verify input goes in.
+function suite:test_click_focuses_textarea()
+    testing.capture_stderr(function()
+        local App = testing.load_app("test/apps/textarea_app.lua")
+        local h   = testing.render(App, { cols = 30, rows = 6 })
+
+        -- Find the Textarea's clickable Box and click it.
+        local box = find_clickable_box(h:tree())
+        lt.assertNotEquals(box, nil, "should find a clickable Box")
+        local r = box.rect
+        h:mouse("down", 1, r.x + 1, r.y + 1)
+        h:mouse("up", 1, r.x + 1, r.y + 1)
+
+        -- Type into the now-focused Textarea.
+        h:type("hello")
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("hello", 1, true), nil,
+            "typed text should appear in the Textarea")
+        h:unmount()
+    end)
+end
+
+-- Click at a specific column in the Textarea to reposition the cursor.
+function suite:test_click_positions_cursor_in_textarea()
+    testing.capture_stderr(function()
+        local App = testing.load_app("test/apps/textarea_app.lua")
+        local h   = testing.render(App, { cols = 30, rows = 6 })
+
+        -- Type some text first (autoFocus).
+        h:type("abcde")
+
+        -- Find the Textarea's clickable Box.
+        local box = find_clickable_box(h:tree())
+        lt.assertNotEquals(box, nil)
+        local r = box.rect
+
+        -- Click at column offset 2 (3rd cell) within the Box.
+        local click_x = r.x + 1 + 2
+        local click_y = r.y + 1
+        h:mouse("down", 1, click_x, click_y)
+        h:mouse("up", 1, click_x, click_y)
+
+        -- Type at the new cursor position.
+        h:type("X")
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("abXcde", 1, true), nil,
+            "cursor should be repositioned by click")
+        h:unmount()
+    end)
+end
+
+-- Click on a specific row in a multi-line Textarea to move the cursor
+-- to that line.
+function suite:test_click_moves_to_different_line()
+    testing.capture_stderr(function()
+        local App = testing.load_app("test/apps/textarea_app.lua")
+        local h   = testing.render(App, { cols = 30, rows = 6 })
+
+        -- Type two lines of text.
+        h:type("line1")
+        h:press("shift+enter")
+        h:type("line2")
+
+        -- Find the Textarea's clickable Box.
+        local box = find_clickable_box(h:tree())
+        lt.assertNotEquals(box, nil)
+        local r = box.rect
+
+        -- Cursor is at end of "line2" (row 1). Click on row 0 at col 5
+        -- (past the '1' in "line1") to move caret to end of line 1.
+        local click_x = r.x + 1 + 5  -- col 5 within the Box (past "line1")
+        local click_y = r.y + 1       -- first row of the Box (0-based row 0)
+        h:mouse("down", 1, click_x, click_y)
+        h:mouse("up", 1, click_x, click_y)
+
+        -- Type to verify we're at end of line 1.
+        h:type("!")
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("line1!", 1, true), nil,
+            "should type on line 1 after clicking it")
+        h:unmount()
+    end)
+end
+
+-- Mouse scroll in the Textarea scrolls the viewport when content overflows.
+function suite:test_scroll_in_textarea()
+    testing.capture_stderr(function()
+        local App = testing.load_app("test/apps/textarea_app.lua")
+        local h   = testing.render(App, { cols = 30, rows = 6 })
+
+        -- Fill the Textarea with many lines to force scrolling.
+        -- Textarea height=4, so only 4 rows visible at a time.
+        for i = 1, 5 do
+            h:type("L" .. i)
+            h:press("shift+enter")
+        end
+        h:type("L6")
+
+        -- Move cursor to line 3 (middle of viewport) so scrolling down
+        -- keeps the cursor visible and clamp_scroll won't undo it.
+        h:press("ctrl+home")  -- cursor at line 1
+        h:press("down")       -- line 2
+        h:press("down")       -- line 3
+
+        -- Verify L1 is visible.
+        local frame_before = h:frame()
+        lt.assertNotEquals(frame_before:find("L1", 1, true), nil,
+            "L1 should be visible before scroll_down")
+
+        -- Find the scrollable Box.
+        local box = find_scrollable_box(h:tree())
+        lt.assertNotEquals(box, nil, "should find a scrollable Box")
+        local r = box.rect
+
+        -- Scroll down. Cursor is at line 3, scroll_top=0, visible rows 1-4.
+        -- After scroll_down, scroll_top=1, visible rows 2-5. Cursor at line 3 is still visible.
+        h:mouse("scroll_down", nil, r.x + 1, r.y + 1)
+
+        -- After scrolling down, L1 should have moved out of view.
+        local frame_after = h:frame()
+        lt.assertEquals(frame_after:find("L1", 1, true), nil,
+            "L1 should have scrolled out of view")
+        h:unmount()
+    end)
+end

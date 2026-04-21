@@ -22,10 +22,11 @@ _暂无_
 
 ### 鼠标交互扩展
 
-- `P1` **命中测试 / `onClick` prop**：Box 持有 layout 坐标，框架层做 hit-test；在 Box 上暴露 `onClick` / `onMouseEnter` / `onMouseLeave` prop，是 Button、ScrollBox 等组件的基础（Lua 层为主）
-- `P2` **`useHover()` hook**：依赖命中测试，返回 `{hovered=bool}`，组件内直接使用无需手算鼠标坐标（Lua 层）
+- `P1` ~~**命中测试 / `onClick` prop**~~ ✅ 已完成：框架层 `hit_test.lua` 实现 hit-test + 事件冒泡；Box 支持 `onClick` / `onScroll` prop；TextInput/Textarea 通过 onClick 支持点击聚焦和光标定位；`has_mouse_props()` 自动启用终端鼠标模式；测试工具 (harness) 已接入 hit-test 管线
+- `P1` **TextInput/Textarea 拖拽选区**：基于 `useMouse` 监听 drag 事件（`request_mouse_level(2)`），维护选区起点和终点状态，拖拽时实时更新选区高亮；TextInput 和 Textarea 均需支持
+- `P2` **双击选词 / 三击选行**：依赖拖拽选区实现；300ms 内双击→选词（基于 `core.find_word_left/right`），三击→选行；需在 hit_test 或 input 中维护点击计数状态
+- `P2` **`useHover()` hook**：依赖命中测试，返回 `{hovered=bool}`，组件内直接使用无需手算鼠标坐标（Lua 层）；需要 `request_mouse_level(3)` 监听 move 事件 + hit_test 分派 `onMouseEnter`/`onMouseLeave`
 - `P2` **鼠标框选 + 高亮**：以插件/中间件形式实现，不嵌入核心。主要步骤：① 用 `input_mod.subscribe_mouse` + `request_mouse_level(2)` 监听拖拽事件；② 维护选区状态（`selection.lua` 已有）；③ 在每帧 `paint()` 后调用 `tui_core.screen.overlay_selection()` 写入 ATTR_INVERSE；④ Esc 清除选区；⑤ mouseup 时通过 OSC 52 / clipboard.copy 复制文本。`tui/internal/selection.lua` 和 C 层 `overlay_selection` 已实现，可直接复用。
-- `P3` **双击选词 / 三击选行**：依赖框选插件，300ms 内双击→选词，三击→选行
 - `P3` `mouse_events.lua` 示例：演示 `useMouse`、click、scroll wheel
 
 ### 内置组件扩充
@@ -58,12 +59,23 @@ _暂无_
 
 ### 测试覆盖
 
+- `P2` **hit_test 单元测试**：`hit_test.lua` 的 `do_hit_test`、`dispatch_click`、`dispatch_scroll`、`has_mouse_props` 路径尚无独立单元测试
+- `P2` ~~**TextInput 鼠标交互测试**~~ ✅ 已完成：使用 `load_app("test/apps/text_input_app.lua")` 测试点击聚焦、点击定位光标、点击切换焦点
+- `P2` ~~**Textarea 鼠标交互测试**~~ ✅ 已完成：使用 `load_app("test/apps/textarea_app.lua")` 测试点击聚焦、点击定位光标、点击切换行、滚动视口
+- `P2` **其他控件测试迁移到 load_app 模式**：Select、Spinner、Static、ProgressBar 等控件的测试目前使用内联 App，应迁移到 `test/apps/` 独立 fixture + `load_app` 模式（参考 text_input / textarea 的迁移方式）
+- `P2` **test/apps fixture 自身验证**：`text_input_app.lua` 和 `textarea_app.lua` 作为测试基础设施，缺少直接验证其能正确加载和渲染的测试
+- `P2` **滚动测试健壮性改进**：`test_scroll_in_textarea` 依赖光标位置避免 `clamp_scroll` 回滚，应增加 `clamp_scroll` 独立单元测试，或使测试更明确表达前提
 - `P2` **ErrorBoundary 嵌套场景**
 - `P2` **并发 setState 稳定化循环边界**：MAX_STABILIZE_PASSES 边界行为
 - `P2` **核心模块入门测试**：`init.lua`、`renderer.lua`、`input.dispatch` 中间件链（pre → focus → broadcast）
 - `P2` **集成测试：监控仪表盘**：useInterval + ProgressBar + Spinner
 - `P2` **集成测试：终端缩放**：useWindowSize + Box 动态 resize
 - `P3` **`testing.simulate_mouse`**：测试套件里方便触发鼠标事件，通过 `input_mod._dispatch_event()` 分发，降低鼠标交互测试摩擦
+
+### 代码清理
+
+- `P3` **简化 `textarea_app.lua`**：父 Box 已固定 `height=4`，Textarea 的 `maxHeight=4` 冗余，可移除让 Textarea 自然填充
+- `P3` **统一鼠标滚动方向约定检查**：确认 `tui/init.lua` 生产环境鼠标事件处理与 `textarea.lua` 的 `onScroll` 方向约定一致，避免测试和生产行为分歧
 
 ### 架构改进
 
@@ -82,7 +94,7 @@ _暂无_
 
 - `P2` **终端身份探测**：XTVERSION/DA1 查询，针对不同终端（iTerm2、Kitty、WezTerm、conhost 等）缓存能力并做兼容处理（C + Lua）
 - `P2` **Windows 终端兼容**：检测并规避 conhost cursor-up viewport yank bug；其他 Windows Terminal 特定缺陷处理（C + Lua）
-- `P2` **Windows Terminal / VS Code Terminal 鼠标兼容**：当前相关改动已回滚并暂缓；后续需要重新定位为何这些终端下鼠标事件未稳定进入现有 `useMouse` / editor 选择路径，避免再次影响 Shift+Enter 等键盘行为
+- `P2` **Windows Terminal / VS Code Terminal 鼠标兼容**：✅ `tui_terminal.c` 已支持将 Windows 原生 `MOUSE_EVENT_RECORD` 转换为 SGR 扩展鼠标序列；hit_test + auto mouse mode 已确保 `onClick`/`onScroll` 在 Windows 下正常工作；剩余问题：Windows Terminal / VS Code Terminal 下 `useMouse` / editor 拖选路径仍需验证（相关改动曾回滚并暂缓，避免影响 Shift+Enter 等键盘行为）
 - `P2` **tmux/screen 穿透**：DCS 封装，使 OSC/DCS 序列在 tmux multiplexer 下正确透传（C + Lua）
 
 ### Kitty Keyboard Protocol 扩展（基础 KKP 已实现）

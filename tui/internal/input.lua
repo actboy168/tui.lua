@@ -101,6 +101,18 @@ end
 -- A middleware that returns true consumes the event (stops all further processing).
 local _middlewares = {}
 
+-- Hit-test handler: fn(ev) -> bool.
+-- Set by init.lua during tui.render(). Called for mouse events before
+-- _mouse_bus.dispatch. If it returns true, the event is consumed and
+-- not forwarded to useMouse subscribers.
+local _hit_test_handler = nil
+
+--- set_hit_test_handler(fn | nil)
+-- Injects the hit-test handler (called from init.lua render loop).
+function M.set_hit_test_handler(fn)
+    _hit_test_handler = fn
+end
+
 -- Bracketed-paste accumulator state (persists across dispatch() calls so
 -- multi-chunk pastes — rare but possible — are assembled correctly).
 local _pasting    = false
@@ -249,6 +261,13 @@ local function _process_event(ev)
     end
     -- ── Mouse events ──────────────────────────────────────────────────────
     if ev.name == "mouse" then
+        -- Hit-test dispatch: framework-level hit testing (onClick, onScroll, etc.)
+        -- takes priority over useMouse subscribers. If a handler consumes the
+        -- event, it is not forwarded to the mouse bus.
+        if _hit_test_handler then
+            local ok, consumed = pcall(_hit_test_handler, ev)
+            if ok and consumed then return false end
+        end
         _mouse_bus.dispatch(ev)
         return false
     end
@@ -381,6 +400,7 @@ function M._reset()
     _focus_bus._reset()
     _mouse_bus._reset()
     _middlewares  = {}
+    _hit_test_handler = nil
     _pasting      = false
     _paste_buf    = {}
     _pending_bytes = ""

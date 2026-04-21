@@ -302,6 +302,28 @@ function M.prefix_width(chars, i)
     return w
 end
 
+--- Convert a 0-based display column offset to a character index.
+-- Returns the character index whose display position is closest to `col`.
+-- If `mask` is set, every character has display width 1.
+function M.col_to_char_index(chars, col, mask)
+    if not chars or #chars == 0 then return 0 end
+    if col <= 0 then return 0 end
+    local w = 0
+    for i = 1, #chars do
+        local cw = mask and 1 or M.char_width(chars[i])
+        if w + cw > col then
+            -- The click falls within this character; snap to the closer edge.
+            if col - w < (w + cw) - col then
+                return i - 1
+            else
+                return i
+            end
+        end
+        w = w + cw
+    end
+    return #chars
+end
+
 function M.copy_chars(chars)
     local out = {}
     for i = 1, #chars do

@@ -9,6 +9,7 @@ local resize_mod    = require "tui.internal.resize"
 local focus_mod     = require "tui.internal.focus"
 local ansi_mod      = require "tui.internal.ansi"
 local hooks         = require "tui.internal.hooks"
+local hit_test      = require "tui.internal.hit_test"
 local testing_input = require "tui.testing.input"
 local testing_mouse = require "tui.testing.mouse"
 local capture       = require "tui.testing.capture"
@@ -86,6 +87,9 @@ function Harness:_paint()
         self._tree = tree
         tree = render_and_layout()
     end
+
+    -- Store the laid-out tree for mouse hit testing (mirrors init.lua paint()).
+    hit_test.set_tree(tree)
 
     screen_mod.clear(self._screen)
     renderer.paint(tree, self._screen)
@@ -370,6 +374,7 @@ function Harness:unmount()
         self._tree = nil
     end
     layout.reset()
+    hit_test.clear_tree()
     input_mod._reset()
     resize_mod._reset()
     focus_mod._reset()
@@ -536,6 +541,18 @@ function M.render(App, opts)
         now   = function() return h._fake_now end,
         sleep = function() end,
     }
+
+    -- Wire the hit-test handler so that mouse events dispatched through
+    -- the harness (h:mouse()) are routed through hit_test.dispatch_click
+    -- and hit_test.dispatch_scroll, matching the production event pipeline.
+    input_mod.set_hit_test_handler(function(ev)
+        if ev.type == "down" and ev.button == 1 then
+            return hit_test.dispatch_click(ev.x, ev.y)
+        elseif ev.type == "scroll" then
+            return hit_test.dispatch_scroll(ev.x, ev.y, ev.scroll)
+        end
+        return false
+    end)
 
     local ok, err = pcall(function() h:_paint() end)
     if not ok then

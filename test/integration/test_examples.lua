@@ -9,8 +9,10 @@
 -- testing.capture_stderr() to suppress those warnings, then unmounts before
 -- running assertions so the harness is always cleaned up.
 
-local lt      = require "ltest"
-local testing = require "tui.testing"
+local lt       = require "ltest"
+local testing  = require "tui.testing"
+local hit_test = require "tui.internal.hit_test"
+local input_helpers = require "tui.testing.input"
 
 local suite = lt.test "examples"
 
@@ -132,4 +134,150 @@ function suite:test_load_app_no_render_call_raises()
 
     lt.assertFalse(ok)
     lt.assertNotEquals(err:find("did not call tui.render", 1, true), nil)
+end
+
+-- ---------------------------------------------------------------------------
+-- chat.lua — mouse interaction tests
+-- ---------------------------------------------------------------------------
+-- The chat example uses <Textarea> which internally adds onClick/onScroll
+-- to its wrapper Box. These tests verify the hit-test → dispatch pipeline
+-- works end-to-end: click to focus, click to position cursor, scroll.
+
+--- Find the first Box element in the tree with an onClick prop.
+local function find_clickable_box(tree)
+    local function walk(e)
+        if not e then return nil end
+        if e.kind == "box" and e.props and type(e.props.onClick) == "function" then
+            return e
+        end
+        for _, c in ipairs(e.children or {}) do
+            local r = walk(c)
+            if r then return r end
+        end
+    end
+    return walk(tree)
+end
+
+--- Find the first Box element in the tree with an onScroll prop.
+local function find_scrollable_box(tree)
+    local function walk(e)
+        if not e then return nil end
+        if e.kind == "box" and e.props and type(e.props.onScroll) == "function" then
+            return e
+        end
+        for _, c in ipairs(e.children or {}) do
+            local r = walk(c)
+            if r then return r end
+        end
+    end
+    return walk(tree)
+end
+
+function suite:test_chat_tree_has_mouse_props()
+    -- The chat example's Textarea adds onClick/onScroll, so the tree
+    -- should be detected as needing mouse mode by has_mouse_props.
+    testing.capture_stderr(function()
+        local App = testing.load_app("examples/chat.lua")
+        local h   = testing.render(App, { cols = 40, rows = 10 })
+        local tree = h:tree()
+        lt.assertTrue(hit_test.has_mouse_props(tree))
+        h:unmount()
+    end)
+end
+
+function suite:test_chat_click_focuses_textarea()
+    -- Click on the Textarea area should focus it, allowing subsequent
+    -- keyboard input to go into the Textarea.
+    local value = nil
+    testing.capture_stderr(function()
+        local App = testing.load_app("examples/chat.lua")
+        local h   = testing.render(App, { cols = 40, rows = 10 })
+
+        -- Find the Textarea's clickable Box and click its first cell.
+        local box = find_clickable_box(h:tree())
+        lt.assertNotEquals(box, nil, "should find a clickable Box in the tree")
+        local r = box.rect
+        lt.assertNotEquals(r, nil, "clickable Box should have a rect")
+
+        -- Click the top-left content cell of the Textarea Box.
+        -- SGR coordinates are 1-based; rect is 0-based, so add 1.
+        local click_x = r.x + 1
+        local click_y = r.y + 1
+        h:mouse("down", 1, click_x, click_y)
+        h:mouse("up", 1, click_x, click_y)
+
+        -- Now type — should go into the Textarea.
+        h:type("hi")
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("hi", 1, true), nil, "typed text should appear in the frame")
+        h:unmount()
+    end)
+end
+
+function suite:test_chat_click_positions_cursor()
+    -- Type some text, then click at a specific column to move the cursor
+    -- and verify subsequent typing goes at the clicked position.
+    testing.capture_stderr(function()
+        local App = testing.load_app("examples/chat.lua")
+        local h   = testing.render(App, { cols = 40, rows = 10 })
+
+        -- First focus by typing (autoFocus should handle this).
+        h:type("abcde")
+
+        -- Find the Textarea's clickable Box.
+        local box = find_clickable_box(h:tree())
+        lt.assertNotEquals(box, nil)
+        local r = box.rect
+
+        -- Click at column offset 2 (3rd cell) within the Box to move cursor
+        -- between 'b' and 'c'.  SGR x = rect.x + 1 (1-based) + 2 (offset).
+        local click_x = r.x + 1 + 2
+        local click_y = r.y + 1
+        h:mouse("down", 1, click_x, click_y)
+        h:mouse("up", 1, click_x, click_y)
+
+        -- Type at the new cursor position.
+        h:type("X")
+        local frame = h:frame()
+        -- Cursor was between 'b' and 'c', so "abXcde" should appear.
+        lt.assertNotEquals(frame:find("abXcde", 1, true), nil,
+            "cursor should be repositioned by click; got: " .. frame)
+        h:unmount()
+    end)
+end
+
+function suite:test_chat_scroll_in_textarea()
+    -- When Textarea content exceeds its visible height, scroll events
+    -- should scroll the viewport. Use a small terminal and enough lines
+    -- so the content overflows.
+    testing.capture_stderr(function()
+        local App = testing.load_app("examples/chat.lua")
+        local h   = testing.render(App, { cols = 40, rows = 6 })
+
+        -- Focus and fill the Textarea with many lines.
+        -- A 6-row terminal has room for border (2 rows) + ~4 content rows.
+        -- Adding 6 lines forces scrolling.
+        for i = 1, 5 do
+            h:type("L" .. i)
+            h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter → newline
+        end
+        h:type("L6")
+
+        -- Find the scrollable Box.
+        local box = find_scrollable_box(h:tree())
+        lt.assertNotEquals(box, nil, "should find a scrollable Box")
+        local r = box.rect
+
+        -- Scroll down inside the Textarea.
+        local scroll_x = r.x + 1
+        local scroll_y = r.y + 1
+        h:mouse("scroll_down", nil, scroll_x, scroll_y)
+
+        -- After scrolling down, the first line should have moved up
+        -- out of view.
+        local frame_after = h:frame()
+        lt.assertEquals(frame_after:find("L1", 1, true), nil,
+            "L1 should have scrolled out of view")
+        h:unmount()
+    end)
 end
