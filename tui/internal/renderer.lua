@@ -113,6 +113,23 @@ local function paint(element, screen, inherit)
                     x_off = x_off + seg_w
                 end
             end
+        elseif element.runs then
+            local base_style_id = sgr.pack_style(screen, props)
+            screen_c.draw_line(screen, r.x, r.y, "", r.w, base_style_id)
+            local x_off = 0
+            for _, seg in ipairs(element.runs) do
+                local seg_props
+                if seg.props then
+                    seg_props = merge_span_props(props, seg.props)
+                else
+                    seg_props = props
+                end
+                local style_id = sgr.pack_style(screen, seg_props)
+                local seg_w    = text_mod.display_width(seg.text)
+                screen_c.draw_line(screen, r.x + x_off, r.y, seg.text, seg_w,
+                                   style_id)
+                x_off = x_off + seg_w
+            end
         elseif element.lines then
             local style_id = sgr.pack_style(screen, props)
             for li, line in ipairs(element.lines) do

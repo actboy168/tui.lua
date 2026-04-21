@@ -11,6 +11,17 @@ local input_helpers = require "tui.testing.input"
 
 local suite = lt.test "textarea"
 
+local function key_event(name, input, ctrl, shift, meta)
+    return {
+        name = name,
+        input = input or "",
+        raw = input or "",
+        ctrl = ctrl or false,
+        shift = shift or false,
+        meta = meta or false,
+    }
+end
+
 -- ---------------------------------------------------------------------------
 -- Helpers.
 -- ---------------------------------------------------------------------------
@@ -424,6 +435,410 @@ function suite:test_ctrl_enter_submit_via_csi_u()
     lt.assertEquals(#submitted, 1)
     lt.assertEquals(submitted[1], "world")
     lt.assertEquals(value, "world")
+    h:unmount()
+end
+
+function suite:test_ctrl_home_and_ctrl_end_move_across_document()
+    local value = "abc\ndef"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("ctrl+a")
+    h:type("X")
+    lt.assertEquals(value, "X")
+    h:press("backspace")
+    h:paste("abc\ndef")
+    lt.assertEquals(value, "abc\ndef")
+    h:press("ctrl+home")
+    h:type("Y")
+    lt.assertEquals(value, "Yabc\ndef")
+    h:press("ctrl+end")
+    h:type("Z")
+    lt.assertEquals(value, "Yabc\ndefZ")
+    h:unmount()
+end
+
+function suite:test_ctrl_u_ctrl_k_and_ctrl_w_are_line_local()
+    local value = "hello\nwide words here"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("ctrl+w")
+    lt.assertEquals(value, "hello\nwide words ")
+    h:press("ctrl+u")
+    lt.assertEquals(value, "hello\n")
+    h:type("again")
+    h:press("ctrl+a")
+    h:type("X")
+    lt.assertEquals(value, "X")
+    h:press("backspace")
+    h:paste("hello\nagain")
+    h:press("home")
+    h:press("ctrl+k")
+    lt.assertEquals(value, "hello\n")
+    h:unmount()
+end
+
+function suite:test_ctrl_left_right_and_delete_are_word_aware()
+    local value = "hello brave world"
+    local function App()
+        return tui.Box {
+            width = 30, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 4 })
+    h:press("ctrl+left")
+    h:press("ctrl+left")
+    h:type("X")
+    lt.assertEquals(value, "hello Xbrave world")
+    h:press("ctrl+delete")
+    lt.assertEquals(value, "hello Xworld")
+    h:unmount()
+end
+
+function suite:test_enter_behavior_newline()
+    local value = "hello"
+    local submitted = {}
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted[#submitted + 1] = v end,
+                enterBehavior = "newline",
+                height = 4,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("enter")
+    lt.assertEquals(value, "hello\n")
+    lt.assertEquals(#submitted, 0)
+    h:press("ctrl+enter")
+    lt.assertEquals(#submitted, 1)
+    lt.assertEquals(submitted[1], "hello\n")
+    h:unmount()
+end
+
+function suite:test_shift_left_type_replaces_textarea_selection()
+    local value = "abcd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("shift+left")
+    h:type("X")
+    lt.assertEquals(value, "abcX")
+    h:unmount()
+end
+
+function suite:test_shift_up_paste_replaces_multiline_selection()
+    local value = "ab\ncd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("shift+up")
+    h:paste("Z")
+    lt.assertEquals(value, "abZ")
+    h:unmount()
+end
+
+function suite:test_textarea_ime_confirm_replaces_selection()
+    local value = "ab\ncd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("home")
+    h:press("shift+end")
+    h:type_composing_confirm("中")
+    lt.assertEquals(value, "ab\n中")
+    h:unmount()
+end
+
+function suite:test_ctrl_a_highlights_multiline_selection()
+    local value = "ab\ncd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:dispatch_event(key_event("char", "a", true))
+    local row1 = h:cells(1)
+    local row2 = h:cells(2)
+    lt.assertEquals(row1[1].inverse, true)
+    lt.assertEquals(row1[2].inverse, true)
+    lt.assertEquals(row2[1].inverse, true)
+    lt.assertEquals(row2[2].inverse, true)
+    h:unmount()
+end
+
+function suite:test_copy_cut_undo_redo()
+    local value = "ab\ncd"
+    local clipboard = require "tui.internal.clipboard"
+    local old_copy = clipboard.copy
+    local copied = {}
+    clipboard.copy = function(text)
+        copied[#copied + 1] = text
+        return true
+    end
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:dispatch_event(key_event("char", "a", true))
+    h:dispatch_event(key_event("char", "c", true, true))
+    lt.assertEquals(copied[1], "ab\ncd")
+    h:dispatch_event(key_event("char", "x", true))
+    lt.assertEquals(copied[2], "ab\ncd")
+    lt.assertEquals(value, "")
+    h:dispatch_event(key_event("char", "z", true))
+    lt.assertEquals(value, "ab\ncd")
+    h:dispatch_event(key_event("char", "y", true))
+    lt.assertEquals(value, "")
+    clipboard.copy = old_copy
+    h:unmount()
+end
+
+function suite:test_textarea_typing_undo_coalesces()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:type("ab")
+    h:dispatch_event(key_event("char", "z", true))
+    lt.assertEquals(value, "")
+    h:dispatch_event(key_event("char", "y", true))
+    lt.assertEquals(value, "ab")
+    h:unmount()
+end
+
+function suite:test_can_disable_undo_and_redo_feature()
+    local value = "ab"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                height = 4,
+                features = { undoRedo = false },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:type("c")
+    lt.assertEquals(value, "abc")
+    h:dispatch_event(key_event("char", "z", true))
+    lt.assertEquals(value, "abc")
+    h:dispatch_event(key_event("char", "y", true))
+    lt.assertEquals(value, "abc")
+    h:unmount()
+end
+
+function suite:test_can_disable_selection_copy_word_kill_features()
+    local value = "ab\ncd"
+    local clipboard = require "tui.internal.clipboard"
+    local old_copy = clipboard.copy
+    local copied = {}
+    clipboard.copy = function(text)
+        copied[#copied + 1] = text
+        return true
+    end
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                height = 4,
+                features = {
+                    selection = false,
+                    copyCut = false,
+                    selectAll = false,
+                    wordOps = false,
+                    killOps = false,
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("shift+up")
+    h:type("!")
+    lt.assertEquals(value, "ab!\ncd")
+    h:dispatch_event(key_event("char", "x", true))
+    lt.assertEquals(value, "ab!\ncd")
+    lt.assertEquals(#copied, 0)
+    h:press("ctrl+left")
+    h:type("?")
+    lt.assertEquals(value, "ab!?\ncd")
+    h:press("ctrl+k")
+    lt.assertEquals(value, "ab!?\ncd")
+    clipboard.copy = old_copy
+    h:unmount()
+end
+
+function suite:test_can_disable_paste_submit_and_ime_preview_features()
+    local value = "ab"
+    local submitted = {}
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted[#submitted + 1] = v end,
+                height = 4,
+                features = {
+                    paste = false,
+                    submit = false,
+                    imeComposing = false,
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:paste("ZZ")
+    lt.assertEquals(value, "ab")
+    h:press("enter")
+    lt.assertEquals(#submitted, 0)
+    lt.assertEquals(value, "ab")
+    h:type_composing("中")
+    lt.assertEquals(h:row(1):match("中") ~= nil, false)
+    h:type_composing_confirm("中")
+    lt.assertEquals(value, "ab中")
+    h:unmount()
+end
+
+function suite:test_can_customize_textarea_keymap()
+    local value = "ab"
+    local submitted = {}
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted[#submitted + 1] = v end,
+                height = 4,
+                keymap = {
+                    ["enter"] = false,
+                    ["shift+enter"] = false,
+                    ["ctrl+enter"] = false,
+                    ["ctrl+j"] = "newline",
+                    ["ctrl+s"] = "submit",
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("enter")
+    lt.assertEquals(value, "ab")
+    lt.assertEquals(#submitted, 0)
+    h:dispatch_event(key_event("char", "j", true))
+    lt.assertEquals(value, "ab\n")
+    h:dispatch_event(key_event("char", "s", true))
+    lt.assertEquals(#submitted, 1)
+    lt.assertEquals(submitted[1], "ab\n")
+    h:unmount()
+end
+
+function suite:test_can_customize_textarea_core_keymap()
+    local value = "ab\ncd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea {
+                value = value,
+                onChange = function(v) value = v end,
+                height = 4,
+                keymap = {
+                    ["left"] = false,
+                    ["up"] = false,
+                    ["backspace"] = false,
+                    ["ctrl+b"] = "moveLeft",
+                    ["ctrl+p"] = "moveUp",
+                    ["ctrl+d"] = "deleteForward",
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:press("left")
+    h:type("x")
+    lt.assertEquals(value, "ab\ncdx")
+    h:dispatch_event(key_event("char", "b", true))
+    h:type("?")
+    lt.assertEquals(value, "ab\ncd?x")
+    h:dispatch_event(key_event("char", "p", true))
+    h:type("!")
+    lt.assertEquals(value, "ab!\ncd?x")
+    h:dispatch_event(key_event("char", "d", true))
+    lt.assertEquals(value, "ab!cd?x")
+    h:unmount()
+end
+
+function suite:test_composing_preview_and_confirm_on_textarea()
+    local value = "ab"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:type_composing("中")
+    lt.assertEquals(value, "ab")
+    lt.assertEquals(h:row(1):match("^ab中") ~= nil, true)
+    h:type_composing_confirm("中")
+    lt.assertEquals(value, "ab中")
+    h:unmount()
+end
+
+function suite:test_escape_clears_textarea_composing_preview()
+    local value = "ab"
+    local function App()
+        return tui.Box {
+            width = 20, height = 4,
+            Textarea { value = value, onChange = function(v) value = v end, height = 4 },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 4 })
+    h:type_composing("中")
+    lt.assertEquals(h:row(1):match("^ab中") ~= nil, true)
+    h:dispatch_event({ name = "escape", ctrl = false, meta = false, shift = false, input = "", raw = "\27" })
+    lt.assertEquals(value, "ab")
+    lt.assertEquals(h:row(1):match("^ab中") == nil, true)
+    lt.assertEquals(h:row(1):match("^ab") ~= nil, true)
     h:unmount()
 end
 

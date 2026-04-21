@@ -36,6 +36,16 @@ local KEYS = {
     f12           = "\27[24~",
 }
 
+local MODIFIED_KEYS = {
+    ctrl = {
+        backspace = "\27[127;5u",
+        enter = "\27[13;5u",
+    },
+    shift = {
+        enter = "\27[13;2u",
+    },
+}
+
 --- Normalize a test input spec through tui_core.terminal's test hook.
 -- Supported specs:
 --   { platform = "raw",    bytes = <string> }
@@ -84,6 +94,12 @@ function M.resolve_key(name)
         error("press/keys: expected non-empty string, got " .. tostring(name), 2)
     end
 
+    local modifier_codes = {
+        shift = 2,
+        meta  = 3,
+        ctrl  = 5,
+    }
+
     local cx = name:match("^ctrl%+(.)$") or name:match("^%^(.)$")
     if cx then
         local b = cx:lower():byte()
@@ -93,16 +109,24 @@ function M.resolve_key(name)
         return string.char(b - 96)
     end
 
-    local sk = name:match("^shift%+(.+)$")
-    if sk then
+    local mod, sk = name:match("^(%a+)%+(.+)$")
+    if mod and sk and modifier_codes[mod] then
+        local special = MODIFIED_KEYS[mod] and MODIFIED_KEYS[mod][sk:lower()]
+        if special then
+            return special
+        end
         local base = KEYS[sk:lower()]
         if not base then
             error("press: unknown key '" .. name .. "'", 2)
         end
+        local mod_code = modifier_codes[mod]
         if base:sub(1, 2) == "\27[" then
-            return base:sub(1, -2) .. ";2" .. base:sub(-1)
+            if #base == 3 then
+                return "\27[1;" .. tostring(mod_code) .. base:sub(-1)
+            end
+            return base:sub(1, -2) .. ";" .. tostring(mod_code) .. base:sub(-1)
         elseif base:sub(1, 2) == "\27O" then
-            return "\27[1;2" .. base:sub(3)
+            return "\27[1;" .. tostring(mod_code) .. base:sub(3)
         end
     end
 

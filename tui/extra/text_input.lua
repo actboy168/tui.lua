@@ -15,6 +15,8 @@
 --   mask        : string (default nil). If set, each visible char is replaced
 --                 by this single-char mask (e.g. "*" for passwords).
 --   width       : optional cell width; defaults to container-allocated width.
+--   features    : optional feature flags table, e.g. { undoRedo = false }.
+--   keymap      : optional shortcut overrides, e.g. { ["ctrl+s"] = "submit" }.
 --
 -- Cursor rendering: TextInput uses useDeclaredCursor() to declare its
 -- cursor position (Ink-compatible API). The framework converts this to
@@ -24,77 +26,12 @@
 -- Cursor position is a UTF-8 character index (1..#chars+1), not a byte
 -- offset. Conversions to display columns go through wcwidth.
 
-local tui      = require "tui"
+local tui  = require "tui"
+local core = require "tui.extra.editing"
 
 local M = {}
 
--- Split a UTF-8 string into a list of chars (each entry = 1 grapheme
--- cluster). Combining marks, ZWJ sequences, VS16 promotion, RI flag pairs,
--- and Hangul L/V/T conjoining all fuse into a single slot so arrow keys /
--- backspace operate on visible characters rather than code points.
-local function to_chars(s)
-    local chars = {}
-    if not s or s == "" then return chars end
-    for ch, _ in tui.iterChars(s) do
-        chars[#chars + 1] = ch
-    end
-    return chars
-end
-
-local function chars_to_string(chars)
-    return table.concat(chars)
-end
-
--- Display width of chars[1..i] prefix.
-local function prefix_width(chars, i)
-    local w = 0
-    for k = 1, i do w = w + (tui.displayWidth(chars[k])) end
-    return w
-end
-
--- Given chars + caret index (0..#chars) and a visible width budget `width`,
--- compute (visible_string, caret_col_within_visible) that keeps the caret
--- inside the window by scrolling horizontally when necessary.
-local function make_window(chars, caret, width, mask)
-    if width <= 0 then return "", 0 end
-    -- Work on masked chars if requested.
-    local masked = chars
-    if mask and #mask > 0 then
-        masked = {}
-        for i = 1, #chars do masked[i] = mask end
-    end
-
-    -- Simple scroll: show starting at `start` such that caret fits.
-    -- Prefer showing from index 1 if the whole string fits; otherwise shift.
-    local total_w = prefix_width(masked, #masked)
-    if total_w <= width then
-        return chars_to_string(masked), prefix_width(masked, caret)
-    end
-
-    -- Find start index such that caret_col_within = width_of(start..caret) <= width.
-    local start = 1
-    while start <= #masked do
-        local w_start_caret = prefix_width(masked, caret) - prefix_width(masked, start - 1)
-        if w_start_caret <= width then break end
-        start = start + 1
-    end
-
-    -- Build visible substring from `start` while staying within width.
-    local visible = {}
-    local used = 0
-    for i = start, #masked do
-        local cw = tui.displayWidth(masked[i])
-        if used + cw > width then break end
-        visible[#visible + 1] = masked[i]
-        used = used + cw
-    end
-    local caret_col = prefix_width(masked, caret) - prefix_width(masked, start - 1)
-    if caret_col < 0 then caret_col = 0 end
-    if caret_col > width then caret_col = width end
-    return table.concat(visible), caret_col
-end
-
-local function TextInputImpl(props)
+local function text_input_impl(props)
     props = props or {}
 
     local value       = props.value or ""
@@ -102,6 +39,9 @@ local function TextInputImpl(props)
     local onSubmit    = props.onSubmit
     local placeholder = props.placeholder or ""
     local mask        = props.mask
+    local clipboard   = tui.useClipboard()
+    local features    = core.resolve_features(props)
+    local keymap      = core.resolve_keymap(props, core.default_text_input_keymap())
 
     -- props.focus == false opts out of focus acquisition: the entry still
     -- registers in the Tab chain but with isActive=false, so navigation
@@ -114,22 +54,90 @@ local function TextInputImpl(props)
     -- caret is now past the end, we clamp locally for this render and
     -- schedule the persisted clamp via useEffect (moving the setCaret out
     -- of render-time satisfies the dev-mode render-phase setState guard).
-    local chars = to_chars(value)
-    local caret_state, setCaret = tui.useState(#chars)
+    local chars = core.to_chars(value)
+    local caret_state, set_caret = tui.useState(#chars)
+    local selection_anchor, set_selection_anchor = tui.useState(nil)
+    local undo_stack, set_undo_stack = tui.useState({})
+    local redo_stack, set_redo_stack = tui.useState({})
+    local history_group, set_history_group = tui.useState(nil)
     local caret_clamped = caret_state
     if caret_clamped > #chars then caret_clamped = #chars end
+    local anchor_clamped = selection_anchor
+    if anchor_clamped ~= nil and anchor_clamped > #chars then
+        anchor_clamped = #chars
+    end
+    if anchor_clamped == caret_clamped then
+        anchor_clamped = nil
+    end
     tui.useEffect(function()
-        if caret_state > #chars then setCaret(#chars) end
-    end, { caret_state, #chars })
+        if caret_state > #chars then set_caret(#chars) end
+        if selection_anchor ~= anchor_clamped then set_selection_anchor(anchor_clamped) end
+    end, { caret_state, #chars, selection_anchor, anchor_clamped })
 
     -- Keep a ref to latest props so the useFocus callback sees fresh value.
-    local ctxRef, _ = tui.useState({})
-    ctxRef.chars    = chars
-    ctxRef.caret    = caret_clamped
-    ctxRef.onChange = onChange
-    ctxRef.onSubmit = onSubmit
-    ctxRef.setCaret = setCaret
-    ctxRef.value    = value
+    local ctx_ref, _ = tui.useState({})
+    ctx_ref.chars = chars
+    ctx_ref.caret = caret_clamped
+    ctx_ref.anchor = anchor_clamped
+    ctx_ref.on_change = onChange
+    ctx_ref.on_submit = onSubmit
+    ctx_ref.set_caret = set_caret
+    ctx_ref.set_anchor = set_selection_anchor
+    ctx_ref.value = value
+    ctx_ref.clipboard = clipboard
+    ctx_ref.features = features
+    ctx_ref.keymap = keymap
+    ctx_ref.undo_stack = undo_stack
+    ctx_ref.redo_stack = redo_stack
+    ctx_ref.history_group = history_group
+
+    local function snapshot_current()
+        return {
+            value = ctx_ref.value,
+            caret = ctx_ref.caret,
+            anchor = ctx_ref.anchor,
+        }
+    end
+
+    local function push_undo_snapshot()
+        if not ctx_ref.features.undo_redo then
+            return
+        end
+        core.push_history_snapshot(set_undo_stack, set_redo_stack, snapshot_current())
+        ctx_ref.redo_stack = {}
+    end
+
+    local function clear_history_group()
+        core.clear_history_group(set_history_group, ctx_ref)
+    end
+
+    tui.useEffect(function()
+        core.sync_history_feature(features.undo_redo, set_undo_stack, set_redo_stack, ctx_ref)
+    end, { features.undo_redo })
+    tui.useEffect(function()
+        core.sync_selection_feature(features.selection, set_selection_anchor, ctx_ref)
+    end, { features.selection })
+
+    local function restore_snapshot(snapshot)
+        local restore_chars = core.to_chars(snapshot.value or "")
+        local restore_caret = math.min(math.max(snapshot.caret or 0, 0), #restore_chars)
+        local restore_anchor = snapshot.anchor
+        if restore_anchor ~= nil then
+            restore_anchor = math.min(math.max(restore_anchor, 0), #restore_chars)
+            if restore_anchor == restore_caret then
+                restore_anchor = nil
+            end
+        end
+        ctx_ref.set_caret(restore_caret)
+        ctx_ref.set_anchor(restore_anchor)
+        ctx_ref.caret = restore_caret
+        ctx_ref.anchor = restore_anchor
+        ctx_ref.chars = restore_chars
+        ctx_ref.value = snapshot.value or ""
+        if ctx_ref.on_change then
+            ctx_ref.on_change(ctx_ref.value)
+        end
+    end
 
     -- Composing (pre-edit) text state for IME input.
     -- When an IME is actively composing (e.g. typing pinyin), the terminal
@@ -137,144 +145,297 @@ local function TextInputImpl(props)
     -- handle pre-edit display internally and only send the final confirmed
     -- text. Terminals that support protocols like kitty may send composing
     -- sequences, which keys.parse will translate into composing events.
-    local composing, setComposing = tui.useState("")
+    local composing, set_composing = tui.useState("")
+    ctx_ref.composing = composing
 
-    local f = tui.useFocus {
+    local focus_handle = tui.useFocus {
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
         isActive  = not disabled,
         on_input  = function(input, key)
-            local cs = ctxRef.chars
-            local c  = ctxRef.caret
+            local cs = ctx_ref.chars
+            local c  = ctx_ref.caret
+            local anchor = ctx_ref.anchor
             local name = key.name
+            local action = core.resolve_key_action(key, ctx_ref.keymap)
 
-            local function emit(new_chars, new_caret)
-                ctxRef.setCaret(new_caret)
-                if ctxRef.onChange then
-                    ctxRef.onChange(chars_to_string(new_chars))
+            local function emit(new_chars, new_caret, opts)
+                local new_value = core.chars_to_string(new_chars)
+                if ctx_ref.features.undo_redo
+                    and (not opts or opts.record_history ~= false)
+                    and new_value ~= ctx_ref.value then
+                    if opts and opts.history then
+                        core.record_history_edit(
+                            set_undo_stack,
+                            set_redo_stack,
+                            set_history_group,
+                            ctx_ref,
+                            snapshot_current(),
+                            opts.history
+                        )
+                    else
+                        push_undo_snapshot()
+                        clear_history_group()
+                    end
+                elseif new_value ~= ctx_ref.value then
+                    clear_history_group()
                 end
-                ctxRef.chars = new_chars
-                ctxRef.caret = new_caret
+                ctx_ref.set_caret(new_caret)
+                ctx_ref.set_anchor(nil)
+                if ctx_ref.on_change then
+                    ctx_ref.on_change(new_value)
+                end
+                ctx_ref.chars = new_chars
+                ctx_ref.caret = new_caret
+                ctx_ref.anchor = nil
+                ctx_ref.value = new_value
             end
 
-            if name == "composing" then
-                -- IME pre-edit text update: store for display at caret.
-                -- The text is not yet committed; it replaces any previous
-                -- composing text for this composition session.
-                setComposing(input)
-            elseif name == "composing_confirm" then
-                -- IME confirmed the composition: insert the confirmed text
-                -- and clear the composing state.
-                if input and input ~= "" then
-                    local ins = to_chars(input)
-                    local nc = {}
-                    for i = 1, c do nc[i] = cs[i] end
-                    for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
-                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-                    emit(nc, c + #ins)
+            local function move_caret(new_caret, extend)
+                extend = extend and ctx_ref.features.selection
+                if extend then
+                    local next_anchor = anchor
+                    if next_anchor == nil then
+                        next_anchor = c
+                    end
+                    ctx_ref.set_anchor(next_anchor == new_caret and nil or next_anchor)
+                    ctx_ref.anchor = next_anchor == new_caret and nil or next_anchor
+                else
+                    if ctx_ref.anchor ~= nil then
+                        ctx_ref.set_anchor(nil)
+                        ctx_ref.anchor = nil
+                    end
                 end
-                setComposing("")
-            elseif name == "escape" then
-                -- Escape cancels any active composition.
-                if composing ~= "" then
-                    setComposing("")
+                if new_caret ~= c then
+                    ctx_ref.set_caret(new_caret)
+                    ctx_ref.caret = new_caret
                 end
-            elseif name == "enter" then
-                if ctxRef.onSubmit then ctxRef.onSubmit(ctxRef.value) end
-            elseif name == "backspace" then
-                if c > 0 then
-                    local nc = {}
-                    for i = 1, c - 1 do nc[i] = cs[i] end
-                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-                    emit(nc, c - 1)
+            end
+
+            local function delete_selection_if_any()
+                local nc, new_caret = core.delete_selection(cs, anchor, c)
+                if nc then
+                    emit(nc, new_caret)
+                    return true
                 end
-            elseif name == "delete" then
-                if c < #cs then
-                    local nc = {}
-                    for i = 1, c do nc[i] = cs[i] end
-                    for i = c + 2, #cs do nc[#nc + 1] = cs[i] end
-                    emit(nc, c)
+                return false
+            end
+
+            local function replace_selection_if_any(text)
+                if not core.has_selection(anchor, c) then
+                    return false
                 end
-            elseif name == "left" then
-                if c > 0 then
-                    ctxRef.setCaret(c - 1)
-                    ctxRef.caret = c - 1
+                local nc, new_caret = core.replace_selection(cs, anchor, c, text)
+                if nc then
+                    emit(nc, new_caret)
+                    return true
                 end
-            elseif name == "right" then
-                if c < #cs then
-                    ctxRef.setCaret(c + 1)
-                    ctxRef.caret = c + 1
+                return false
+            end
+
+            local function clear_selection_if_any()
+                if ctx_ref.anchor == nil then
+                    return false
                 end
-            elseif name == "home" then
-                ctxRef.setCaret(0)
-                ctxRef.caret = 0
-            elseif name == "end" then
-                ctxRef.setCaret(#cs)
-                ctxRef.caret = #cs
+                ctx_ref.set_anchor(nil)
+                ctx_ref.anchor = nil
+                return true
+            end
+
+            if core.handle_shared_editor_input {
+                name = name,
+                shortcut = action,
+                input = input,
+                composing = ctx_ref.composing,
+                set_composing = set_composing,
+                clear_selection = clear_selection_if_any,
+                replace_selection = replace_selection_if_any,
+                insert_text = function(text)
+                    local nc, new_caret = core.insert_text(cs, c, text)
+                    if nc then emit(nc, new_caret) end
+                end,
+                selection_text = function()
+                    return core.selection_text(cs, anchor, c)
+                end,
+                delete_selection = delete_selection_if_any,
+                clipboard = ctx_ref.clipboard,
+                features = ctx_ref.features,
+                undo_stack = ctx_ref.undo_stack,
+                redo_stack = ctx_ref.redo_stack,
+                set_undo_stack = set_undo_stack,
+                set_redo_stack = set_redo_stack,
+                snapshot_current = snapshot_current,
+                restore_snapshot = restore_snapshot,
+                clear_history_group = clear_history_group,
+            } then
+                return
+            end
+
+            if action == "submit" then
+                clear_history_group()
+                if ctx_ref.features.submit and ctx_ref.on_submit then ctx_ref.on_submit(ctx_ref.value) end
+            elseif action == "select_all" then
+                clear_history_group()
+                local all_anchor = (#cs > 0) and 0 or nil
+                ctx_ref.set_anchor(all_anchor)
+                ctx_ref.anchor = all_anchor
+                if c ~= #cs then
+                    ctx_ref.set_caret(#cs)
+                    ctx_ref.caret = #cs
+                end
+            elseif action == "line_start" then
+                clear_history_group()
+                move_caret(0, key.shift)
+            elseif action == "line_end" then
+                clear_history_group()
+                move_caret(#cs, key.shift)
+            elseif action == "move_left" then
+                clear_history_group()
+                if c > 0 then move_caret(c - 1, key.shift) end
+            elseif action == "move_right" then
+                clear_history_group()
+                if c < #cs then move_caret(c + 1, key.shift) end
+            elseif action == "word_left" then
+                clear_history_group()
+                move_caret(core.find_word_left(cs, c), key.shift)
+            elseif action == "word_right" then
+                clear_history_group()
+                move_caret(core.find_word_right(cs, c), key.shift)
+            elseif action == "kill_left" then
+                if not delete_selection_if_any() then
+                    local nc, new_caret = core.delete_to_start(cs, c)
+                    if nc then
+                        emit(nc, new_caret, {
+                            history = core.make_history_edit("delete_backward", c, new_caret),
+                        })
+                    end
+                end
+            elseif action == "kill_right" then
+                if not delete_selection_if_any() then
+                    local nc, new_caret = core.delete_to_end(cs, c)
+                    if nc then
+                        emit(nc, new_caret, {
+                            history = core.make_history_edit("delete_forward", c, new_caret),
+                        })
+                    end
+                end
+            elseif action == "delete_word_left" then
+                if not delete_selection_if_any() then
+                    local nc, new_caret = core.delete_word_backward(cs, c)
+                    if nc then
+                        emit(nc, new_caret, {
+                            history = core.make_history_edit("delete_backward", c, new_caret),
+                        })
+                    end
+                end
+            elseif action == "delete_word_right" then
+                if not delete_selection_if_any() then
+                    local nc, new_caret = core.delete_word_forward(cs, c)
+                    if nc then
+                        emit(nc, new_caret, {
+                            history = core.make_history_edit("delete_forward", c, new_caret),
+                        })
+                    end
+                end
+            elseif action == "delete_backward" then
+                if not delete_selection_if_any() then
+                    local nc, new_caret = core.delete_backward(cs, c)
+                    if nc then
+                        emit(nc, new_caret, {
+                            history = core.make_history_edit("delete_backward", c, new_caret),
+                        })
+                    end
+                end
+            elseif action == "delete_forward" then
+                if not delete_selection_if_any() then
+                    local nc, new_caret = core.delete_forward(cs, c)
+                    if nc then
+                        emit(nc, new_caret, {
+                            history = core.make_history_edit("delete_forward", c, new_caret),
+                        })
+                    end
+                end
             elseif name == "char" and input and input ~= "" then
                 -- Insert printable UTF-8 character(s) at caret.
-                local ins = to_chars(input)
-                local nc = {}
-                for i = 1, c do nc[i] = cs[i] end
-                for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
-                for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-                emit(nc, c + #ins)
+                if not replace_selection_if_any(input) then
+                    local nc, new_caret = core.insert_text(cs, c, input)
+                    if nc then
+                        emit(nc, new_caret, {
+                            history = core.make_history_edit("insert", c, new_caret),
+                        })
+                    end
+                end
             elseif name == "paste" and input and input ~= "" then
                 -- Bracketed paste: strip newlines (single-line field), then
                 -- insert all remaining chars at once.
-                local sanitized = input:gsub("\r\n", " "):gsub("[\r\n]", " ")
-                if sanitized ~= "" then
-                    local ins = to_chars(sanitized)
-                    local nc = {}
-                    for i = 1, c do nc[i] = cs[i] end
-                    for _, ch in ipairs(ins) do nc[#nc + 1] = ch end
-                    for i = c + 1, #cs do nc[#nc + 1] = cs[i] end
-                    emit(nc, c + #ins)
+                if ctx_ref.features.paste then
+                    local sanitized = input:gsub("\r\n", " "):gsub("[\r\n]", " ")
+                    if sanitized ~= "" then
+                        if not replace_selection_if_any(sanitized) then
+                            local nc, new_caret = core.insert_text(cs, c, sanitized)
+                            if nc then
+                                emit(nc, new_caret, {
+                                    history = core.make_history_edit("paste", c, new_caret, { coalesce = false }),
+                                })
+                            end
+                        end
+                    end
                 end
             end
         end,
     }
-    local focus_flag = f.isFocused
+    local focus_flag = focus_handle.isFocused
 
-    -- Clear composing state when focus is lost so that a stale pre-edit
-    -- string does not linger when the input regains focus later.
+        -- Clear composing state when focus is lost so that a stale pre-edit
+        -- string does not linger when the input regains focus later.
     tui.useEffect(function()
-        if not focus_flag and composing ~= "" then
-            setComposing("")
+        core.sync_composing_feature(features.ime_composing, {
+            set_composing = set_composing,
+            composing = ctx_ref.composing,
+        })
+        core.clear_composing_on_blur({
+            set_composing = set_composing,
+            composing = ctx_ref.composing,
+        }, focus_flag)
+        if not features.ime_composing then
+            ctx_ref.composing = ""
         end
-    end, { focus_flag })
+        if not focus_flag then
+            ctx_ref.composing = ""
+        end
+    end, { focus_flag, features.ime_composing })
 
     -- Visible text + caret column.
     local width = props.width or props.minWidth or nil
     -- Fall back to a reasonable default when unset; parent Box typically
     -- passes a flex-grown child so we try to render the whole value.
     local show_placeholder = (#chars == 0) and not focus_flag and placeholder ~= ""
-    local render_width = width or math.max(prefix_width(chars, #chars) + 1,
-                                           tui.displayWidth(placeholder))
+    local render_width = width or math.max(core.prefix_width(chars, #chars) + 1,
+                                            tui.displayWidth(placeholder))
     if render_width < 1 then render_width = 1 end
 
-    local visible, caret_col
+    local text_children, caret_col
     if show_placeholder then
-        visible, caret_col = placeholder, 0
+        text_children, caret_col = { placeholder }, 0
     else
-        -- Append composing text after the caret position for display.
-        -- The composing text is shown in-place but is not part of the
-        -- actual value until confirmed.
-        local display_chars = {}
-        for i = 1, caret_clamped do display_chars[i] = chars[i] end
-        local composing_chars = to_chars(composing)
-        for _, ch in ipairs(composing_chars) do
-            display_chars[#display_chars + 1] = ch
+        if composing ~= "" then
+            local display_chars, display_caret = core.with_composing(chars, caret_clamped, composing)
+            local visible
+            visible, caret_col = core.make_window(display_chars, display_caret, render_width, mask)
+            text_children = { visible }
+        else
+            local _visible, _caret_col, start_i, end_i = core.make_window(chars, caret_clamped, render_width, mask)
+            caret_col = _caret_col
+            text_children = core.selection_spans(chars, features.selection and anchor_clamped or nil, caret_clamped, {
+                mask = mask,
+                start = start_i,
+                stop = end_i,
+            })
         end
-        for i = caret_clamped + 1, #chars do
-            display_chars[#display_chars + 1] = chars[i]
-        end
-        local display_caret = caret_clamped + #composing_chars
-        visible, caret_col = make_window(display_chars, display_caret, render_width, mask)
     end
 
     -- Build the Text child; user may apply styling via a wrapper Box.
-    local text_el = tui.Text { width = render_width, wrap = "nowrap", visible }
+    local text_el = tui.Text { width = render_width, wrap = "nowrap", table.unpack(text_children) }
 
     -- Single-writer cursor model: only the focused TextInput declares its
     -- cursor position via useDeclaredCursor(). The tagger writes _cursor_offset
@@ -301,7 +462,7 @@ function M.TextInput(props)
     props = props or {}
     local key = props.key
     props.key = nil
-    return { kind = "component", fn = TextInputImpl, props = props, key = key }
+    return { kind = "component", fn = text_input_impl, props = props, key = key }
 end
 
 return M

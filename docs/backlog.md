@@ -82,6 +82,7 @@ _暂无_
 
 - `P2` **终端身份探测**：XTVERSION/DA1 查询，针对不同终端（iTerm2、Kitty、WezTerm、conhost 等）缓存能力并做兼容处理（C + Lua）
 - `P2` **Windows 终端兼容**：检测并规避 conhost cursor-up viewport yank bug；其他 Windows Terminal 特定缺陷处理（C + Lua）
+- `P2` **Windows Terminal / VS Code Terminal 鼠标兼容**：当前相关改动已回滚并暂缓；后续需要重新定位为何这些终端下鼠标事件未稳定进入现有 `useMouse` / editor 选择路径，避免再次影响 Shift+Enter 等键盘行为
 - `P2` **tmux/screen 穿透**：DCS 封装，使 OSC/DCS 序列在 tmux multiplexer 下正确透传（C + Lua）
 
 ### Kitty Keyboard Protocol 扩展（基础 KKP 已实现）

@@ -22,6 +22,17 @@ end
 
 local suite = lt.test "text_input"
 
+local function key_event(name, input, ctrl, shift, meta)
+    return {
+        name = name,
+        input = input or "",
+        raw = input or "",
+        ctrl = ctrl or false,
+        shift = shift or false,
+        meta = meta or false,
+    }
+end
+
 function suite:test_initial_empty_with_placeholder()
     local value = ""
     local function App()
@@ -485,6 +496,442 @@ function suite:test_home_and_end()
     h:press("end")
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 3)
+    h:unmount()
+end
+
+function suite:test_ctrl_a_selects_all_then_ctrl_e_moves_to_end()
+    local value = "abcd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("ctrl+a")
+    h:type("X")
+    lt.assertEquals(value, "X")
+    h:press("backspace")
+    h:type("abcd")
+    lt.assertEquals(value, "abcd")
+    h:press("ctrl+e")
+    h:type("Y")
+    lt.assertEquals(value, "abcdY")
+    h:unmount()
+end
+
+function suite:test_ctrl_u_deletes_to_line_start()
+    local value = "hello world"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    for _ = 1, 6 do h:press("right") end
+    h:press("ctrl+u")
+    lt.assertEquals(value, "world")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 0)
+    h:unmount()
+end
+
+function suite:test_ctrl_k_deletes_to_line_end()
+    local value = "hello world"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    for _ = 1, 6 do h:press("right") end
+    h:press("ctrl+k")
+    lt.assertEquals(value, "hello ")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 6)
+    h:unmount()
+end
+
+function suite:test_ctrl_w_deletes_previous_word()
+    local value = "hello brave world"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("ctrl+w")
+    lt.assertEquals(value, "hello brave ")
+    h:press("ctrl+w")
+    lt.assertEquals(value, "hello ")
+    h:unmount()
+end
+
+function suite:test_ctrl_left_and_ctrl_right_move_by_word()
+    local value = "hello brave world"
+    local function App()
+        return tui.Box {
+            width = 30, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 1 })
+    h:press("ctrl+left")
+    local te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 12)
+    h:press("ctrl+left")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 6)
+    h:press("ctrl+right")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, 12)
+    h:unmount()
+end
+
+function suite:test_ctrl_backspace_and_ctrl_delete_delete_words()
+    local value = "hello brave world"
+    local function App()
+        return tui.Box {
+            width = 30, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 1 })
+    h:press("ctrl+backspace")
+    lt.assertEquals(value, "hello brave ")
+    h:press("ctrl+left")
+    h:press("ctrl+delete")
+    lt.assertEquals(value, "hello ")
+    h:unmount()
+end
+
+function suite:test_shift_left_type_replaces_selection()
+    local value = "abcd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("shift+left")
+    h:type("X")
+    lt.assertEquals(value, "abcX")
+    h:unmount()
+end
+
+function suite:test_shift_home_paste_replaces_selection()
+    local value = "abcd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("shift+home")
+    h:paste("Z")
+    lt.assertEquals(value, "Z")
+    h:unmount()
+end
+
+function suite:test_ctrl_a_highlights_selection()
+    local value = "abcd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch_event(key_event("char", "a", true))
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].inverse, true)
+    lt.assertEquals(cells[2].inverse, true)
+    lt.assertEquals(cells[3].inverse, true)
+    lt.assertEquals(cells[4].inverse, true)
+    h:unmount()
+end
+
+function suite:test_copy_and_cut_selection()
+    local value = "copy"
+    local clipboard = require "tui.internal.clipboard"
+    local old_copy = clipboard.copy
+    local copied = {}
+    clipboard.copy = function(text)
+        copied[#copied + 1] = text
+        return true
+    end
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:dispatch_event(key_event("char", "a", true))
+    h:dispatch_event(key_event("char", "c", true, true))
+    lt.assertEquals(copied[1], "copy")
+    lt.assertEquals(value, "copy")
+    h:dispatch_event(key_event("char", "x", true))
+    lt.assertEquals(copied[2], "copy")
+    lt.assertEquals(value, "")
+    clipboard.copy = old_copy
+    h:unmount()
+end
+
+function suite:test_undo_and_redo()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:type("ab")
+    h:dispatch_event(key_event("char", "z", true))
+    lt.assertEquals(value, "")
+    h:dispatch_event(key_event("char", "y", true))
+    lt.assertEquals(value, "ab")
+    h:unmount()
+end
+
+function suite:test_undo_coalescing_starts_new_group_after_cursor_move()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:type("ab")
+    h:press("left")
+    h:type("X")
+    lt.assertEquals(value, "aXb")
+    h:dispatch_event(key_event("char", "z", true))
+    lt.assertEquals(value, "ab")
+    h:dispatch_event(key_event("char", "z", true))
+    lt.assertEquals(value, "")
+    h:unmount()
+end
+
+function suite:test_can_disable_undo_and_redo_feature()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                features = { undoRedo = false },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:type("ab")
+    h:dispatch_event(key_event("char", "z", true))
+    lt.assertEquals(value, "ab")
+    h:dispatch_event(key_event("char", "y", true))
+    lt.assertEquals(value, "ab")
+    h:unmount()
+end
+
+function suite:test_can_disable_selection_copy_word_kill_features()
+    local value = "hello world"
+    local clipboard = require "tui.internal.clipboard"
+    local old_copy = clipboard.copy
+    local copied = {}
+    clipboard.copy = function(text)
+        copied[#copied + 1] = text
+        return true
+    end
+    local function App()
+        return tui.Box {
+            width = 30, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                features = {
+                    selection = false,
+                    copyCut = false,
+                    selectAll = false,
+                    wordOps = false,
+                    killOps = false,
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 30, rows = 1 })
+    h:press("shift+left")
+    h:type("!")
+    lt.assertEquals(value, "hello worl!d")
+    h:dispatch_event(key_event("char", "a", true))
+    h:type("?")
+    lt.assertEquals(value, "hello worl!?d")
+    h:dispatch_event(key_event("char", "x", true))
+    lt.assertEquals(value, "hello worl!?d")
+    lt.assertEquals(#copied, 0)
+    local te = testing.find_text_with_cursor(h:tree())
+    local before = te._cursor_offset
+    h:press("ctrl+left")
+    te = testing.find_text_with_cursor(h:tree())
+    lt.assertEquals(te._cursor_offset, before)
+    h:press("ctrl+k")
+    lt.assertEquals(value, "hello worl!?d")
+    clipboard.copy = old_copy
+    h:unmount()
+end
+
+function suite:test_can_disable_paste_submit_and_ime_preview_features()
+    local value = "ab"
+    local submitted = nil
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted = v end,
+                features = {
+                    paste = false,
+                    submit = false,
+                    imeComposing = false,
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:paste("ZZ")
+    lt.assertEquals(value, "ab")
+    h:press("enter")
+    lt.assertNil(submitted)
+    h:type_composing("中")
+    lt.assertEquals(value, "ab")
+    lt.assertEquals(h:row(1):match("中") ~= nil, false)
+    h:type_composing_confirm("中")
+    lt.assertEquals(value, "ab中")
+    h:unmount()
+end
+
+function suite:test_can_customize_text_input_keymap()
+    local value = "hello"
+    local submitted = nil
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                onSubmit = function(v) submitted = v end,
+                keymap = {
+                    ["enter"] = false,
+                    ["ctrl+s"] = "submit",
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("enter")
+    lt.assertNil(submitted)
+    h:dispatch_event(key_event("char", "s", true))
+    lt.assertEquals(submitted, "hello")
+    h:unmount()
+end
+
+function suite:test_can_customize_text_input_core_keymap()
+    local value = "ac"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+                keymap = {
+                    ["left"] = false,
+                    ["home"] = false,
+                    ["backspace"] = false,
+                    ["ctrl+b"] = "moveLeft",
+                    ["ctrl+a"] = "lineStart",
+                    ["ctrl+h"] = "deleteBackward",
+                },
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("left")
+    h:type("x")
+    lt.assertEquals(value, "acx")
+    h:dispatch_event(key_event("char", "b", true))
+    h:type("?")
+    lt.assertEquals(value, "ac?x")
+    h:dispatch_event(key_event("char", "a", true))
+    h:type("!")
+    lt.assertEquals(value, "!ac?x")
+    h:dispatch_event(key_event("char", "h", true))
+    lt.assertEquals(value, "ac?x")
+    h:unmount()
+end
+
+function suite:test_ime_confirm_replaces_selected_text()
+    local value = "abcd"
+    local function App()
+        return tui.Box {
+            width = 20, height = 1,
+            TextInput {
+                value = value,
+                onChange = function(v) value = v end,
+            },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 1 })
+    h:press("home")
+    h:press("right")
+    h:press("shift+right")
+    h:type_composing_confirm("中")
+    lt.assertEquals(value, "a中cd")
     h:unmount()
 end
 
