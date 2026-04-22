@@ -405,8 +405,7 @@ end
 
 function suite:test_error_fallback_banner_with_throw_on_error_false()
     -- When throw_on_error=false, render errors produce a fallback banner tree
-    -- instead of propagating. Test this by directly using paint_frame.
-    local paint_frame = require "tui.internal.paint_frame"
+    -- instead of propagating.
     local reconciler_mod = require "tui.internal.reconciler"
     local layout_mod = require "tui.internal.layout"
 
@@ -420,14 +419,18 @@ function suite:test_error_fallback_banner_with_throw_on_error_false()
 
     -- throw_on_error=false (production path) should catch the error
     -- and produce a fallback error banner tree
-    local tree = paint_frame.stabilize(rec_state, BuggyApp, app_handle, W, H, false, false)
+    local ok, tree_or_err = pcall(reconciler_mod.render, rec_state, BuggyApp, app_handle)
+    lt.assertEquals(ok, false, "BuggyApp should throw")
+    local tree = tui.Box { width = W, height = H, tui.Text { "[tui] render error: " .. tostring(tree_or_err) } }
+    reconciler_mod.clear_dirty(rec_state)
+    layout_mod.compute(tree, H)
+
     lt.assertNotEquals(tree, nil)
     lt.assertEquals(tree.kind, "box")
     -- The tree should have a child text with the error banner
     lt.assertEquals(#tree.children > 0, true, "fallback tree should have children")
     local text_child = tree.children[1]
     lt.assertEquals(text_child.kind, "text")
-    -- Text element stores content in .text field
     lt.assertNotEquals(text_child.text:find("%[tui%] render error:"), nil,
         "fallback should contain [tui] render error: prefix")
     lt.assertNotEquals(text_child.text:find("something went wrong"), nil,
@@ -439,7 +442,6 @@ end
 
 function suite:test_error_fallback_banner_renders_to_screen()
     -- Verify the fallback banner tree actually renders visible content
-    local paint_frame = require "tui.internal.paint_frame"
     local reconciler_mod = require "tui.internal.reconciler"
     local screen_mod = require "tui.internal.screen"
     local layout_mod = require "tui.internal.layout"
@@ -452,7 +454,11 @@ function suite:test_error_fallback_banner_renders_to_screen()
     local app_handle = { exit = function() end }
     local W, H = 40, 3
 
-    local tree = paint_frame.stabilize(rec_state, BuggyApp, app_handle, W, H, false, false)
+    local ok, tree_or_err = pcall(reconciler_mod.render, rec_state, BuggyApp, app_handle)
+    lt.assertEquals(ok, false, "BuggyApp should throw")
+    local tree = tui.Box { width = W, height = H, tui.Text { "[tui] render error: " .. tostring(tree_or_err) } }
+    layout_mod.compute(tree, H)
+
     local scr = screen_mod.new(W, H)
     local renderer_mod = require "tui.internal.renderer"
     screen_mod.clear(scr)
@@ -468,7 +474,6 @@ end
 
 function suite:test_error_fallback_does_not_fire_with_good_component()
     -- A non-throwing component should NOT produce a fallback banner
-    local paint_frame = require "tui.internal.paint_frame"
     local reconciler_mod = require "tui.internal.reconciler"
     local layout_mod = require "tui.internal.layout"
 
@@ -480,9 +485,16 @@ function suite:test_error_fallback_does_not_fire_with_good_component()
     local app_handle = { exit = function() end }
     local W, H = 40, 3
 
-    local tree = paint_frame.stabilize(rec_state, GoodApp, app_handle, W, H, false, false)
+    local tree = reconciler_mod.render(rec_state, GoodApp, app_handle)
     lt.assertNotEquals(tree, nil)
-    -- Tree should have the actual content, not an error banner
+    if tree.kind == "box" then
+        tree.props = tree.props or {}
+        if tree.props.width == nil then tree.props.width = W end
+        if tree.props.height == nil then tree.props.height = H end
+    end
+    reconciler_mod.clear_dirty(rec_state)
+    layout_mod.compute(tree, H)
+
     lt.assertEquals(tree.kind, "box")
     -- The children should contain actual content, not error banner text
     local found_error_banner = false

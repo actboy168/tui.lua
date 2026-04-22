@@ -5,6 +5,8 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local testing = require "tui.testing"
 local helpers = require "test.helpers"
 
@@ -19,8 +21,8 @@ function suite:test_type_submit_stream_resize_flow()
 
     -- Type "hi" and press Enter. :type walks UTF-8 boundaries and rerenders
     -- between each keystroke; :press rerenders once after.
-    h:type("hi")
-    h:press("enter")
+    tui_input.type("hi")
+    tui_input.press("enter")
     h:rerender()
 
     -- After submit: history gains [you] hi; streaming starts at shown=0 so
@@ -33,7 +35,9 @@ function suite:test_type_submit_stream_resize_flow()
     lt.assertEquals(found_user, true, "user message should appear in history")
 
     -- Advance 40ms three times → streaming shown = 3 → "[bot] hel".
-    h:advance(40):advance(40):advance(40)
+    h:advance(40)
+    h:advance(40)
+    h:advance(40)
     local partial_found = false
     for _, t in ipairs(testing.text_content(h:tree())) do
         if t == "[bot] hel" then partial_found = true; break end
@@ -42,7 +46,9 @@ function suite:test_type_submit_stream_resize_flow()
 
     -- Two more ticks finalize "hello" (shown=5 triggers the finalize branch
     -- on the following tick, so advance enough to land on finalize).
-    h:advance(40):advance(40):advance(40)
+    h:advance(40)
+    h:advance(40)
+    h:advance(40)
     local final_found = false
     for _, t in ipairs(testing.text_content(h:tree())) do
         if t == "[bot] hello" then final_found = true; break end

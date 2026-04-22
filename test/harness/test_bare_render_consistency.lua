@@ -5,6 +5,8 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local testing = require "tui.testing"
 local input_helpers = require "tui.testing.input"
 
@@ -279,7 +281,7 @@ function suite:test_type_same_chars()
     b:unmount()
 
     local h = testing.render(make_app(harness_chars))
-    h:type("hi")
+    tui_input.type("hi")
     h:rerender()
     lt.assertEquals(harness_chars, { "h", "i" }, "harness: type should deliver chars")
     h:unmount()

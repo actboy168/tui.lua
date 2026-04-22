@@ -7,11 +7,14 @@ local harness = require "tui.testing.harness"
 local snapshot = require "tui.testing.snapshot"
 local inspect = require "tui.testing.inspect"
 
+
 local M = {
     input = input,
     mouse = mouse,
     render = harness.render,
-    mount_bare = harness.mount_bare,
+    mount_bare = function (App)
+        return require("tui.testing.bare").mount(App)
+    end,
     capture_stderr = capture.capture_stderr,
     capture_writes = capture.capture_writes,
 }

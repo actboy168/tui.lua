@@ -556,7 +556,8 @@ function suite:test_bare_render_count_tracks_rerenders()
     b:rerender()
     lt.assertEquals(b:render_count(), 2)
 
-    b:rerender():rerender()
+    b:rerender()
+    b:rerender()
     lt.assertEquals(b:render_count(), 4)
     b:unmount()
 end
@@ -566,7 +567,8 @@ function suite:test_bare_reset_render_count()
         return tui.Text { "" }
     end
     local b = testing.mount_bare(App)
-    b:rerender():rerender()
+    b:rerender()
+    b:rerender()
     lt.assertEquals(b:render_count(), 3)
 
     b:reset_render_count()

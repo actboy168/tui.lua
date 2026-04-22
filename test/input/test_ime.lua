@@ -4,6 +4,7 @@ local tui      = require "tui"
 local extra = require "tui.extra"
 local testing  = require "tui.testing"
 local input_helpers = require "tui.testing.input"
+local tui_input = require "tui.input"
 
 local test_ime = lt.test "ime"
 
@@ -40,7 +41,7 @@ function test_ime:test_ime_pos_updates_after_typing()
     end
     local h = testing.render(App)
 
-    h:type("abc")
+    tui_input.type("abc")
     h:rerender()
     local col, row = h:ime_pos()
     lt.assertEquals(col ~= nil, true)
@@ -64,12 +65,12 @@ function test_ime:test_composing_then_confirm()
     local h = testing.render(App)
 
     -- Simulate IME composing: user types pinyin "ni".
-    h:type_composing("ni")
+    tui_input.type_composing("ni")
     -- Composing text is shown but not committed.
     lt.assertEquals(lastValue, "")
 
     -- Simulate IME confirmation: user selects "你".
-    h:type_composing_confirm("你")
+    tui_input.type_composing_confirm("你")
     h:rerender()
     -- The confirmed text is now in the value.
     lt.assertEquals(lastValue, "你")
@@ -108,11 +109,11 @@ function test_ime:test_composing_cancel_by_escape()
     local h = testing.render(App)
 
     -- Start composing.
-    h:type_composing("hao")
+    tui_input.type_composing("hao")
     lt.assertEquals(lastValue, "")
 
     -- Cancel with Escape.
-    h:press("escape")
+    tui_input.press("escape")
     lt.assertEquals(lastValue, "")
 
     h:unmount()
@@ -126,10 +127,10 @@ function test_ime:test_composing_shown_at_caret()
     local h = testing.render(App)
 
     -- Move caret to position 1 (between 'a' and 'b').
-    h:press("left")
+    tui_input.press("left")
 
     -- Start composing — the composing text appears between 'a' and 'b'.
-    h:type_composing("x")
+    tui_input.type_composing("x")
     h:rerender()
     -- Value should still be "ab" (composing text not committed).
     -- The visual display includes composing text but value is unchanged.
@@ -157,10 +158,10 @@ function test_ime:test_composing_cleared_on_focus_loss()
     local h = testing.render(App)
 
     -- Start composing in the first TextInput.
-    h:type_composing("test")
+    tui_input.type_composing("test")
 
     -- Tab to the next TextInput — focus moves away.
-    h:press("tab")
+    tui_input.press("tab")
 
     -- The first TextInput's value should remain empty (composing was cancelled).
     lt.assertEquals(lastValue, "")
@@ -221,7 +222,7 @@ function test_ime:test_physical_cursor_tracks_typing()
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- autoFocus sets isFocused state on the next paint; the first
     -- character's _paint() also consumes this dirty flag.
-    h:type("abc")
+    tui_input.type("abc")
     h:rerender()
 
     local cursor_col, cursor_row = h:cursor()

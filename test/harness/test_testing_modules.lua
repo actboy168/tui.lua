@@ -1,5 +1,7 @@
 local lt      = require "ltest"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local testing = require "tui.testing"
 
 local suite = lt.test "testing_modules"
@@ -55,7 +57,7 @@ function suite:test_input_paste_helper_matches_harness_paste()
 
     local h = testing.render(App, { cols = 10, rows = 1 })
     h:dispatch(testing.input.paste("alpha"))
-    h:paste("beta")
+    tui_input.paste("beta")
 
     h:rerender()
 
@@ -92,7 +94,7 @@ function suite:test_harness_mouse_matches_helper_dispatch()
     end
 
     local h = testing.render(App, { cols = 10, rows = 1 })
-    h:mouse("scroll_down", nil, 4, 2, { meta = true })
+    tui_input.mouse("scroll_down", nil, 4, 2, { meta = true })
     h:dispatch(testing.mouse.harness("scroll_down", nil, 4, 2, { meta = true }))
 
     lt.assertEquals(#events, 2)

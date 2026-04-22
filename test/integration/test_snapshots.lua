@@ -12,6 +12,8 @@
 
 local lt      = require "ltest"
 local testing = require "tui.testing"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local helpers = require "test.helpers"
 
 local suite = lt.test "snapshots"
@@ -29,7 +31,7 @@ end
 -- empty because nothing was submitted.
 function suite:test_chat_typed()
     local h = testing.render(make_chat_app("hi"), { cols = 30, rows = 8 })
-    h:type("hello")
+    tui_input.type("hello")
     h:rerender()
     h:match_snapshot("chat_typed_30x8")
     h:unmount()
@@ -39,11 +41,13 @@ end
 -- shows a partial bot reply. Exercises Static output + live streaming line.
 function suite:test_chat_streaming()
     local h = testing.render(make_chat_app("hello world"), { cols = 30, rows = 8 })
-    h:type("hi")
-    h:press("enter")
+    tui_input.type("hi")
+    tui_input.press("enter")
     h:rerender()
     -- 3 ticks → "[bot] hel"
-    h:advance(40):advance(40):advance(40)
+    h:advance(40)
+    h:advance(40)
+    h:advance(40)
     h:match_snapshot("chat_streaming_30x8")
     h:unmount()
 end

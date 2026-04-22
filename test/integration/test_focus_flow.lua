@@ -3,6 +3,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local extra   = require "tui.extra"
 
 local suite = lt.test "focus_flow"
@@ -81,16 +83,16 @@ function suite:test_tab_forward()
 
     lt.assertEquals(h:focus_id(), "field_a")
 
-    h:press("tab")
+    tui_input.press("tab")
     h:rerender()
     lt.assertEquals(h:focus_id(), "field_b")
 
-    h:press("tab")
+    tui_input.press("tab")
     h:rerender()
     lt.assertEquals(h:focus_id(), "field_c")
 
     -- Tab wraps from last back to first
-    h:press("tab")
+    tui_input.press("tab")
     h:rerender()
     lt.assertEquals(h:focus_id(), "field_a")
 
@@ -108,15 +110,15 @@ function suite:test_shift_tab_backward()
     lt.assertEquals(h:focus_id(), "field_a")
 
     -- Shift+Tab from first wraps to last
-    h:press("shift+tab")
+    tui_input.press("shift+tab")
     h:rerender()
     lt.assertEquals(h:focus_id(), "field_c")
 
-    h:press("shift+tab")
+    tui_input.press("shift+tab")
     h:rerender()
     lt.assertEquals(h:focus_id(), "field_b")
 
-    h:press("shift+tab")
+    tui_input.press("shift+tab")
     h:rerender()
     lt.assertEquals(h:focus_id(), "field_a")
 
@@ -134,12 +136,12 @@ function suite:test_cursor_follows_focus()
     local _, row_a = h:cursor()
     lt.assertEquals(row_a, 1)
 
-    h:press("tab")
+    tui_input.press("tab")
     h:rerender()
     local _, row_b = h:cursor()
     lt.assertEquals(row_b, 2)
 
-    h:press("tab")
+    tui_input.press("tab")
     h:rerender()
     local _, row_c = h:cursor()
     lt.assertEquals(row_c, 3)
@@ -158,7 +160,7 @@ function suite:test_cursor_col_advances()
     local col0 = h:cursor()
     lt.assertNotEquals(col0, nil)
 
-    h:type("hi")
+    tui_input.type("hi")
     h:rerender()
     local col2 = h:cursor()
     lt.assertEquals(col2, col0 + 2)

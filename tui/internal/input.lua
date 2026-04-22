@@ -131,6 +131,22 @@ local _paste_buf  = {}
 -- those bytes are held here and prepended to the *next* dispatch() call.
 local _pending_bytes = ""
 
+-- Ingest redirect for tui.input.lua (harness / production scripts).
+local _ingest_fn = nil
+
+function M._set_ingest(fn)
+    _ingest_fn = fn
+end
+
+function M._dispatch_bytes(bytes)
+    if not bytes or #bytes == 0 then return end
+    if _ingest_fn then
+        _ingest_fn(bytes)
+    else
+        M.dispatch(bytes)
+    end
+end
+
 -- Returns how many bytes at the END of `s` form an incomplete ANSI escape
 -- prefix that should be buffered rather than parsed now.
 local function incomplete_esc_tail(s)
@@ -401,6 +417,7 @@ function M._reset()
     _mouse_bus._reset()
     _middlewares  = {}
     _hit_test_handler = nil
+    _ingest_fn = nil
     _pasting      = false
     _paste_buf    = {}
     _pending_bytes = ""

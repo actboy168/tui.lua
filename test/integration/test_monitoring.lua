@@ -3,6 +3,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local extra = require "tui.extra"
 
 local suite = lt.test "monitoring"
@@ -225,10 +227,10 @@ function suite:test_multi_panel_dashboard()
     h:match_snapshot("dashboard_panel_1_60x15")
 
     -- Switch panel with Tab
-    h:press("tab")
+    tui_input.press("tab")
     h:match_snapshot("dashboard_panel_2_60x15")
 
-    h:press("tab")
+    tui_input.press("tab")
     h:match_snapshot("dashboard_panel_3_60x15")
 
     h:unmount()

@@ -27,7 +27,6 @@ function M.install(testing, Harness)
     function Harness:dispatch_event(event)
         input_mod._dispatch_event(event)
         self:_paint()
-        return self
     end
 
     function testing.find_text_with_cursor(tree)

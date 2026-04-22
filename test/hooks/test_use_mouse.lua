@@ -4,6 +4,8 @@
 local lt        = require "ltest"
 local testing   = require "tui.testing"
 local tui       = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local input_mod = require "tui.internal.input"
 local mouse_helpers = require "tui.testing.mouse"
 
@@ -167,7 +169,7 @@ end
 function suite:test_harness_mouse_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    h:mouse("down", 1, 5, 3)
+    tui_input.mouse("down", 1, 5, 3)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
@@ -180,7 +182,7 @@ end
 function suite:test_harness_mouse_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    h:mouse("up", 1, 5, 3)
+    tui_input.mouse("up", 1, 5, 3)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "up")
@@ -191,7 +193,7 @@ end
 function suite:test_harness_mouse_scroll_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    h:mouse("scroll_up", nil, 1, 1)
+    tui_input.mouse("scroll_up", nil, 1, 1)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
@@ -202,7 +204,7 @@ end
 function suite:test_harness_mouse_scroll_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    h:mouse("scroll_down", nil, 1, 1)
+    tui_input.mouse("scroll_down", nil, 1, 1)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
@@ -213,7 +215,7 @@ end
 function suite:test_harness_mouse_modifiers()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    h:mouse("down", 1, 1, 1, { shift = true, ctrl = true })
+    tui_input.mouse("down", 1, 1, 1, { shift = true, ctrl = true })
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertTrue(events[1].shift)

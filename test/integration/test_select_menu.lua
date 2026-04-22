@@ -3,6 +3,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local extra   = require "tui.extra"
 
 local suite = lt.test "select_menu"
@@ -61,7 +63,7 @@ function suite:test_down_moves_highlight()
 
     local h = testing.render(App, { cols = 35, rows = 12 })
 
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
 
     lt.assertEquals(changed_to, "beta")
@@ -89,7 +91,7 @@ function suite:test_up_wraps_to_last()
     local h = testing.render(App, { cols = 35, rows = 12 })
 
     -- Up from first item wraps to last (delta)
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
     lt.assertEquals(changed_to, "delta")
 
@@ -104,11 +106,11 @@ function suite:test_navigation_sequence()
 
     local h = testing.render(App, { cols = 35, rows = 12 })
 
-    h:press("down")  -- → beta
-    h:press("down")  -- → gamma
-    h:press("down")  -- → delta
-    h:press("down")  -- → alpha (wrap)
-    h:press("up")    -- → delta
+    tui_input.press("down")  -- → beta
+    tui_input.press("down")  -- → gamma
+    tui_input.press("down")  -- → delta
+    tui_input.press("down")  -- → alpha (wrap)
+    tui_input.press("up")    -- → delta
 
     h:rerender()
 
@@ -127,7 +129,7 @@ function suite:test_enter_confirms_first_item()
 
     local h = testing.render(App, { cols = 35, rows = 12 })
 
-    h:press("enter")
+    tui_input.press("enter")
 
     h:rerender()
 
@@ -144,9 +146,9 @@ function suite:test_enter_confirms_navigated_item()
 
     local h = testing.render(App, { cols = 35, rows = 12 })
 
-    h:press("down")
-    h:press("down")
-    h:press("enter")
+    tui_input.press("down")
+    tui_input.press("down")
+    tui_input.press("enter")
 
     h:rerender()
 
@@ -168,9 +170,9 @@ end
 
 function suite:test_snapshot_after_navigation()
     local h = testing.render(MenuApp(nil, nil), { cols = 35, rows = 12 })
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     h:match_snapshot("select_gamma_highlighted_35x12")
     h:unmount()
@@ -184,11 +186,11 @@ function suite:test_one_render_per_keypress()
     local h = testing.render(MenuApp(nil, nil), { cols = 35, rows = 12 })
     h:reset_render_count()
 
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     h:expect_renders(1, "one down → one render")
 
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     h:expect_renders(2, "two downs → two renders total")
 

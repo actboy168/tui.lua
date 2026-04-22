@@ -97,16 +97,16 @@ function M.install(Harness)
 
         if os.getenv("TUI_UPDATE_SNAPSHOTS") == "1" then
             file_write(path, actual)
-            return self
+            return
         end
 
         local expected = file_read(path)
         if not expected then
             file_write(path, actual)
-            return self
+            return
         end
 
-        if trim_trailing(expected) == actual then return self end
+        if trim_trailing(expected) == actual then return end
 
         error(format_diff(name, expected, actual), 2)
     end

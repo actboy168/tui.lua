@@ -1,4 +1,3 @@
-local element       = require "tui.internal.element"
 local layout        = require "tui.internal.layout"
 local screen_mod    = require "tui.internal.screen"
 local reconciler    = require "tui.internal.reconciler"
@@ -9,9 +8,8 @@ local focus_mod     = require "tui.internal.focus"
 local ansi_mod      = require "tui.internal.ansi"
 local hooks         = require "tui.internal.hooks"
 local hit_test      = require "tui.internal.hit_test"
-local paint_frame   = require "tui.internal.paint_frame"
-local testing_input = require "tui.testing.input"
-local testing_mouse = require "tui.testing.mouse"
+local app_base      = require "tui.internal.app_base"
+local tui_input     = require "tui.input"
 local capture       = require "tui.testing.capture"
 local vterm         = require "tui.testing.vterm"
 
@@ -45,7 +43,7 @@ local Harness = {}
 Harness.__index = Harness
 
 --- Re-render, diff, and commit one harness frame.
--- Delegates to paint_frame.frame() for the full production paint pipeline.
+-- Delegates to app_base.paint() for the full production paint pipeline.
 function Harness:_paint()
     -- Free the previous frame's tree before stabilizing the new one.
     -- hit_test must be cleared first to avoid dangling pointer access.
@@ -53,26 +51,25 @@ function Harness:_paint()
         hit_test.clear_tree()
     end
 
-    local mouse_ref = { current = self._mouse_auto_release }
-    local tree, passes = paint_frame.frame {
-        rec_state  = self._state,
-        root       = self._App,
-        app_handle = self._app_handle,
-        get_size   = self._terminal.get_size,
-        screen     = self._screen,
-        interactive = self._interactive,
-        throw_on_error = true,
-        prev_tree  = self._tree,
-        write_fn   = self._terminal.write,
-        on_cursor_move = function(col, row)
+    local tree, passes, new_mouse = app_base.paint({
+        rec_state        = self._state,
+        root             = self._App,
+        app_handle       = self._app_handle,
+        get_size         = self._terminal.get_size,
+        screen           = self._screen,
+        interactive      = self._interactive,
+        throw_on_error   = true,
+        prev_tree        = self._tree,
+        write_fn         = self._terminal.write,
+        on_cursor_move   = function(col, row)
             self._last_cursor_col, self._last_cursor_row = col, row
             self._ime = { col = col, row = row }
         end,
-        mouse_auto_release = mouse_ref,
-    }
+        mouse_auto_release = self._mouse_auto_release,
+    })
 
     self._render_count = (self._render_count or 0) + passes
-    self._mouse_auto_release = mouse_ref.current
+    self._mouse_auto_release = new_mouse
     self._tree = tree
 end
 
@@ -82,7 +79,6 @@ end
 function Harness:rerender()
     scheduler.requestRedraw()
     scheduler.loop_once(self._scheduler_opts, self._terminal, self._fake_now, true)
-    return self
 end
 
 function Harness:width()  return self._w end
@@ -112,7 +108,6 @@ end
 
 function Harness:reset_render_count()
     self._render_count = 0
-    return self
 end
 
 function Harness:expect_renders(expected, msg)
@@ -121,7 +116,6 @@ function Harness:expect_renders(expected, msg)
         error((msg or "render count mismatch") .. ": expected " .. expected ..
               ", got " .. actual, 2)
     end
-    return self
 end
 
 function Harness:cursor()
@@ -166,37 +160,6 @@ function Harness:ime_pos()
     return p.col, p.row
 end
 
---- Dispatch a pre-built event object directly through input_mod (no paint).
-function Harness:dispatch_event(ev)
-    input_mod._dispatch_event(ev)
-    return self
-end
-
-function Harness:type_composing(text)
-    input_mod._dispatch_event({
-        name  = "composing",
-        input = text or "",
-        raw   = text or "",
-        ctrl  = false,
-        meta  = false,
-        shift = false,
-    })
-    return self
-end
-
-function Harness:type_composing_confirm(text)
-    local fake_input = text or ""
-    input_mod._dispatch_event({
-        name  = "composing_confirm",
-        input = fake_input,
-        raw   = fake_input,
-        ctrl  = false,
-        meta  = false,
-        shift = false,
-    })
-    return self
-end
-
 function Harness:composing()
     return self._composing
 end
@@ -207,7 +170,6 @@ end
 
 function Harness:clear_ansi()
     self._ansi_buf = {}
-    return self
 end
 
 --- Return the virtual terminal state.
@@ -221,61 +183,16 @@ function Harness:_enqueue_input(bytes)
         local vt = self._vt
         vt.input_queue[#vt.input_queue + 1] = bytes
     end
-    return self
 end
 
 --- Dispatch raw bytes through the production input path.
 -- Enqueues to vterm, then loop_once reads → on_input → dispatch + paint.
 function Harness:dispatch(bytes)
     if bytes and #bytes > 0 then
-        self:_enqueue_input(bytes)
+        tui_input.dispatch(bytes)
         scheduler.requestRedraw()
         scheduler.loop_once(self._scheduler_opts, self._terminal, self._fake_now, true)
     end
-    return self
-end
-
---- Simulate a bracketed paste burst (enqueue only, no paint).
-function Harness:paste(text)
-    self:_enqueue_input(testing_input.paste(text))
-    return self
-end
-
---- Simulate a mouse event through the shared testing.mouse encoder (enqueue only, no paint).
-function Harness:mouse(ev_type, btn, x, y, mods)
-    self:_enqueue_input(testing_mouse.harness(ev_type, btn, x, y, mods))
-    return self
-end
-
---- Simulate a named key (enqueue only, no paint).
-function Harness:press(name)
-    local raw = testing_input.resolve_key(name)
-    if raw == nil then
-        return self:type(name)
-    end
-    self:_enqueue_input(raw)
-    return self
-end
-
---- Simulate typing a string, enqueueing one UTF-8 codepoint at a time.
-function Harness:type(str)
-    if type(str) ~= "string" then
-        error("type: expected string, got " .. type(str), 2)
-    end
-    local i = 1
-    while i <= #str do
-        local b = str:byte(i)
-        local n
-        if b < 0x80     then n = 1
-        elseif b < 0xC0 then n = 1
-        elseif b < 0xE0 then n = 2
-        elseif b < 0xF0 then n = 3
-        else                 n = 4 end
-        local chunk = str:sub(i, i + n - 1)
-        self:_enqueue_input(chunk)
-        i = i + n
-    end
-    return self
 end
 
 --- Advance the virtual clock, run timers, and repaint.
@@ -284,7 +201,6 @@ function Harness:advance(ms)
     self._fake_now = self._fake_now + ms
     scheduler.step(self._fake_now)
     self:_paint()
-    return self
 end
 
 --- Resize the harness terminal dimensions.
@@ -296,7 +212,6 @@ function Harness:resize(cols, rows)
     assert(type(rows) == "number" and rows > 0, "resize: rows must be positive number")
     self._w, self._h = cols, rows
     self._vt:resize(cols, rows)
-    return self
 end
 
 function Harness:focus_id()
@@ -305,17 +220,14 @@ end
 
 function Harness:focus_next()
     focus_mod.focus_next()
-    return self
 end
 
 function Harness:focus_prev()
     focus_mod.focus_prev()
-    return self
 end
 
 function Harness:focus(id)
     focus_mod.focus(id)
-    return self
 end
 
 function Harness:unmount()
@@ -351,115 +263,6 @@ function Harness:unmount()
     capture.drain_and_fatal_if_any()
 end
 
-local Bare = {}
-Bare.__index = Bare
-
-function Bare:rerender()
-    if self._tree then self._tree = nil end
-    self._render_count = (self._render_count or 0) + 1
-    self._tree = reconciler.render(self._state, self._App, self._app_handle)
-    return self
-end
-
-function Bare:render_count()
-    return self._render_count or 0
-end
-
-function Bare:reset_render_count()
-    self._render_count = 0
-    return self
-end
-
-function Bare:expect_renders(expected, msg)
-    local actual = self._render_count or 0
-    if actual ~= expected then
-        error((msg or "render count mismatch") .. ": expected " .. expected ..
-              ", got " .. actual, 2)
-    end
-    return self
-end
-
-function Bare:dispatch(bytes)
-    if bytes and #bytes > 0 then input_mod.dispatch(bytes) end
-    return self
-end
-
---- Simulate typing a string on Bare (dispatch only, no paint).
-function Bare:type(str)
-    if type(str) ~= "string" then
-        error("type: expected string, got " .. type(str), 2)
-    end
-    local i = 1
-    while i <= #str do
-        local b = str:byte(i)
-        local n
-        if b < 0x80     then n = 1
-        elseif b < 0xC0 then n = 1
-        elseif b < 0xE0 then n = 2
-        elseif b < 0xF0 then n = 3
-        else                 n = 4 end
-        local chunk = str:sub(i, i + n - 1)
-        input_mod.dispatch(chunk)
-        i = i + n
-    end
-    return self
-end
-
-function Bare:press(name)
-    local raw = testing_input.resolve_key(name)
-    if raw == nil then
-        return self:type(name)
-    end
-    input_mod.dispatch(raw)
-    return self
-end
-
-function Bare:advance(ms)
-    assert(type(ms) == "number" and ms >= 0, "advance: non-negative ms required")
-    self._fake_now = self._fake_now + ms
-    scheduler.step(self._fake_now)
-    return self
-end
-
-function Bare:focus_id()
-    return focus_mod.get_focused_id()
-end
-
-function Bare:focus_next()
-    focus_mod.focus_next()
-    return self
-end
-
-function Bare:focus_prev()
-    focus_mod.focus_prev()
-    return self
-end
-
-function Bare:focus(id)
-    focus_mod.focus(id)
-    return self
-end
-
-function Bare:tree()
-    return self._tree
-end
-
-function Bare:state()
-    return self._state
-end
-
-function Bare:unmount()
-    if self._dead then return end
-    self._dead = true
-    reconciler.shutdown(self._state)
-    input_mod._reset()
-    resize_mod._reset()
-    focus_mod._reset()
-    scheduler._reset()
-    hooks._set_dev_mode(false)
-    capture.drain_and_fatal_if_any()
-end
-
 --- Mount a full render/layout harness for component and integration tests.
 function M.render(App, opts)
     opts = opts or {}
@@ -479,10 +282,7 @@ function M.render(App, opts)
         ansi_mod.set_interactive_fn(function() return true end)
     end
 
-    input_mod._reset()
-    resize_mod._reset()
-    focus_mod._reset()
-    scheduler._reset()
+    app_base.reset_framework()
     layout.reset()
     hooks._set_dev_mode(true)
 
@@ -544,35 +344,21 @@ function M.render(App, opts)
         sleep = function() end,
     }
 
-    -- Wire the hit-test handler so that mouse events dispatched through
-    -- the harness (h:mouse()) are routed through hit_test.dispatch_click
-    -- and hit_test.dispatch_scroll, matching the production event pipeline.
-    input_mod.set_hit_test_handler(function(ev)
-        if ev.type == "down" and ev.button == 1 then
-            return hit_test.dispatch_click(ev.x, ev.y)
-        elseif ev.type == "scroll" then
-            return hit_test.dispatch_scroll(ev.x, ev.y, ev.scroll)
-        end
-        return false
-    end)
+    -- Redirect tui.input simulated events into the vterm input queue.
+    tui_input.ingest(function(bytes) h:_enqueue_input(bytes) end)
+
+    app_base.setup_hit_test()
 
     -- Interactive mode initialization (mirrors init.lua render() preamble)
     if use_interactive then
-        local clipboard = require "tui.internal.clipboard"
-        h._terminal.write(ansi_mod.cursorHide() .. ansi_mod.enableBracketedPaste .. ansi_mod.enableFocusEvents)
-        input_mod.set_mouse_mode_writer(h._terminal.write)
-        clipboard.set_writer(h._terminal.write)
-        clipboard._osc52_enabled = true
+        app_base.setup_interactive(h._terminal.write, true, false)
         screen_mod.set_mode(h._screen, "main")
     end
 
     local ok, err = pcall(function() h:_paint() end)
     if not ok then
         if ansi_restore then ansi_restore() end
-        input_mod._reset()
-        resize_mod._reset()
-        focus_mod._reset()
-        scheduler._reset()
+        app_base.reset_framework()
         error(err, 2)
     end
 
@@ -592,31 +378,6 @@ function M.render(App, opts)
     return h
 end
 
---- Mount a bare reconciler/hooks harness without layout or screen painting.
-function M.mount_bare(App)
-    input_mod._reset()
-    resize_mod._reset()
-    focus_mod._reset()
-    scheduler._reset()
-    hooks._set_dev_mode(true)
-    local b = setmetatable({
-        _App          = App,
-        _state        = reconciler.new(),
-        _tree         = nil,
-        _dead         = false,
-        _fake_now     = 0,
-        _render_count = 1,
-    }, Bare)
-    b._app_handle = { exit = function() b._dead = true end }
-    scheduler.configure {
-        now   = function() return b._fake_now end,
-        sleep = function() end,
-    }
-    b._tree = reconciler.render(b._state, App, b._app_handle)
-    return b
-end
-
 M.Harness = Harness
-M.Bare = Bare
 
 return M

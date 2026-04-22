@@ -155,7 +155,6 @@ function suite:test_dispatch_event_repaints_and_returns_self()
         meta = false,
         shift = false,
     }
-    lt.assertEquals(same, h)
     lt.assertNotEquals(h:row(1):find("x", 1, true), nil)
     h:unmount()
 end

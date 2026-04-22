@@ -2,6 +2,8 @@
 
 local lt     = require "ltest"
 local tui    = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local Select = require "tui.extra.select".Select
 local testing = require "tui.testing"
 
@@ -49,7 +51,7 @@ function suite:test_down_moves_highlight_and_fires_onchange()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     lt.assertEquals(#changes, 1)
     lt.assertEquals(changes[1][1], "b")
@@ -68,7 +70,7 @@ function suite:test_up_wraps_to_last()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
     row_starts_with(h, 3, "❯ c")
     h:unmount()
@@ -83,7 +85,7 @@ function suite:test_down_wraps_to_first()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     row_starts_with(h, 1, "❯ a")
     h:unmount()
@@ -98,10 +100,10 @@ function suite:test_home_end_jump()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
-    h:press("end")
+    tui_input.press("end")
     h:rerender()
     row_starts_with(h, 3, "❯ c")
-    h:press("home")
+    tui_input.press("home")
     h:rerender()
     row_starts_with(h, 1, "❯ a")
     h:unmount()
@@ -120,8 +122,8 @@ function suite:test_enter_fires_onselect()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
-    h:press("down")
-    h:press("enter")
+    tui_input.press("down")
+    tui_input.press("enter")
     h:rerender()
     lt.assertEquals(selected[1], "b")
     lt.assertEquals(selected[2], 2)
@@ -142,7 +144,7 @@ function suite:test_disabled_ignores_keys()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     lt.assertEquals(changes, 0)
     -- Highlight stays on the first row.
@@ -161,8 +163,8 @@ function suite:test_empty_items_no_error()
     local h = testing.render(App, { cols = 30, rows = 3 })
     lt.assertEquals(strip_ansi(h:row(1)):match("%S"), nil)  -- no non-space
     -- Enter / arrows are no-ops and must not raise.
-    h:press("down")
-    h:press("enter")
+    tui_input.press("down")
+    tui_input.press("enter")
     h:unmount()
 end
 
@@ -182,8 +184,8 @@ function suite:test_table_items_value_distinct_from_label()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
-    h:press("down")
-    h:press("enter")
+    tui_input.press("down")
+    tui_input.press("enter")
     h:rerender()
     lt.assertEquals(got[1], "B")
     lt.assertEquals(got[2], 2)
@@ -209,9 +211,9 @@ function suite:test_limit_window_scrolls()
     row_starts_with(h, 3, "  c")
 
     -- Move highlight down far enough that the window shifts.
-    h:press("down") -- hl=2
-    h:press("down") -- hl=3
-    h:press("down") -- hl=4 — window must shift to show 'd'
+    tui_input.press("down") -- hl=2
+    tui_input.press("down") -- hl=3
+    tui_input.press("down") -- hl=4 — window must shift to show 'd'
     h:rerender()
     -- Whichever row the highlighted 'd' ends up on, it must be visible.
     local found
@@ -240,7 +242,7 @@ function suite:test_render_item_override()
     local h = testing.render(App, { cols = 30, rows = 2 })
     row_starts_with(h, 1, "[*] a")
     row_starts_with(h, 2, "[ ] b")
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     row_starts_with(h, 1, "[ ] a")
     row_starts_with(h, 2, "[*] b")
@@ -281,7 +283,7 @@ function suite:test_unknown_key_is_noop()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 2 })
-    h:type("x")
+    tui_input.type("x")
     h:rerender()
     lt.assertEquals(changes, 0)
     h:unmount()

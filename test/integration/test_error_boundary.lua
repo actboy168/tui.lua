@@ -13,6 +13,8 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local testing = require "tui.testing"
 
 local suite = lt.test "error_boundary"
@@ -340,7 +342,7 @@ function suite:test_useinput_handler_throw_caught_by_boundary()
 
     local h = testing.render(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:frame(), "BAD ", "no key pressed yet, child still mounted")
-    h:type("x")   -- drives input.dispatch → broadcast handler → throws
+    tui_input.type("x")   -- drives input.dispatch → broadcast handler → throws
     h:rerender()
     lt.assertEquals(h:frame(), "FBkb", "boundary catches useInput handler error")
     h:unmount()
@@ -368,7 +370,7 @@ function suite:test_usefocus_on_input_throw_caught_by_boundary()
 
     local h = testing.render(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:focus_id() ~= nil, true, "autoFocus took focus")
-    h:type("y")   -- dispatch_focused delivers to focused on_input → throws
+    tui_input.type("y")   -- dispatch_focused delivers to focused on_input → throws
     h:rerender()
     lt.assertEquals(h:frame(), "FBfb", "boundary catches focused on_input error")
     h:unmount()
@@ -388,7 +390,7 @@ function suite:test_useinput_throw_without_boundary_propagates()
     local function App() return Bad {} end
 
     local h = testing.render(App, { cols = 2, rows = 1 })
-    local ok, err = pcall(function() h:type("a"); h:rerender() end)
+    local ok, err = pcall(function() tui_input.type("a"); h:rerender() end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("loose-key", 1, true) ~= nil, true,
         "expected unhandled input error, got: " .. tostring(err))

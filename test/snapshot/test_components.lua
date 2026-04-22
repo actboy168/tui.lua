@@ -6,6 +6,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local extra = require "tui.extra"
 
 local suite = lt.test "components"
@@ -250,7 +252,7 @@ function suite:test_textinput_typed()
         }
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
-    h:type("abc")
+    tui_input.type("abc")
     h:rerender()
     h:match_snapshot("textinput_typed_25x5")
     h:unmount()

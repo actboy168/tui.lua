@@ -3,6 +3,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 local extra = require "tui.extra"
 
 local suite = lt.test "forms"
@@ -68,14 +70,14 @@ function suite:test_login_form_submit()
     lt.assertNotEquals(col0, nil, "cursor should be set on initial focused TextInput")
 
     -- Type in username field and submit
-    h:type("admin")
+    tui_input.type("admin")
     h:rerender()
 
     -- Cursor advanced by 5 chars
     local col_after, _ = h:cursor()
     lt.assertEquals(col_after, col0 + 5)
 
-    h:press("enter")
+    tui_input.press("enter")
     h:rerender()
 
     lt.assertNotEquals(submitted, nil)
@@ -138,11 +140,11 @@ function suite:test_login_form_full_flow()
     lt.assertNotEquals(focus_before_tab, nil)
 
     -- Fill username
-    h:type("john")
+    tui_input.type("john")
     h:rerender()
 
     -- Use Tab to move to password field
-    h:press("tab")
+    tui_input.press("tab")
     h:rerender()
 
     -- Focus must have moved to a different field
@@ -157,9 +159,9 @@ function suite:test_login_form_full_flow()
     lt.assertTrue(row_pass >= 1)
 
     -- Fill password and submit
-    h:type("secret123")
+    tui_input.type("secret123")
     h:rerender()
-    h:press("return")
+    tui_input.press("return")
     h:rerender()
 
     lt.assertNotEquals(submitted, nil)
@@ -247,17 +249,17 @@ function suite:test_wizard_form_navigation()
     local h = testing.render(App, { cols = 45, rows = 12 })
 
     -- Step 1: Fill name, then Enter to next step
-    h:type("John Doe")
-    h:press("return")
+    tui_input.type("John Doe")
+    tui_input.press("return")
     h:rerender()
 
     -- Step 2: Fill email, then Enter to next step
-    h:type("john@example.com")
-    h:press("return")
+    tui_input.type("john@example.com")
+    tui_input.press("return")
     h:rerender()
 
     -- Step 3: Submit
-    h:press("return")
+    tui_input.press("return")
     h:rerender()
 
     lt.assertEquals(#submissions, 1)
@@ -307,19 +309,19 @@ function suite:test_form_with_validation()
     local h = testing.render(App, { cols = 45, rows = 10 })
 
     -- Submit invalid email
-    h:type("invalid")
+    tui_input.type("invalid")
     h:rerender()
-    h:press("enter")
+    tui_input.press("enter")
     h:rerender()
     lt.assertEquals(submitted, false)
     lt.assertEquals(#errors, 1)
 
     -- Clear and submit valid email
-    h:press("ctrl+u")  -- clear line
+    tui_input.press("ctrl+u")  -- clear line
     h:rerender()
-    h:type("valid@example.com")
+    tui_input.type("valid@example.com")
     h:rerender()
-    h:press("enter")
+    tui_input.press("enter")
     h:rerender()
 
     lt.assertEquals(submitted, true)
@@ -357,9 +359,9 @@ function suite:test_form_with_select()
     local h = testing.render(App, { cols = 35, rows = 12 })
 
     -- Select an item
-    h:press("down")
-    h:press("down")
-    h:press("return")
+    tui_input.press("down")
+    tui_input.press("down")
+    tui_input.press("return")
     h:rerender()
 
     lt.assertEquals(selectedValue, "opt3")

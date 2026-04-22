@@ -1,15 +1,105 @@
+-- tui/internal/app_base.lua — shared initialization / teardown helpers
+-- used by both tui.internal.app (production) and tui.testing.harness.
+
+local input_mod  = require "tui.internal.input"
+local resize_mod = require "tui.internal.resize"
+local focus_mod  = require "tui.internal.focus"
+local scheduler  = require "tui.internal.scheduler"
+local hit_test   = require "tui.internal.hit_test"
+local ansi       = require "tui.internal.ansi"
+local clipboard  = require "tui.internal.clipboard"
+local screen_mod = require "tui.internal.screen"
 local element    = require "tui.internal.element"
 local layout     = require "tui.internal.layout"
 local renderer   = require "tui.internal.renderer"
-local screen_mod = require "tui.internal.screen"
 local reconciler = require "tui.internal.reconciler"
-local ansi       = require "tui.internal.ansi"
-local hit_test   = require "tui.internal.hit_test"
-local input_mod  = require "tui.internal.input"
-
-local resize_mod = require "tui.internal.resize"
 
 local M = {}
+
+-- Forward declarations for the paint pipeline (defined below).
+local find_cursor
+local stabilize
+local paint_interactive
+local frame
+
+--- Write interactive-mode startup sequences and wire writers.
+function M.setup_interactive(terminal_write, interactive, use_kkp)
+    if not interactive then return end
+    terminal_write(ansi.cursorHide() .. ansi.enableBracketedPaste .. ansi.enableFocusEvents)
+    if use_kkp then
+        terminal_write(ansi.kittyKeyboard.push)
+    end
+    input_mod.set_mouse_mode_writer(terminal_write)
+    clipboard.set_writer(terminal_write)
+    clipboard._osc52_enabled = true
+end
+
+--- Write interactive-mode teardown sequences and detach writers.
+function M.teardown_interactive(terminal_write, terminal_set_raw, interactive, use_kkp, screen_state, last_display_y)
+    if interactive then
+        local move_seq = "\r"
+        if last_display_y then
+            local _, vy = screen_mod.cursor_pos(screen_state)
+            local dy = vy - last_display_y
+            if dy > 0 then
+                move_seq = ansi.cursorDown(dy) .. "\r"
+            end
+        end
+        terminal_write(ansi.disableBracketedPaste .. ansi.disableFocusEvents .. move_seq .. ansi.cursorShow() .. "\n")
+        if use_kkp then
+            terminal_write(ansi.kittyKeyboard.pop)
+        end
+        input_mod.set_mouse_mode_writer(nil)
+    end
+    if terminal_set_raw then
+        terminal_set_raw(false)
+    end
+    clipboard._osc52_enabled = false
+end
+
+--- Reset the framework singletons that both production and harness use.
+function M.reset_framework()
+    input_mod._reset()
+    resize_mod._reset()
+    focus_mod._reset()
+    scheduler._reset()
+end
+
+--- Install the shared hit-test handler for mouse events.
+function M.setup_hit_test()
+    input_mod.set_hit_test_handler(function(ev)
+        if ev.type == "down" and ev.button == 1 then
+            return hit_test.dispatch_click(ev.x, ev.y)
+        elseif ev.type == "scroll" then
+            return hit_test.dispatch_scroll(ev.x, ev.y, ev.scroll)
+        end
+        return false
+    end)
+end
+
+--- Wrap frame() with mouse_auto_release bookkeeping.
+-- Returns: tree, passes, new_mouse_auto_release
+function M.paint(opts)
+    local mouse_ref = { current = opts.mouse_auto_release }
+    local tree, passes = frame {
+        rec_state        = opts.rec_state,
+        root             = opts.root,
+        app_handle       = opts.app_handle,
+        get_size         = opts.get_size,
+        screen           = opts.screen,
+        interactive      = opts.interactive,
+        throw_on_error   = opts.throw_on_error,
+        prev_tree        = opts.prev_tree,
+        write_fn         = opts.write_fn,
+        on_cursor_move   = opts.on_cursor_move,
+        mouse_auto_release = mouse_ref,
+    }
+    return tree, passes or 0, mouse_ref.current
+end
+
+-- ============================================================================
+-- Paint frame pipeline (merged from paint_frame.lua)
+-- ============================================================================
 
 -- Error-handling: `reconciler.render` can raise if a component fn throws
 -- and there is no `<ErrorBoundary>` ancestor to catch it. We swap in a
@@ -66,7 +156,7 @@ end
 -- resolved within a single frame, matching the harness behavior.
 -- Returns the final tree and the number of render passes performed.
 -- Caller is responsible for freeing the returned tree when done.
-function M.stabilize(rec_state, root, app_handle, w, h, is_main, throw_on_error)
+stabilize = function(rec_state, root, app_handle, w, h, is_main, throw_on_error)
     local tree = render_and_layout(rec_state, root, app_handle, w, h, is_main, throw_on_error)
     local passes = 1
 
@@ -82,7 +172,7 @@ end
 
 --- Find the cursor position in the laid-out tree.
 -- Returns col, row (1-based) or nil.
-function M.find_cursor(tree)
+find_cursor = function(tree)
     local first_candidate = nil
     local focused_candidate = nil
     local root_w = tree.rect and tree.rect.w
@@ -120,31 +210,10 @@ function M.find_cursor(tree)
     return nil
 end
 
---- Paint a laid-out tree to the screen state and return the diff string.
-function M.paint_and_diff(tree, screen_state, interactive, resized, content_h)
-    screen_mod.clear(screen_state)
-    renderer.paint(tree, screen_state)
-    return screen_mod.diff(screen_state, interactive and resized,
-                           interactive and content_h or nil)
-end
-
 --- Perform a full paint frame: resize detection → stabilize → set_tree → paint.
 -- Returns the laid-out tree and the number of render passes.
 -- Caller is responsible for freeing the returned tree when done.
---
--- opts:
---   rec_state:       reconciler state
---   root:            root component/element
---   app_handle:      { exit = fn }
---   get_size:        function() -> w, h  (terminal.get_size)
---   screen:          screen state object
---   interactive:     boolean
---   throw_on_error:  boolean (default false)
---   prev_tree:      previous tree to free before stabilizing (harness only)
---   write_fn:        function(s) — terminal.write
---   on_cursor_move:  function(col, row)? — called when cursor is positioned
---   mouse_auto_release:  { current = nil|function } — managed by paint_interactive
-function M.frame(opts)
+frame = function(opts)
     -- Resize detection.
     local w, h = opts.get_size()
     local cw, ch = screen_mod.size(opts.screen)
@@ -164,14 +233,14 @@ function M.frame(opts)
         layout.free(opts.prev_tree)
     end
 
-    local tree, passes = M.stabilize(opts.rec_state, opts.root, opts.app_handle, w, h, interactive, throw_on_error)
+    local tree, passes = stabilize(opts.rec_state, opts.root, opts.app_handle, w, h, interactive, throw_on_error)
 
     -- Store tree for mouse hit testing.
     hit_test.set_tree(tree)
 
     local content_h = tree.rect and math.min(tree.rect.h, h) or h
     local mouse_ref = { current = opts.mouse_auto_release and opts.mouse_auto_release.current }
-    M.paint_interactive(opts.screen, tree, {
+    paint_interactive(opts.screen, tree, {
         interactive = interactive,
         resized = resized,
         content_h = content_h,
@@ -189,20 +258,9 @@ function M.frame(opts)
 end
 
 --- Paint a tree and write output.
--- Called from both init.lua paint() and harness _paint().
 -- Handles both interactive (BSU/ESU wrapped, mouse auto-enable) and
 -- non-interactive (plain diff + cursor) modes.
---
--- opts:
---   interactive: boolean
---   resized: boolean — true if terminal was resized this frame
---   content_h: number — layout content height (for cursor bounds clamp)
---   set_display_cursor: function(screen, col, row) — screen_mod.set_display_cursor
---   cursor_pos_fn: function() -> col, row — screen_mod.cursor_pos
---   on_cursor_move: function(col, row)? — called when cursor is positioned
---   _mouse_auto_release_handler: function(ref) — called with { current = nil|function }
---     so the caller can do:  local r = { current = self._mouse_auto_release }; paint_interactive(..., r); self._mouse_auto_release = r.current
-function M.paint_interactive(screen_state, tree, opts)
+paint_interactive = function(screen_state, tree, opts)
     local interactive = opts.interactive
     local content_h = opts.content_h
 
@@ -226,7 +284,7 @@ function M.paint_interactive(screen_state, tree, opts)
 
     -- cursor
     local cursor_seq = ""
-    local ccol, crow = M.find_cursor(tree)
+    local ccol, crow = find_cursor(tree)
     if ccol and crow then
         if interactive and (crow - 1) < content_h then
             local cx, cy = opts.cursor_pos_fn()

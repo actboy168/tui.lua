@@ -4,6 +4,7 @@ local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
 local extra   = require "tui.extra"
+local tui_input = require "tui.input"
 
 local suite = lt.test "ime_flow"
 
@@ -32,7 +33,7 @@ end
 function suite:test_composing_appears()
     local h = testing.render(IMEApp, { cols = 35, rows = 5 })
 
-    h:type_composing("ni")
+    tui_input.type_composing("ni")
     h:rerender()
 
     -- During composing the text should be visible in the frame
@@ -69,8 +70,8 @@ function suite:test_confirm_commits_text()
 
     local h = testing.render(App, { cols = 35, rows = 5 })
 
-    h:type_composing("你好")
-    h:type_composing_confirm("你好")
+    tui_input.type_composing("你好")
+    tui_input.type_composing_confirm("你好")
 
     lt.assertEquals(committed, "你好")
 
@@ -90,13 +91,13 @@ function suite:test_cursor_past_double_width()
     lt.assertNotEquals(col0, nil, "cursor position should be defined")
 
     -- ASCII: cursor moves 1 per character
-    h:type("ab")
+    tui_input.type("ab")
     h:rerender()
     local col_ascii = h:cursor()
     lt.assertEquals(col_ascii, col0 + 2)
 
     -- Confirm a double-width character: cursor moves 2 per character
-    h:type_composing_confirm("你")   -- 1 wide char = 2 columns
+    tui_input.type_composing_confirm("你")   -- 1 wide char = 2 columns
     h:rerender()
     local col_after = h:cursor()
     lt.assertEquals(col_after, col_ascii + 2,
@@ -113,7 +114,7 @@ function suite:test_ime_pos_after_composing()
     local h = testing.render(IMEApp, { cols = 35, rows = 5 })
     h:rerender()
 
-    h:type_composing("a")
+    tui_input.type_composing("a")
 
     local col, row = h:ime_pos()
     lt.assertNotEquals(col, nil, "ime_pos col should be set during composing")
@@ -130,7 +131,7 @@ end
 
 function suite:test_snapshot_composing()
     local h = testing.render(IMEApp, { cols = 35, rows = 5 })
-    h:type_composing("abc")
+    tui_input.type_composing("abc")
     h:rerender()
     h:match_snapshot("ime_composing_35x5")
     h:unmount()
@@ -138,7 +139,7 @@ end
 
 function suite:test_snapshot_confirmed()
     local h = testing.render(IMEApp, { cols = 35, rows = 5 })
-    h:type_composing_confirm("Hello")
+    tui_input.type_composing_confirm("Hello")
     h:rerender()
     h:match_snapshot("ime_confirmed_35x5")
     h:unmount()

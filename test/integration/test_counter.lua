@@ -3,6 +3,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local tui_input = require "tui.input"
+local tui_input = require "tui.input"
 
 local suite = lt.test "counter"
 
@@ -35,19 +37,19 @@ function suite:test_increment()
 
     lt.assertEquals(h:row(2), "0                        ")
 
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
     lt.assertEquals(h:row(2), "1                        ")
 
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
     lt.assertEquals(h:row(2), "2                        ")
 
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
     lt.assertEquals(h:row(2), "3                        ")
 
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     lt.assertEquals(h:row(2), "2                        ")
 
@@ -57,11 +59,11 @@ end
 function suite:test_decrement_below_zero()
     local h = testing.render(Counter, { cols = 25, rows = 7 })
 
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     lt.assertEquals(h:row(2), "-1                       ")
 
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     lt.assertEquals(h:row(2), "-2                       ")
 
@@ -76,13 +78,13 @@ function suite:test_render_count_per_keypress()
     local h = testing.render(Counter, { cols = 25, rows = 7 })
     h:reset_render_count()
 
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
     h:expect_renders(1, "one keypress → one render")
 
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
-    h:press("down")
+    tui_input.press("down")
     h:rerender()
     h:expect_renders(3, "three keypresses → three renders")
 
@@ -101,11 +103,11 @@ end
 
 function suite:test_snapshot_after_increments()
     local h = testing.render(Counter, { cols = 25, rows = 7 })
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
-    h:press("up")
+    tui_input.press("up")
     h:rerender()
     h:match_snapshot("counter_at_3_25x7")
     h:unmount()
