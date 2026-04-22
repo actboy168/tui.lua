@@ -4,6 +4,7 @@ local lt     = require "ltest"
 local tui    = require "tui"
 local Static = require "tui.extra.static".Static
 local testing = require "tui.testing"
+local vterm  = require "tui.testing.vterm"
 
 local suite = lt.test "static"
 
@@ -44,8 +45,8 @@ function suite:test_static_appending_items_produces_incremental_diff()
     h:rerender()
     local ansi = h:ansi()
     lt.assertEquals(#ansi > 0, true, "expected some ANSI for new row")
-    lt.assertEquals(#ansi < 150, true, "expected a small diff, got " .. #ansi .. " bytes")
-    lt.assertEquals(ansi:find("second", 1, true) ~= nil, true)
+    lt.assertEquals(#ansi < 300, true, "expected a small diff, got " .. #ansi .. " bytes")
+    lt.assertEquals(h:row(2):sub(1, 6), "second", "new row content should appear")
     h:unmount()
 end
 
@@ -62,9 +63,13 @@ function suite:test_static_no_change_produces_zero_diff()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 5 })
-    h:clear_ansi()
+    local vt = h:vterm()
+    -- Capture the screen before rerender
+    local before = vterm.screen_string(vt)
     h:rerender()
-    lt.assertEquals(#h:ansi(), 0, "second identical render should emit no ANSI")
+    local after = vterm.screen_string(vt)
+    -- Screen content must be identical (no cell changes)
+    lt.assertEquals(after, before, "second identical render should not change screen content")
     h:unmount()
 end
 

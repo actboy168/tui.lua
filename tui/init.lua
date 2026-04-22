@@ -28,6 +28,7 @@ local ansi       = require "tui.internal.ansi"
 local text_mod   = require "tui.internal.text"
 local clipboard  = require "tui.internal.clipboard"
 local hit_test   = require "tui.internal.hit_test"
+local paint_frame = require "tui.internal.paint_frame"
 local tui_core   = require "tui_core"
 
 local terminal = tui_core.terminal
@@ -144,93 +145,6 @@ M.truncateStart  = text_mod.truncate_start
 M.truncateMiddle = text_mod.truncate_middle
 
 
--- Cursor position is set by the focused component via cursor.set(col, row)
--- during render. We consume it here after layout (so coordinates are absolute).
--- Single-writer model: only one component sets the cursor per frame.
---
--- Fallback: if no component calls cursor.set(), we scan the tree for Text
--- elements with _cursor_offset (legacy TextInput behavior).
-local function find_cursor(tree)
-    local first_candidate = nil
-    local focused_candidate = nil
-    local root_w = tree.rect and tree.rect.w
-    local root_h = tree.rect and tree.rect.h
-
-    local function walk(e)
-        if not e then return end
-        if e.kind == "text" and e._cursor_offset ~= nil then
-            local r = e.rect or { x = 0, y = 0 }
-            local offset = math.min(e._cursor_offset, r.w or e._cursor_offset)
-            local col = r.x + offset + 1
-            if root_w and col > root_w then col = root_w end
-            local row = r.y + 1
-            if root_h and row > root_h then row = root_h end
-            local cand = { col = col, row = row }
-            if not first_candidate then
-                first_candidate = cand
-            end
-            if e._cursor_focused and not focused_candidate then
-                focused_candidate = cand
-            end
-        end
-        if e.children then
-            for _, c in ipairs(e.children) do
-                walk(c)
-            end
-        end
-    end
-
-    walk(tree)
-    local chosen = focused_candidate or first_candidate
-    if chosen then
-        return chosen.col, chosen.row
-    end
-    return nil
-end
-
--- Produce + commit one frame. Called internally by render / rerender /
--- type / press / advance / resize.
---
--- Error-handling: `reconciler.render` can raise if a component fn throws
--- and there is no `<ErrorBoundary>` ancestor to catch it. We swap in a
--- banner tree so the event loop keeps running instead of crashing the
--- whole TUI (the "framework-level implicit boundary" guarantee).
-local function fallback_error_tree(msg, w, h)
-    return element.Box {
-        width = w, height = h,
-        element.Text {
-            "[tui] render error: " .. tostring(msg),
-        },
-    }
-end
-
--- Produce a fresh host tree (with layout applied) for the current frame.
--- Caller is responsible for layout.free() after using the tree.
--- In main-screen mode (is_main=true) the root box height is NOT auto-filled
--- to h; content determines its own height so only the needed rows are claimed.
-local function produce_tree(rec_state, root, app_handle, w, h, is_main)
-    local ok, tree_or_err = pcall(reconciler.render, rec_state, root, app_handle)
-    local tree
-    if ok then
-        tree = tree_or_err
-        if not tree then
-            tree = element.Box { width = w, height = h }
-        end
-    else
-        tree = fallback_error_tree(tree_or_err, w, h)
-    end
-
-    -- Expand root Box to fill the terminal width; fill height only in alt mode.
-    if tree.kind == "box" then
-        tree.props = tree.props or {}
-        if tree.props.width  == nil then tree.props.width  = w end
-        if not is_main and tree.props.height == nil then tree.props.height = h end
-    end
-
-    layout.compute(tree, h)
-    return tree
-end
-
 --- tui.render(root, opts)
 -- Run the main loop with `root` as the top of the component tree. Blocks
 -- until the app calls `useApp():exit()`, or an emergency key is received
@@ -315,7 +229,7 @@ function M.render(root, opts)
         if resize_mod.observe(w, h) then
             screen_mod.invalidate(screen_state)
         end
-        local tree = produce_tree(rec_state, root, app_handle, w, h, interactive)
+        local tree = paint_frame.stabilize(rec_state, root, app_handle, w, h, interactive)
         -- Store the laid-out tree for mouse hit testing before painting
         -- (painting may modify elements in-place, but rects are stable).
         hit_test.set_tree(tree)
@@ -345,7 +259,7 @@ function M.render(root, opts)
         -- In non-interactive mode: no cursor handling.
         local cursor_seq = ""
         if interactive then
-            local ccol, crow = find_cursor(tree)
+            local ccol, crow = paint_frame.find_cursor(tree)
             -- Guard: if the declared cursor row is outside the visible area
             -- (content taller than the terminal), treat it as hidden. Storing
             -- an out-of-bounds display_y would corrupt the next frame's preamble
@@ -373,6 +287,7 @@ function M.render(root, opts)
             terminal.write(diff)
         end
 
+        hit_test.clear_tree()
         layout.free(tree)
     end
 

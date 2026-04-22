@@ -548,9 +548,20 @@ end
 
 -- Interactive mode
 
+local _interactive_override = nil
+
 --- Check if the terminal is interactive (TTY + not in CI).
 function M.interactive()
+    if _interactive_override ~= nil then
+        return _interactive_override()
+    end
     return is_tty() and not is_ci()
+end
+
+--- Override the interactive() check for testing.
+--- Pass a function that returns bool, or nil to restore default behavior.
+function M.set_interactive_fn(fn)
+    _interactive_override = fn
 end
 
 --- Override terminal capabilities for testing or custom integrations.

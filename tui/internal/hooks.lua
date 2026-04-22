@@ -1004,36 +1004,10 @@ function M.useClipboard()
     local clipboard_mod = require "tui.internal.clipboard"
 
     local handle = M.useMemo(function()
-        local function write(text)
-            clipboard_mod.copy(text)
-        end
-
-        local _read_tools = {
-            { cmd = "xclip -selection clipboard -o" },
-            { cmd = "xsel --clipboard --output" },
-            { cmd = "pbpaste" },
-            { cmd = "wl-paste --no-newline" },
+        return {
+            write = function(text) clipboard_mod.copy(text) end,
+            read  = function() return clipboard_mod.read() end,
         }
-
-        local function read()
-            for _, t in ipairs(_read_tools) do
-                local binary = t.cmd:match("^%S+")
-                local probe = io.popen("command -v " .. binary .. " 2>/dev/null")
-                local found = probe and probe:read("*l")
-                if probe then probe:close() end
-                if found and found ~= "" then
-                    local f = io.popen(t.cmd .. " 2>/dev/null")
-                    if f then
-                        local text = f:read("*a")
-                        f:close()
-                        if text and #text > 0 then return text end
-                    end
-                end
-            end
-            return nil
-        end
-
-        return { write = write, read = read }
     end, {})
 
     return handle

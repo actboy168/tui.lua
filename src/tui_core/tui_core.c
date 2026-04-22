@@ -41,11 +41,12 @@ int tui_open_screen(lua_State *L);
 int tui_open_text(lua_State *L);
 int tui_open_text_extra(lua_State *L);
 int tui_open_time(lua_State *L);
+int tui_open_vterm(lua_State *L);
 
 DLL_EXPORT LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
     luaL_checkversion(L);
-    lua_createtable(L, 0, 6);
+    lua_createtable(L, 0, 7);
 
     /* terminal sub-table */
     tui_open_terminal(L);
@@ -71,6 +72,10 @@ luaopen_tui_core(lua_State *L) {
     /* time sub-table (monotonic clock + sleep) */
     tui_open_time(L);
     lua_setfield(L, -2, "time");
+
+    /* vterm sub-table (virtual terminal emulator) */
+    tui_open_vterm(L);
+    lua_setfield(L, -2, "vterm");
 
     return 1;
 }

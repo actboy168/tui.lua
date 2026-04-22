@@ -22,7 +22,6 @@ _暂无_
 
 ### 鼠标交互扩展
 
-- `P1` ~~**命中测试 / `onClick` prop**~~ ✅ 已完成：框架层 `hit_test.lua` 实现 hit-test + 事件冒泡；Box 支持 `onClick` / `onScroll` prop；TextInput/Textarea 通过 onClick 支持点击聚焦和光标定位；`has_mouse_props()` 自动启用终端鼠标模式；测试工具 (harness) 已接入 hit-test 管线
 - `P1` **TextInput/Textarea 拖拽选区**：基于 `useMouse` 监听 drag 事件（`request_mouse_level(2)`），维护选区起点和终点状态，拖拽时实时更新选区高亮；TextInput 和 Textarea 均需支持
 - `P2` **双击选词 / 三击选行**：依赖拖拽选区实现；300ms 内双击→选词（基于 `core.find_word_left/right`），三击→选行；需在 hit_test 或 input 中维护点击计数状态
 - `P2` **`useHover()` hook**：依赖命中测试，返回 `{hovered=bool}`，组件内直接使用无需手算鼠标坐标（Lua 层）；需要 `request_mouse_level(3)` 监听 move 事件 + hit_test 分派 `onMouseEnter`/`onMouseLeave`
@@ -42,7 +41,6 @@ _暂无_
 
 - `P1` **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点，解决弹窗关闭后焦点丢失问题
 - `P1` **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
-- `P2` **光标 shape 支持**：`\x1B[n q` 切换 bar / block / underline；TextInput 暴露 `cursorShape` prop
 - `P2` **超链接（OSC 8）**：终端超链接支持，URL 去重存储到 HyperlinkPool
 - `P2` **RawAnsi 直通**：跳过 reconciler/layout/render 管线，直接输出预渲染 ANSI 序列；适合 `git diff --color`、LLM 流式输出等场景（C + Lua）
 - `P3` **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
@@ -59,9 +57,9 @@ _暂无_
 
 ### 测试覆盖
 
+#### 控件与交互测试
+
 - `P2` **hit_test 单元测试**：`hit_test.lua` 的 `do_hit_test`、`dispatch_click`、`dispatch_scroll`、`has_mouse_props` 路径尚无独立单元测试
-- `P2` ~~**TextInput 鼠标交互测试**~~ ✅ 已完成：使用 `load_app("test/apps/text_input_app.lua")` 测试点击聚焦、点击定位光标、点击切换焦点
-- `P2` ~~**Textarea 鼠标交互测试**~~ ✅ 已完成：使用 `load_app("test/apps/textarea_app.lua")` 测试点击聚焦、点击定位光标、点击切换行、滚动视口
 - `P2` **其他控件测试迁移到 load_app 模式**：Select、Spinner、Static、ProgressBar 等控件的测试目前使用内联 App，应迁移到 `test/apps/` 独立 fixture + `load_app` 模式（参考 text_input / textarea 的迁移方式）
 - `P2` **test/apps fixture 自身验证**：`text_input_app.lua` 和 `textarea_app.lua` 作为测试基础设施，缺少直接验证其能正确加载和渲染的测试
 - `P2` **滚动测试健壮性改进**：`test_scroll_in_textarea` 依赖光标位置避免 `clamp_scroll` 回滚，应增加 `clamp_scroll` 独立单元测试，或使测试更明确表达前提
@@ -71,6 +69,17 @@ _暂无_
 - `P2` **集成测试：监控仪表盘**：useInterval + ProgressBar + Spinner
 - `P2` **集成测试：终端缩放**：useWindowSize + Box 动态 resize
 - `P3` **`testing.simulate_mouse`**：测试套件里方便触发鼠标事件，通过 `input_mod._dispatch_event()` 分发，降低鼠标交互测试摩擦
+
+#### 仍需真实终端的路径
+
+以下路径依赖 C 层或真实 I/O，vterm 无法覆盖：
+
+- `P1` **raw mode / Windows VT**：`set_raw` 进入/退出、Windows VT enable、真实 stdin 读取 — C 层行为，需集成测试
+- `P2` **输入字节流解析**：ESC 序列跨 read 边界缓冲 (`incomplete_esc_tail`)、split UTF-8、ambiguous sequence 超时处理 — C 层解析器行为
+- `P2` **帧率与调度**：16ms 帧率 cap、dirty flag 合并、`requestRedraw` 与 frame boundary 的交互、timer fire 和 paint 的时序关系 — 需要真实时间推进
+- `P2` **resize force-clear**：`screen_mod.diff(..., resized=true)` 触发的全屏清除路径 — 需 vterm resize 支持
+- `P2` **KKP 交互**：push/pop 序列、release-event 过滤、真实终端的 disambiguate escape code 解析 — C 层行为
+- `P2` **颜色级别自动检测**：`ansi.color_level` 的环境变量探测逻辑（16/256/truecolor 降级路径）— 需要真实环境变量
 
 ### 代码清理
 

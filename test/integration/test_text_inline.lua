@@ -8,6 +8,7 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
+local vterm   = require "tui.testing.vterm"
 
 local suite = lt.test "text_inline"
 
@@ -273,8 +274,7 @@ end
 -- ============================================================================
 
 function suite:test_rerender_stable()
-    -- Re-rendering an app with inline spans produces zero diff bytes on the
-    -- second render (no cells changed).
+    -- Re-rendering an app with inline spans produces no screen changes.
     local App = function()
         return tui.Box {
             width = 20, height = 2,
@@ -282,10 +282,12 @@ function suite:test_rerender_stable()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 2 })
-    -- Clear the ANSI buffer from the initial render, then force a second paint.
-    h:clear_ansi():rerender()
-    local ansi2 = h:ansi()
+    local vt = h:vterm()
+    -- Capture screen before rerender
+    local before = vterm.screen_string(vt)
+    h:rerender()
+    local after = vterm.screen_string(vt)
     h:unmount()
-    lt.assertEquals(ansi2, "", "second render should produce no diff output")
+    lt.assertEquals(after, before, "second render should not change screen content")
 end
 

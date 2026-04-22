@@ -1,17 +1,14 @@
 -- test/integration/test_ansi_quality.lua — ANSI output quality assertions
 --
--- Uses h:ansi() to inspect the raw byte stream written to the fake terminal
--- and verifies that the framework emits correct ANSI sequences at the right
--- moments (cursor show, incremental diff efficiency).
---
--- NOTE: The test harness deliberately does NOT emit cursor-hide (\27[?25l).
--- Only real tui/init.lua emits that sequence.  The harness emits cursor-show
--- (\27[?25h) + CUP positioning when a cursor is found, and nothing when not.
+-- Uses vterm + cells/cursor query APIs to verify that the framework emits
+-- correct ANSI sequences at the right moments (cursor show, incremental diff
+-- efficiency, term_type OSC1337).
 
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
 local extra   = require "tui.extra"
+local vterm   = require "tui.testing.vterm"
 
 local suite = lt.test "ansi_quality"
 
@@ -19,9 +16,7 @@ local suite = lt.test "ansi_quality"
 -- Cursor show lifecycle
 -- ============================================================================
 
--- An app with a focused TextInput should emit cursor-show (\27[?25h)
--- followed by an absolute cursor-position (CUP) sequence.
-
+-- An app with a focused TextInput should show the cursor.
 function suite:test_cursor_show_with_text_input()
     local App = function()
         return tui.Box {
@@ -34,25 +29,22 @@ function suite:test_cursor_show_with_text_input()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 5 })
+    local h = testing.render(App, { cols = 35, rows = 5, interactive = true })
     h:rerender()  -- ensure cursor position is emitted
 
-    local ansi = h:ansi()
+    local vt = h:vterm()
+    -- cursor-show must appear in the output
+    lt.assertEquals(vterm.has_sequence(vt, "\x1b[?25h"), true,
+        "expected cursor-show sequence with focused TextInput")
 
-    -- cursor-show must appear
-    lt.assertNotEquals(ansi:find("\27%[%?25h", 1, false), nil,
-        "expected cursor-show sequence \\27[?25h with focused TextInput")
-
-    -- A CUP sequence (\27[row;colH) must follow cursor-show
-    lt.assertNotEquals(ansi:find("\27%[%d+;%d+H", 1, false), nil,
-        "expected CUP cursor-position sequence")
+    -- A cursor positioning sequence must appear (cursorMove or CUP)
+    lt.assertEquals(vterm.has_sequence_pattern(vt, "\x1b%[%d*[ABCD]"), true,
+        "expected a cursor positioning sequence")
 
     h:unmount()
 end
 
--- An app with no TextInput should emit neither cursor-show nor cursor-hide
--- (the harness skips both when there is nothing to position).
-
+-- An app with no TextInput should hide the cursor.
 function suite:test_no_cursor_show_without_text_input()
     local App = function()
         return tui.Box {
@@ -61,12 +53,11 @@ function suite:test_no_cursor_show_without_text_input()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.render(App, { cols = 25, rows = 5, interactive = true })
 
-    local ansi = h:ansi()
-
-    lt.assertEquals(ansi:find("\27%[%?25h", 1, false), nil,
-        "no cursor-show when there is no TextInput")
+    local vt = h:vterm()
+    lt.assertEquals(vterm.has_sequence(vt, "\x1b[?25l"), true,
+        "cursor should be hidden when there is no TextInput")
 
     h:unmount()
 end
@@ -76,9 +67,8 @@ end
 -- ============================================================================
 
 -- After an unrelated state change, the diff should only contain sequences for
--- the row that actually changed.  We use a counter app: pressing "up" changes
+-- the row that actually changed. We use a counter app: pressing "up" changes
 -- exactly one row, so the next diff must be much smaller than a full-redraw.
-
 function suite:test_incremental_diff_size()
     local App = function()
         local count, setCount = tui.useState(0)
@@ -96,7 +86,7 @@ function suite:test_incremental_diff_size()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 12 })
+    local h = testing.render(App, { cols = 25, rows = 12, interactive = true })
 
     -- Capture the size of the first (full-redraw) paint
     local full_size = #h:ansi()
@@ -127,7 +117,7 @@ function suite:test_resize_triggers_full_redraw()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 10 })
+    local h = testing.render(App, { cols = 35, rows = 10, interactive = true })
     local first_size = #h:ansi()
 
     -- Normal re-render after no changes (no key, no state) → minimal diff
@@ -232,7 +222,8 @@ end
 -- ============================================================================
 
 -- With term_type = "iterm2", cursorPosition() appends the OSC1337 SetMark
--- suffix so iTerm2 can track the cursor. Verify it appears in h:ansi().
+-- suffix so iTerm2 can track the cursor. This is a non-interactive paint path
+-- feature, so we use vterm without interactive mode.
 function suite:test_term_type_iterm2_adds_osc1337()
     local App = function()
         return tui.Box {
@@ -245,7 +236,7 @@ function suite:test_term_type_iterm2_adds_osc1337()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5, term_type = "iterm2" })
+    local h = testing.render(App, { cols = 25, rows = 5, term_type = "iterm2", interactive = false })
     h:rerender()
 
     -- OSC1337 SetMark = ESC ] 1337 ; SetMark BEL (0x07)
@@ -269,7 +260,7 @@ function suite:test_term_type_unknown_no_osc1337()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5, term_type = "unknown" })
+    local h = testing.render(App, { cols = 25, rows = 5, term_type = "unknown", interactive = false })
     h:rerender()
 
     local ansi = h:ansi()
@@ -294,14 +285,14 @@ function suite:test_term_type_restored_after_unmount()
     end
 
     -- First render: force iterm2
-    local h1 = testing.render(App, { cols = 25, rows = 5, term_type = "iterm2" })
+    local h1 = testing.render(App, { cols = 25, rows = 5, term_type = "iterm2", interactive = false })
     h1:rerender()
     lt.assertNotEquals(h1:ansi():find("\27%]1337;SetMark", 1, false), nil,
         "iterm2 should emit OSC1337")
     h1:unmount()
 
     -- Second render: no term_type override — must NOT see iterm2 OSC1337
-    local h2 = testing.render(App, { cols = 25, rows = 5, term_type = "unknown" })
+    local h2 = testing.render(App, { cols = 25, rows = 5, term_type = "unknown", interactive = false })
     h2:rerender()
     lt.assertEquals(h2:ansi():find("\27%]1337;SetMark", 1, false), nil,
         "after unmount, iterm2 override should be restored; unknown should not emit OSC1337")
@@ -329,7 +320,7 @@ function suite:test_paste_received_by_text_input()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 5 })
+    local h = testing.render(App, { cols = 35, rows = 5, interactive = true })
     h:paste("hello world")
 
     lt.assertEquals(received, "hello world")

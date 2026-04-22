@@ -10,13 +10,16 @@ local focus_mod     = require "tui.internal.focus"
 local ansi_mod      = require "tui.internal.ansi"
 local hooks         = require "tui.internal.hooks"
 local hit_test      = require "tui.internal.hit_test"
+local paint_frame   = require "tui.internal.paint_frame"
 local testing_input = require "tui.testing.input"
 local testing_mouse = require "tui.testing.mouse"
 local capture       = require "tui.testing.capture"
+local vterm         = require "tui.testing.vterm"
 
 local M = {}
 
--- Validate CSI numeric parameters before storing them in the fake terminal log.
+-- Validate CSI numeric parameters — catch framework bugs that emit float
+-- coordinates (e.g. \27[73.0;3.0H) which real terminals silently reject.
 local function check_csi_integers(s)
     local i = 1
     while i <= #s do
@@ -39,23 +42,6 @@ local function check_csi_integers(s)
     return nil
 end
 
-local function make_fake_terminal(h)
-    return {
-        get_size          = function() return h._w, h._h end,
-        write             = function(s)
-            local bad = check_csi_integers(s)
-            if bad then
-                error("[tui:fatal] harness terminal: " .. bad ..
-                      " (real terminals silently reject these)", 0)
-            end
-            h._ansi_buf[#h._ansi_buf + 1] = s
-        end,
-        read_raw          = function() return nil end,
-        set_raw           = function() end,
-        windows_vt_enable = function() return true end,
-    }
-end
-
 local Harness = {}
 Harness.__index = Harness
 
@@ -63,84 +49,72 @@ Harness.__index = Harness
 function Harness:_paint()
     resize_mod.observe(self._w, self._h)
 
-    local function render_and_layout()
-        self._render_count = (self._render_count or 0) + 1
-        local t = reconciler.render(self._state, self._App, self._app_handle)
-        if not t then
-            t = element.Box { width = self._w, height = self._h }
-        end
-        if t.kind == "box" then
-            t.props = t.props or {}
-            if t.props.width  == nil then t.props.width  = self._w end
-            if t.props.height == nil then t.props.height = self._h end
-        end
-        reconciler.clear_dirty(self._state)
-        layout.compute(t, self._h)
-        return t
+    -- Free the previous frame's tree before stabilizing the new one.
+    -- hit_test must be cleared first to avoid dangling pointer access.
+    if self._tree then
+        hit_test.clear_tree()
+        layout.free(self._tree)
+        self._tree = nil
     end
 
-    local tree = render_and_layout()
-
-    for _ = 1, 8 do
-        if not reconciler.has_dirty(self._state) then break end
-        if self._tree then layout.free(self._tree) end
-        self._tree = tree
-        tree = render_and_layout()
-    end
+    local interactive = self._interactive
+    local tree, passes = paint_frame.stabilize(self._state, self._App, self._app_handle, self._w, self._h, interactive, true)
+    self._render_count = (self._render_count or 0) + passes
 
     -- Store the laid-out tree for mouse hit testing (mirrors init.lua paint()).
     hit_test.set_tree(tree)
 
+    -- Auto-enable mouse mode when the tree has click/scroll handlers.
+    if interactive then
+        local needs_mouse = hit_test.has_mouse_props(tree)
+        if needs_mouse and not self._mouse_auto_release then
+            self._mouse_auto_release = input_mod.request_mouse_level(1)
+        elseif not needs_mouse and self._mouse_auto_release then
+            self._mouse_auto_release()
+            self._mouse_auto_release = nil
+        end
+    end
+
     screen_mod.clear(self._screen)
     renderer.paint(tree, self._screen)
-    local ansi = screen_mod.diff(self._screen)
-    if #ansi > 0 then
-        self._terminal.write(ansi)
-    end
 
-    local ccol, crow
-    do
-        local first_candidate = nil
-        local focused_candidate = nil
-        local root_w = tree.rect and tree.rect.w
-        local root_h = tree.rect and tree.rect.h
+    if interactive then
+        -- Interactive paint path (mirrors init.lua paint())
+        local content_h = tree.rect and math.min(tree.rect.h, self._h) or self._h
+        local diff = screen_mod.diff(self._screen, false, content_h)
 
-        local function walk(e)
-            if not e then return end
-            if e.kind == "text" and e._cursor_offset ~= nil then
-                local r = e.rect or { x = 0, y = 0 }
-                local offset = math.min(e._cursor_offset, r.w or e._cursor_offset)
-                local col = r.x + offset + 1
-                if root_w and col > root_w then col = root_w end
-                local row = r.y + 1
-                if root_h and row > root_h then row = root_h end
-                local cand = { col = col, row = row }
-                if not first_candidate then
-                    first_candidate = cand
-                end
-                if e._cursor_focused and not focused_candidate then
-                    focused_candidate = cand
-                end
-            end
-            for _, c in ipairs(e.children or {}) do
-                walk(c)
-            end
+        local cursor_seq = ""
+        local ccol, crow = paint_frame.find_cursor(tree)
+        if ccol and crow and (crow - 1) < content_h then
+            local cx, cy = screen_mod.cursor_pos(self._screen)
+            local dx = (ccol - 1) - cx
+            local dy = (crow - 1) - cy
+            cursor_seq = ansi_mod.cursorShow() .. ansi_mod.cursorMove(dx, dy)
+            screen_mod.set_display_cursor(self._screen, ccol - 1, crow - 1)
+            self._last_cursor_col, self._last_cursor_row = ccol, crow
+            self._ime = { col = ccol, row = crow }
+        else
+            cursor_seq = ansi_mod.cursorHide()
         end
 
-        walk(tree)
-        local chosen = focused_candidate or first_candidate
-        if chosen then
-            ccol, crow = chosen.col, chosen.row
+        if #diff > 0 or #cursor_seq > 0 then
+            self._terminal.write(ansi_mod.beginSyncUpdate() .. diff .. cursor_seq .. ansi_mod.endSyncUpdate())
+        end
+    else
+        -- Non-interactive paint path (original harness behavior)
+        local ansi = screen_mod.diff(self._screen)
+        if #ansi > 0 then
+            self._terminal.write(ansi)
+        end
+
+        local ccol, crow = paint_frame.find_cursor(tree)
+        if ccol and crow then
+            self._terminal.write(ansi_mod.cursorShow() .. ansi_mod.cursorPosition(ccol, crow))
+            self._last_cursor_col, self._last_cursor_row = ccol, crow
+            self._ime = { col = ccol, row = crow }
         end
     end
 
-    if ccol and crow then
-        self._terminal.write(ansi_mod.cursorShow() .. ansi_mod.cursorPosition(ccol, crow))
-        self._last_cursor_col, self._last_cursor_row = ccol, crow
-        self._ime = { col = ccol, row = crow }
-    end
-
-    if self._tree then layout.free(self._tree) end
     self._tree = tree
 end
 
@@ -268,6 +242,11 @@ function Harness:clear_ansi()
     return self
 end
 
+--- Return the virtual terminal state.
+function Harness:vterm()
+    return self._vt
+end
+
 --- Dispatch raw bytes through tui.internal.input and repaint.
 function Harness:dispatch(bytes)
     if bytes and #bytes > 0 then
@@ -339,6 +318,7 @@ function Harness:resize(cols, rows)
     assert(type(rows) == "number" and rows > 0, "resize: rows must be positive number")
     self._w, self._h = cols, rows
     screen_mod.resize(self._screen, cols, rows)
+    self._vt:resize(cols, rows)
     self:_paint()
     return self
 end
@@ -368,6 +348,8 @@ end
 function Harness:unmount()
     if self._dead then return end
     self._dead = true
+    -- Release auto mouse mode before _reset clears everything
+    self._mouse_auto_release = nil
     reconciler.shutdown(self._state)
     if self._tree then
         layout.free(self._tree)
@@ -383,6 +365,15 @@ function Harness:unmount()
     if self._ansi_restore then
         self._ansi_restore()
         self._ansi_restore = nil
+    end
+    if self._interactive then
+        -- Interactive teardown (mirrors init.lua teardown)
+        local clipboard = require "tui.internal.clipboard"
+        self._terminal.write(ansi_mod.disableBracketedPaste .. ansi_mod.disableFocusEvents .. "\r" .. ansi_mod.cursorShow() .. "\n")
+        input_mod.set_mouse_mode_writer(nil)
+        clipboard._osc52_enabled = false
+        clipboard.set_writer(nil)
+        ansi_mod.set_interactive_fn(nil)
     end
     capture.drain_and_fatal_if_any()
 end
@@ -501,10 +492,17 @@ function M.render(App, opts)
     local W    = opts.cols or 80
     local H    = opts.rows or 24
     local now0 = opts.now or 0
+    local use_interactive = opts.interactive == true
 
     local ansi_restore = nil
     if opts.term_type ~= nil then
         ansi_restore = ansi_mod.override(opts.term_type)
+    end
+
+    -- When interactive mode is requested, patch ansi.interactive() to return
+    -- true so that the production interactive code paths are exercised.
+    if use_interactive then
+        ansi_mod.set_interactive_fn(function() return true end)
     end
 
     input_mod._reset()
@@ -515,27 +513,55 @@ function M.render(App, opts)
     hooks._set_dev_mode(true)
 
     local h = setmetatable({
-        _App             = App,
-        _w               = W,
-        _h               = H,
-        _fake_now        = now0,
-        _ansi_buf        = {},
-        _state           = reconciler.new(),
-        _screen          = screen_mod.new(W, H),
-        _tree            = nil,
-        _dead            = false,
-        _ime             = nil,
-        _composing       = "",
-        _render_count    = 0,
-        _last_cursor_col = 1,
-        _last_cursor_row = 1,
-        _ansi_restore    = ansi_restore,
+        _App                 = App,
+        _w                   = W,
+        _h                   = H,
+        _fake_now            = now0,
+        _ansi_buf            = {},
+        _state               = reconciler.new(),
+        _screen              = screen_mod.new(W, H),
+        _tree                = nil,
+        _dead                = false,
+        _ime                 = nil,
+        _composing           = "",
+        _render_count        = 0,
+        _last_cursor_col     = 1,
+        _last_cursor_row     = 1,
+        _ansi_restore        = ansi_restore,
+        _vt                  = nil,
+        _interactive         = use_interactive,
+        _mouse_auto_release  = nil,
     }, Harness)
     h._app_handle = { exit = function() h._dead = true end }
 
     local screen_c = require "tui_core".screen
     screen_c.set_color_level(h._screen, 2)
-    h._terminal = make_fake_terminal(h)
+
+    -- Create vterm-backed terminal
+    local vt = vterm.new(W, H)
+    h._vt = vt
+    h._terminal = {
+        get_size = function() return h._w, h._h end,
+        write = function(s)
+            local bad = check_csi_integers(s)
+            if bad then
+                error("[tui:fatal] harness terminal: " .. bad, 0)
+            end
+            h._ansi_buf[#h._ansi_buf + 1] = s
+            vt.write_log[#vt.write_log + 1] = s
+            vt:write(s)
+        end,
+        read_raw = function()
+            if #vt.input_queue > 0 then
+                return table.remove(vt.input_queue, 1)
+            end
+            return nil
+        end,
+        set_raw = function(on)
+            vt:set_raw(on and true or false)
+        end,
+        windows_vt_enable = function() return true end,
+    }
 
     scheduler.configure {
         now   = function() return h._fake_now end,
@@ -553,6 +579,16 @@ function M.render(App, opts)
         end
         return false
     end)
+
+    -- Interactive mode initialization (mirrors init.lua render() preamble)
+    if use_interactive then
+        local clipboard = require "tui.internal.clipboard"
+        h._terminal.write(ansi_mod.cursorHide() .. ansi_mod.enableBracketedPaste .. ansi_mod.enableFocusEvents)
+        input_mod.set_mouse_mode_writer(h._terminal.write)
+        clipboard.set_writer(h._terminal.write)
+        clipboard._osc52_enabled = true
+        screen_mod.set_mode(h._screen, "main")
+    end
 
     local ok, err = pcall(function() h:_paint() end)
     if not ok then

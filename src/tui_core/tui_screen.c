@@ -39,88 +39,16 @@
 
 #include "wcwidth.h"
 #include "tui_fatal.h"
+#include "tui_cell.h"
 
-/* ── cell / slab / screen structs ─────────────────────────────── */
-
-/* SGR style layout (Stage 10+):
+/* ── screen-specific structs ───────────────────────────────────
  *
- *   cell_t.style_id: index into the screen's style_pool.  id=0 means
- *     "terminal default" — no fg/bg/attr overrides.  Non-zero IDs index
- *     style_pool_t.entries[id-1] which carries fg_mode/bg_mode (one of
- *     COLOR_MODE_DEFAULT/16/256/24BIT), the color value, and the attrs
- *     bitmask (BOLD|DIM|UNDERLINE|INVERSE|ITALIC|STRIKETHROUGH).
- *
- *   Downgrade: when screen.color_level < the mode requested, emit_sgr
- *     transparently downgrades (24bit→256→16) at render time.  The pool
- *     always stores the original (highest-fidelity) value.
- */
-#define ATTR_BOLD          0x01u
-#define ATTR_DIM           0x02u
-#define ATTR_UNDERLINE     0x04u
-#define ATTR_INVERSE       0x08u
-#define ATTR_ITALIC        0x40u
-#define ATTR_STRIKETHROUGH 0x80u
-#define ATTR_STYLE_MASK    (ATTR_BOLD | ATTR_DIM | ATTR_UNDERLINE | ATTR_INVERSE \
-                            | ATTR_ITALIC | ATTR_STRIKETHROUGH)
-
-/* Color mode stored in style_entry_t.fg_mode / bg_mode. */
-#define COLOR_MODE_DEFAULT  0u  /* terminal default color (SGR 39/49) */
-#define COLOR_MODE_16       1u  /* ANSI 16-color (0..15) */
-#define COLOR_MODE_256      2u  /* xterm 256-color (0..255) */
-#define COLOR_MODE_24BIT    3u  /* 24-bit truecolor (0x00RRGGBB) */
-
-/* Screen-level color depth limit. */
-#define COLOR_LEVEL_16    0  /* ANSI 16-color only */
-#define COLOR_LEVEL_256   1  /* up to xterm 256-color */
-#define COLOR_LEVEL_24BIT 2  /* full 24-bit truecolor */
-
-typedef struct {
-    union {
-        uint8_t inline_bytes[8];
-        struct {
-            uint32_t slab_off;
-            uint16_t slab_len;
-            uint8_t  _pad[2];
-        } ext;
-    } u;
-    uint8_t  len;       /* 1..8 inline, 0xFF slab, 0 WIDE_TAIL */
-    uint8_t  width;     /* 0 tail, 1 narrow, 2 wide head */
-    uint16_t style_id;  /* style pool index; 0 = default (no style) */
-} cell_t;
-
-/* Compile-time guard: must stay 12 bytes / 4-byte alignment. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-_Static_assert(sizeof(cell_t) == 12, "cell_t must be 12 bytes");
-#endif
-
-typedef struct {
-    uint8_t *buf;
-    uint32_t size;
-    uint32_t cap;
-} slab_t;
-
-/* ── style_entry_t / style_pool_t ─────────────────────────────────
- *
- * style_id=0 is the implicit default style (all-default fg/bg, no attrs).
- * style_id N > 0 refers to pool->entries[N-1].  The pool grows
- * monotonically during the session — no per-frame reset — so prev-buffer
- * style_ids remain valid across frame boundaries (required for diff). */
-typedef struct {
-    uint32_t fg_val;   /* color value (meaning depends on fg_mode) */
-    uint32_t bg_val;   /* color value (meaning depends on bg_mode) */
-    uint8_t  fg_mode;  /* COLOR_MODE_* */
-    uint8_t  bg_mode;  /* COLOR_MODE_* */
-    uint8_t  attrs;    /* ATTR_BOLD | ATTR_DIM | … (no DEFAULT bits) */
-    uint8_t  _pad;
-} style_entry_t;  /* 12 bytes */
-
-typedef struct {
-    style_entry_t *entries;  /* entries[i] → style_id (i+1) */
-    uint32_t       count;
-    uint32_t       cap;
-} style_pool_t;
+ * Types and helpers shared with tui_vterm.c are in tui_cell.h.
+ * Only screen-specific definitions remain here. */
 
 #define ROW_POOL_GEN 4
+
+/* SGR style, cell_t, slab_t, style_entry_t, style_pool_t — in tui_cell.h */
 
 typedef struct {
     uint8_t *buf;
@@ -168,87 +96,7 @@ typedef struct {
 
 #define SCREEN_MT "tui_core.screen"
 
-/* ── helpers ──────────────────────────────────────────────────── */
-
-static inline cell_t *
-cell_at(cell_t *buf, int w, int x, int y) {
-    return &buf[y * w + x];
-}
-
-static inline void
-cell_set_space(cell_t *c) {
-    c->u.inline_bytes[0] = ' ';
-    c->len      = 1;
-    c->width    = 1;
-    c->style_id = 0;
-}
-
-static void
-fill_space(cell_t *buf, int n) {
-    for (int i = 0; i < n; i++) {
-        cell_t *c = &buf[i];
-        memset(c, 0, sizeof(*c));
-        c->u.inline_bytes[0] = ' ';
-        c->len   = 1;
-        c->width = 1;
-        /* style_id already 0 from memset → terminal default */
-    }
-}
-
-static inline void
-cell_bytes(const cell_t *c, const slab_t *slab,
-           const uint8_t **out_p, size_t *out_len) {
-    if (c->len == 0xFF) {
-        *out_p   = slab->buf + c->u.ext.slab_off;
-        *out_len = c->u.ext.slab_len;
-    } else {
-        *out_p   = c->u.inline_bytes;
-        *out_len = c->len;
-    }
-}
-
-static inline int
-cell_eq(const cell_t *a, const slab_t *slab_a,
-        const cell_t *b, const slab_t *slab_b) {
-    if (a->len != b->len || a->width != b->width) return 0;
-    if (a->len == 0)    return 1;                  /* both WIDE_TAIL */
-    if (a->style_id != b->style_id) return 0;
-    if (a->len == 0xFF) {
-        if (a->u.ext.slab_len != b->u.ext.slab_len) return 0;
-        return memcmp(slab_a->buf + a->u.ext.slab_off,
-                      slab_b->buf + b->u.ext.slab_off,
-                      a->u.ext.slab_len) == 0;
-    }
-    return memcmp(a->u.inline_bytes, b->u.inline_bytes, a->len) == 0;
-}
-
-static inline void
-slab_reset(slab_t *s) { s->size = 0; }
-
-static uint32_t
-slab_push(slab_t *s, const uint8_t *p, uint32_t n) {
-    if (s->size + n > s->cap) {
-        uint32_t need = s->size + n;
-        uint32_t ncap = s->cap ? s->cap * 2 : 256;
-        while (ncap < need) ncap *= 2;
-        uint8_t *nb = (uint8_t *)realloc(s->buf, ncap);
-        if (!nb) return 0xFFFFFFFFu;  /* caller must handle */
-        s->buf = nb;
-        s->cap = ncap;
-    }
-    uint32_t off = s->size;
-    memcpy(s->buf + off, p, n);
-    s->size += n;
-    return off;
-}
-
-static void
-slab_free(slab_t *s) {
-    free(s->buf);
-    s->buf = NULL;
-    s->size = 0;
-    s->cap = 0;
-}
+/* ── helpers (screen-specific) ──────────────────────────────── */
 
 static void
 row_pool_free(row_pool_t *p) {
@@ -259,61 +107,6 @@ row_pool_free(row_pool_t *p) {
     }
     p->gen = 0;
 }
-
-/* ── style pool helpers ────────────────────────────────────────── */
-
-static const style_entry_t STYLE_DEFAULT_ENTRY = {0u, 0u, 0u, 0u, 0u, 0u};
-
-static const style_entry_t *
-pool_get(const style_pool_t *p, uint16_t id) {
-    if (id == 0 || (uint32_t)(id - 1) >= p->count)
-        return &STYLE_DEFAULT_ENTRY;
-    return &p->entries[id - 1];
-}
-
-static uint16_t
-style_intern(style_pool_t *p,
-             uint8_t fg_mode, uint32_t fg_val,
-             uint8_t bg_mode, uint32_t bg_val,
-             uint8_t attrs) {
-    /* id=0 is the implicit all-default; avoid storing it. */
-    if (fg_mode == COLOR_MODE_DEFAULT &&
-        bg_mode == COLOR_MODE_DEFAULT && attrs == 0)
-        return 0;
-    /* Linear scan — pool typically stays well under 200 entries. */
-    for (uint32_t i = 0; i < p->count; i++) {
-        const style_entry_t *e = &p->entries[i];
-        if (e->fg_mode == fg_mode && e->fg_val == fg_val &&
-            e->bg_mode == bg_mode && e->bg_val == bg_val &&
-            e->attrs   == attrs)
-            return (uint16_t)(i + 1);
-    }
-    /* Grow pool if needed. */
-    if (p->count >= p->cap) {
-        uint32_t ncap = p->cap ? p->cap * 2 : 64;
-        if (ncap > 65534u) ncap = 65534u;  /* cap at max uint16_t - 1 */
-        style_entry_t *ne = (style_entry_t *)realloc(p->entries,
-                                                      ncap * sizeof(style_entry_t));
-        if (!ne) return 0;  /* OOM: fall back to default */
-        p->entries = ne;
-        p->cap = ncap;
-    }
-    uint16_t id = (uint16_t)(p->count + 1);
-    style_entry_t *e = &p->entries[p->count++];
-    e->fg_mode = fg_mode; e->fg_val  = fg_val;
-    e->bg_mode = bg_mode; e->bg_val  = bg_val;
-    e->attrs   = attrs;   e->_pad    = 0;
-    return id;
-}
-
-static void
-pool_free(style_pool_t *p) {
-    free(p->entries);
-    p->entries = NULL;
-    p->count = p->cap = 0;
-}
-
-/* ── Color downgrade helpers ───────────────────────────────────── */
 
 /* Expand xterm-256 palette index to approximate (r, g, b). */
 static void
@@ -1031,7 +824,7 @@ diff_alt(screen_t *s, bytes_t *out) {
                 const cell_t *c = cell_at(s->next, s->w, x, y);
                 if (c->len == 0) continue;  /* WIDE_TAIL: skip */
                 emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
-                const uint8_t *p; size_t n;
+                const uint8_t *p; uint32_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
             }
@@ -1057,7 +850,7 @@ diff_alt(screen_t *s, bytes_t *out) {
                 if (run_start < 0) {
                     bytes_append_cup(out, y, x);
                     emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
-                    const uint8_t *p; size_t n;
+                    const uint8_t *p; uint32_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
                     bytes_append(out, p, n);
                     run_start = x;
@@ -1070,12 +863,12 @@ diff_alt(screen_t *s, bytes_t *out) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
                             emit_sgr(out, &s->pool, s->color_level, &cur_style_id, bc->style_id);
-                            const uint8_t *bp; size_t bn;
+                            const uint8_t *bp; uint32_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
                             bytes_append(out, bp, bn);
                         }
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
-                        const uint8_t *p; size_t n;
+                        const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
                         last_change = x;
@@ -1083,7 +876,7 @@ diff_alt(screen_t *s, bytes_t *out) {
                     } else {
                         bytes_append_cup(out, y, x);
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
-                        const uint8_t *p; size_t n;
+                        const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
                         run_start = x;
@@ -1192,7 +985,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                 }
                 virt_x = x;
                 emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
-                const uint8_t *p; size_t n;
+                const uint8_t *p; uint32_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
                 virt_x += c->width;
@@ -1211,7 +1004,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                 emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                 virt_x = x; virt_y = y;
                 emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
-                const uint8_t *p; size_t n;
+                const uint8_t *p; uint32_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
                 virt_x += c->width;
@@ -1243,7 +1036,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                     emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                     virt_x = x; virt_y = y;
                     emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
-                    const uint8_t *p; size_t n;
+                    const uint8_t *p; uint32_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
                     bytes_append(out, p, n);
                     virt_x = x + cn->width;
@@ -1258,13 +1051,13 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
                             emit_sgr(out, &s->pool, s->color_level, &cur_style_id, bc->style_id);
-                            const uint8_t *bp; size_t bn;
+                            const uint8_t *bp; uint32_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
                             bytes_append(out, bp, bn);
                         }
                         virt_x = x;
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
-                        const uint8_t *p; size_t n;
+                        const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
                         virt_x = x + cn->width;
@@ -1275,7 +1068,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                         emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                         virt_x = x; virt_y = y;
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
-                        const uint8_t *p; size_t n;
+                        const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
                         bytes_append(out, p, n);
                         virt_x = x + cn->width;
@@ -1397,7 +1190,7 @@ l_rows(lua_State *L) {
         for (int x = 0; x < s->w; x++) {
             const cell_t *c = &cells[y * s->w + x];
             if (c->len == 0) continue;
-            const uint8_t *p; size_t n;
+            const uint8_t *p; uint32_t n;
             cell_bytes(c, slab, &p, &n);
             memcpy(rb->buf + off, p, n);
             off += n;
@@ -1514,7 +1307,7 @@ l_cells(lua_State *L) {
 
         lua_createtable(L, 0, 10);
 
-        const uint8_t *p; size_t n;
+        const uint8_t *p; uint32_t n;
         cell_bytes(c, slab, &p, &n);
         lua_pushlstring(L, (const char *)p, n);
         lua_setfield(L, -2, "char");

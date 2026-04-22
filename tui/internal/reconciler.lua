@@ -437,35 +437,61 @@ end
 --- render(state, root_element, app_handle) -> host_element_tree
 -- Walks the user's tree, expanding function components into host elements,
 -- unmounts any instances that disappeared this pass, and flushes effects.
+--
+-- Stabilization: if a component calls setState during its own render
+-- (eager re-render), we run another expand pass (up to 8) so the returned
+-- tree already reflects the latest state.  Effects are flushed *after* the
+-- stabilization loop so that effect setState is consumed on the next frame,
+-- matching both the original harness behaviour and the production event loop.
 function M.render(state, root, app_handle)
-    -- Reuse existing tables by clearing them instead of allocating new ones.
-    local seen = state.seen
-    for k in next, seen do seen[k] = nil end
-    local kw = state._key_warned
-    for k in next, kw do kw[k] = nil end
-    local eff = state._effects_to_flush
-    for i = #eff, 1, -1 do eff[i] = nil end
-
     state.app  = app_handle
     state.context_stack = state.context_stack or {}
 
-    -- Publish the state so hooks.useContext can look up Providers. Wrap in
-    -- pcall so _current_state is always cleared even if expand() throws.
-    M._current_state = state
-    local ok, tree_or_err = pcall(expand, state, root, "")
-    M._current_state = nil
-    if not ok then error(tree_or_err, 0) end
-    local tree = tree_or_err
+    local tree
+    for pass = 1, 8 do
+        -- Reuse existing tables by clearing them instead of allocating new ones.
+        local seen = state.seen
+        for k in next, seen do seen[k] = nil end
+        local kw = state._key_warned
+        for k in next, kw do kw[k] = nil end
+        local eff = state._effects_to_flush
+        for i = #eff, 1, -1 do eff[i] = nil end
 
-    -- Unmount stale instances.
-    for path, inst in pairs(state.instances) do
-        if not state.seen[path] then
-            hooks._unmount(inst)
-            state.instances[path] = nil
+        -- Publish the state so hooks.useContext can look up Providers. Wrap in
+        -- pcall so _current_state is always cleared even if expand() throws.
+        M._current_state = state
+        local ok, tree_or_err = pcall(expand, state, root, "")
+        M._current_state = nil
+        if not ok then error(tree_or_err, 0) end
+        tree = tree_or_err
+
+        -- Unmount stale instances.
+        for path, inst in pairs(state.instances) do
+            if not state.seen[path] then
+                hooks._unmount(inst)
+                state.instances[path] = nil
+            end
+        end
+
+        -- Check if any component triggered setState during its render.
+        local has_dirty = false
+        for _, inst in pairs(state.instances) do
+            if inst.dirty then
+                has_dirty = true
+                break
+            end
+        end
+        if not has_dirty then break end
+
+        -- Clear dirty flags for the next stabilization pass.
+        for _, inst in pairs(state.instances) do
+            inst.dirty = false
         end
     end
 
-    -- Run pending effects after commit.
+    -- Run pending effects after the tree has stabilized.  Effect setState is
+    -- NOT consumed inside this render call; it becomes visible on the next
+    -- frame (via scheduler.requestRedraw or the harness's next _paint).
     for _, inst in ipairs(state._effects_to_flush) do
         hooks._flush_effects(inst)
     end

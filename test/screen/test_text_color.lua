@@ -1,7 +1,7 @@
 -- test/test_text_color.lua — integration tests for color / style support
 -- at the Text element API level. Exercises tui.sgr + renderer +
 -- tui_core.screen working together through the standard harness.
--- Assertions track Stage 11 incremental SGR diff output (no leading "0;").
+-- Uses vterm + cells() API to assert color attributes instead of raw ANSI.
 
 local lt      = require "ltest"
 local testing = require "tui.testing"
@@ -11,26 +11,25 @@ local Box     = tui.Box
 
 local suite = lt.test "text_color"
 
-local <const> ESC = "\27"
-
 -- ---------------------------------------------------------------------------
--- Case 1: red Text produces SGR in ANSI output but plain text in rows().
+-- Case 1: red Text produces colored cells but plain text in rows().
 
-function suite:test_red_text_sgr_in_ansi_only()
+function suite:test_red_text_in_cells_only()
     local function App()
         return Box { width = 5, height = 1,
             Text { color = "red", "hi" },
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
-        "expected red SGR in ANSI: " .. (ansi:gsub(ESC, "<ESC>")))
-    -- rows() must be plain "hi" + padding.
+    -- cells should have red fg (index 1)
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].fg, 1, "cell 1 should have red fg")
+    lt.assertEquals(cells[2].fg, 1, "cell 2 should have red fg")
+    -- rows() must be plain "hi" + padding (no escape sequences).
     local rows = h:rows()
     lt.assertEquals(rows[1]:sub(1, 2), "hi")
-    lt.assertEquals(rows[1]:find(ESC, 1, true), nil,
-        "rows should never contain SGR: " .. (rows[1]:gsub(ESC, "<ESC>")))
+    lt.assertEquals(rows[1]:find("\27", 1, true), nil,
+        "rows should never contain SGR")
     h:unmount()
 end
 
@@ -44,10 +43,10 @@ function suite:test_box_color_inherits_to_text()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    -- Text has no explicit color, so it should inherit green (32m) from Box.
-    lt.assertEquals(ansi:find(ESC .. "[32m", 1, true) ~= nil, true,
-        "Text should inherit Box color: " .. (ansi:gsub(ESC, "<ESC>")))
+    local cells = h:cells(1)
+    -- Text has no explicit color, so it should inherit green (fg=2) from Box.
+    lt.assertEquals(cells[1].fg, 2, "Text should inherit Box green color")
+    lt.assertEquals(cells[2].fg, 2, "Text should inherit Box green color")
     h:unmount()
 end
 
@@ -61,12 +60,9 @@ function suite:test_text_color_overrides_inherited()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil, true,
-        "Text explicit color should win: " .. (ansi:gsub(ESC, "<ESC>")))
-    -- green should NOT appear
-    lt.assertEquals(ansi:find(ESC .. "[32m", 1, true), nil,
-        "inherited green should not appear: " .. (ansi:gsub(ESC, "<ESC>")))
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].fg, 1, "Text explicit red should win")
+    lt.assertEquals(cells[2].fg, 1, "Text explicit red should win")
     h:unmount()
 end
 
@@ -79,14 +75,12 @@ function suite:test_text_dimcolor_overrides_inherited()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    -- red fg (31m) with dim (2m) should appear, not green
-    lt.assertEquals(ansi:find(ESC .. "[31m", 1, true) ~= nil
-        or ansi:find(ESC .. "[2;31m", 1, true) ~= nil
-        or ansi:find(ESC .. "[31;2m", 1, true) ~= nil
-        or ansi:find("31", 1, true) ~= nil, true,
-        "dimColor Text should use its own color, not inherited: "
-        .. (ansi:gsub(ESC, "<ESC>")))
+    local cells = h:cells(1)
+    -- dimColor="red" → dim=true, fg=1 (red)
+    lt.assertEquals(cells[1].fg, 1, "dimColor Text should use red fg")
+    lt.assertEquals(cells[1].dim, true, "dimColor Text should be dim")
+    lt.assertEquals(cells[2].fg, 1, "dimColor Text should use red fg")
+    lt.assertEquals(cells[2].dim, true, "dimColor Text should be dim")
     h:unmount()
 end
 
@@ -101,10 +95,9 @@ function suite:test_nested_box_color_inheritance()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    lt.assertEquals(ansi:find(ESC .. "[34m", 1, true) ~= nil, true,
-        "Text should inherit blue from grandparent Box: "
-        .. (ansi:gsub(ESC, "<ESC>")))
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].fg, 4, "Text should inherit blue from grandparent Box")
+    lt.assertEquals(cells[2].fg, 4, "Text should inherit blue from grandparent Box")
     h:unmount()
 end
 
@@ -119,13 +112,10 @@ function suite:test_inner_box_overrides_inherited_color()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    -- yellow = 33m should appear (inner Box overrides blue)
-    lt.assertEquals(ansi:find(ESC .. "[33m", 1, true) ~= nil, true,
-        "inner Box color should override outer: " .. (ansi:gsub(ESC, "<ESC>")))
-    -- blue (34m) should NOT appear for the text
-    lt.assertEquals(ansi:find(ESC .. "[34m", 1, true), nil,
-        "outer box blue should not reach text: " .. (ansi:gsub(ESC, "<ESC>")))
+    local cells = h:cells(1)
+    -- yellow = fg=3 should appear (inner Box overrides blue)
+    lt.assertEquals(cells[1].fg, 3, "inner Box yellow should override outer blue")
+    lt.assertEquals(cells[2].fg, 3, "inner Box yellow should override outer blue")
     h:unmount()
 end
 
@@ -138,11 +128,10 @@ function suite:test_box_backgroundcolor_inherits_to_text()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    -- bg=blue → 44m
-    lt.assertEquals(ansi:find(ESC .. "[44m", 1, true) ~= nil, true,
-        "Text should inherit Box backgroundColor: "
-        .. (ansi:gsub(ESC, "<ESC>")))
+    local cells = h:cells(1)
+    -- bg=blue → bg=4
+    lt.assertEquals(cells[1].bg, 4, "Text should inherit Box backgroundColor blue")
+    lt.assertEquals(cells[2].bg, 4, "Text should inherit Box backgroundColor blue")
     h:unmount()
 end
 
@@ -172,10 +161,9 @@ function suite:test_border_color()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    -- Cyan (6) normal fg → ESC[36m (incremental form, no leading 0;).
-    lt.assertEquals(ansi:find(ESC .. "[36m", 1, true) ~= nil, true,
-        "expected cyan SGR on border: " .. (ansi:gsub(ESC, "<ESC>")))
+    -- Border cells on row 1 should have cyan fg (fg=6)
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].fg, 6, "border cell should have cyan fg")
     h:unmount()
 end
 
@@ -189,9 +177,8 @@ function suite:test_bold_with_background()
         }
     end
     local h = testing.render(App)
-    local ansi = h:ansi()
-    -- bold + bg=4 → ESC[1;44m (incremental form).
-    lt.assertEquals(ansi:find(ESC .. "[1;44m", 1, true) ~= nil, true,
-        "expected bold + blue bg SGR: " .. (ansi:gsub(ESC, "<ESC>")))
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].bold, true, "cell should be bold")
+    lt.assertEquals(cells[1].bg, 4, "cell should have blue bg")
     h:unmount()
 end

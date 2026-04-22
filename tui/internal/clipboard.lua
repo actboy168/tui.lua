@@ -73,13 +73,52 @@ local function osc52_copy(text)
 end
 
 -- ---------------------------------------------------------------------------
--- CLI tool fallback list.
+-- CLI tool helpers
 -- ---------------------------------------------------------------------------
-local _tools = {
+
+--- Check whether a binary is available on PATH.
+local function probe_binary(binary)
+    local probe = io.popen("command -v " .. binary .. " 2>/dev/null")
+    local found = probe and probe:read("*l")
+    if probe then probe:close() end
+    return found and found ~= ""
+end
+
+--- Run a CLI command, feeding text to stdin. Returns true on success.
+local function run_with_stdin(cmd, text)
+    local f = io.popen(cmd .. " 2>/dev/null", "w")
+    if not f then return false end
+    f:write(text)
+    f:close()
+    return true
+end
+
+--- Run a CLI command, capturing stdout. Returns the output string or nil.
+local function run_with_stdout(cmd)
+    local f = io.popen(cmd .. " 2>/dev/null")
+    if not f then return nil end
+    local text = f:read("*a")
+    f:close()
+    if text and #text > 0 then return text end
+    return nil
+end
+
+-- ---------------------------------------------------------------------------
+-- CLI tool lists
+-- ---------------------------------------------------------------------------
+
+local _write_tools = {
     "wl-copy",
     "xclip -selection clipboard",
     "xsel --clipboard --input",
     "pbcopy",
+}
+
+local _read_tools = {
+    "xclip -selection clipboard -o",
+    "xsel --clipboard --output",
+    "pbpaste",
+    "wl-paste --no-newline",
 }
 
 --- Write text to the OS clipboard.
@@ -93,21 +132,28 @@ function M.copy(text)
     end
 
     -- Fall back to CLI tools.
-    for _, cmd in ipairs(_tools) do
+    for _, cmd in ipairs(_write_tools) do
         local binary = cmd:match("^%S+")
-        local probe = io.popen("command -v " .. binary .. " 2>/dev/null")
-        local found = probe and probe:read("*l")
-        if probe then probe:close() end
-        if found and found ~= "" then
-            local f = io.popen(cmd .. " 2>/dev/null", "w")
-            if f then
-                f:write(text)
-                f:close()
+        if probe_binary(binary) then
+            if run_with_stdin(cmd, text) then
                 return true
             end
         end
     end
     return false
+end
+
+--- Read text from the OS clipboard.
+--  Returns the clipboard text, or nil if no tool is available.
+function M.read()
+    for _, cmd in ipairs(_read_tools) do
+        local binary = cmd:match("^%S+")
+        if probe_binary(binary) then
+            local text = run_with_stdout(cmd)
+            if text then return text end
+        end
+    end
+    return nil
 end
 
 -- OSC 52 is disabled by default; tui.render() enables it once the terminal

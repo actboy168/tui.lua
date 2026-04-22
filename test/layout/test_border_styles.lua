@@ -122,10 +122,9 @@ function suite.test_borderColor_applies_to_border()
         }
     end, { cols = 20, rows = 10 })
 
-    -- Get ANSI output and verify red color is applied
-    local ansi = h:ansi()
-    -- Red foreground SGR is 31
-    lt.assertNotEquals(ansi:find("\27%[31"), nil)
+    -- Border cells on row 1 should have red fg (fg=1)
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].fg, 1, "border cell should have red fg")
     h:unmount()
 end
 
@@ -139,10 +138,10 @@ function suite.test_borderDimColor_applies_dim()
         }
     end, { cols = 20, rows = 10 })
 
-    -- Get ANSI output and verify dim + blue is applied
-    local ansi = h:ansi()
-    -- Should have ANSI escape sequences
-    lt.assertNotEquals(ansi:find("\27%["), nil)
+    -- Border cells on row 1 should have dim + blue
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].dim, true, "border cell should be dim")
+    lt.assertEquals(cells[1].fg, 4, "border cell should have blue fg")
     h:unmount()
 end
 
@@ -157,9 +156,9 @@ function suite.test_borderColor_overrides_color()
         }
     end, { cols = 20, rows = 10 })
 
-    local ansi = h:ansi()
-    -- Should have red (31) for border
-    lt.assertNotEquals(ansi:find("\27%[31"), nil)
+    -- Border cells should have red (fg=1) for border, not green
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].fg, 1, "border cell should have red fg")
     h:unmount()
 end
 
@@ -174,9 +173,12 @@ function suite.test_text_uses_color_not_borderColor()
         }
     end, { cols = 20, rows = 10 })
 
-    -- Text should be blue, border should be red
-    local ansi = h:ansi()
-    -- Both colors might appear, just verify it renders
-    lt.assertNotEquals(ansi:find("\27%["), nil)
+    -- Row 1 is border → red fg; row 2 has content → blue fg
+    local border_cells = h:cells(1)
+    lt.assertEquals(border_cells[1].fg, 1, "border should be red")
+    -- Find the text row (row 2 inside the border)
+    local content_cells = h:cells(2)
+    -- Content area starts at col 2 (after left border), text "hello" starts there
+    lt.assertEquals(content_cells[2].fg, 4, "text should be blue (fg=4)")
     h:unmount()
 end
