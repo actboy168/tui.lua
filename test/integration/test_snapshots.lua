@@ -30,6 +30,7 @@ end
 function suite:test_chat_typed()
     local h = testing.render(make_chat_app("hi"), { cols = 30, rows = 8 })
     h:type("hello")
+    h:rerender()
     h:match_snapshot("chat_typed_30x8")
     h:unmount()
 end
@@ -38,7 +39,9 @@ end
 -- shows a partial bot reply. Exercises Static output + live streaming line.
 function suite:test_chat_streaming()
     local h = testing.render(make_chat_app("hello world"), { cols = 30, rows = 8 })
-    h:type("hi"):press("enter")
+    h:type("hi")
+    h:press("enter")
+    h:rerender()
     -- 3 ticks → "[bot] hel"
     h:advance(40):advance(40):advance(40)
     h:match_snapshot("chat_streaming_30x8")
@@ -50,6 +53,7 @@ end
 function suite:test_chat_resized()
     local h = testing.render(make_chat_app("hi"), { cols = 30, rows = 8 })
     h:resize(40, 10)
+    h:rerender()
     h:match_snapshot("chat_resized_40x10")
     h:unmount()
 end

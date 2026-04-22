@@ -19,7 +19,9 @@ function suite:test_type_submit_stream_resize_flow()
 
     -- Type "hi" and press Enter. :type walks UTF-8 boundaries and rerenders
     -- between each keystroke; :press rerenders once after.
-    h:type("hi"):press("enter")
+    h:type("hi")
+    h:press("enter")
+    h:rerender()
 
     -- After submit: history gains [you] hi; streaming starts at shown=0 so
     -- no streaming row text rendered yet.
@@ -50,6 +52,7 @@ function suite:test_type_submit_stream_resize_flow()
     -- Resize to 60×20: row width expands accordingly and useWindowSize
     -- drives a re-render with the new dimensions.
     h:resize(60, 20)
+    h:rerender()
     lt.assertEquals(#h:rows(), 20, "row count should match new height")
     lt.assertEquals(#h:row(1), 60, "row width should match new cols")
 

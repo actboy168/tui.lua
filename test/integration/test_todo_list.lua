@@ -78,7 +78,9 @@ function suite:test_add_single_task()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
     h:type("Buy milk")
+    h:rerender()
     h:press("enter")
+    h:rerender()
 
     local frame = h:frame()
     lt.assertNotEquals(frame:find("Buy milk"), nil)
@@ -98,13 +100,19 @@ function suite:test_add_multiple_tasks()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
     h:type("Task one")
+    h:rerender()
     h:press("enter")
+    h:rerender()
 
     h:type("Task two")
+    h:rerender()
     h:press("enter")
+    h:rerender()
 
     h:type("Task three")
+    h:rerender()
     h:press("enter")
+    h:rerender()
 
     -- All three tasks appear in the tree
     local text = table.concat(testing.text_content(h:tree()), "\n")
@@ -123,7 +131,9 @@ function suite:test_input_clears_after_submit()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
     h:type("Do something")
+    h:rerender()
     h:press("enter")
+    h:rerender()
 
     -- The task was added to the list
     lt.assertNotEquals(h:frame():find("Do something"), nil)
@@ -159,9 +169,13 @@ function suite:test_snapshot_with_tasks()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
     h:type("First task")
+    h:rerender()
     h:press("enter")
+    h:rerender()
     h:type("Second task")
+    h:rerender()
     h:press("enter")
+    h:rerender()
 
     h:match_snapshot("todo_two_tasks_45x17")
     h:unmount()

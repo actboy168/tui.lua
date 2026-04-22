@@ -280,6 +280,7 @@ function suite:test_type_same_chars()
 
     local h = testing.render(make_app(harness_chars))
     h:type("hi")
+    h:rerender()
     lt.assertEquals(harness_chars, { "h", "i" }, "harness: type should deliver chars")
     h:unmount()
 end

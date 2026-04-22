@@ -62,6 +62,7 @@ function suite:test_down_moves_highlight()
     local h = testing.render(App, { cols = 35, rows = 12 })
 
     h:press("down")
+    h:rerender()
 
     lt.assertEquals(changed_to, "beta")
 
@@ -89,6 +90,7 @@ function suite:test_up_wraps_to_last()
 
     -- Up from first item wraps to last (delta)
     h:press("up")
+    h:rerender()
     lt.assertEquals(changed_to, "delta")
 
     h:unmount()
@@ -108,6 +110,8 @@ function suite:test_navigation_sequence()
     h:press("down")  -- → alpha (wrap)
     h:press("up")    -- → delta
 
+    h:rerender()
+
     lt.assertEquals(trail, { "beta", "gamma", "delta", "alpha", "delta" })
 
     h:unmount()
@@ -125,6 +129,8 @@ function suite:test_enter_confirms_first_item()
 
     h:press("enter")
 
+    h:rerender()
+
     lt.assertNotEquals(selected, nil)
     lt.assertEquals(selected.value, "alpha")
     lt.assertEquals(selected.label, "Alpha")
@@ -141,6 +147,8 @@ function suite:test_enter_confirms_navigated_item()
     h:press("down")
     h:press("down")
     h:press("enter")
+
+    h:rerender()
 
     lt.assertNotEquals(selected, nil)
     lt.assertEquals(selected.value, "gamma")
@@ -161,7 +169,9 @@ end
 function suite:test_snapshot_after_navigation()
     local h = testing.render(MenuApp(nil, nil), { cols = 35, rows = 12 })
     h:press("down")
+    h:rerender()
     h:press("down")
+    h:rerender()
     h:match_snapshot("select_gamma_highlighted_35x12")
     h:unmount()
 end
@@ -175,9 +185,11 @@ function suite:test_one_render_per_keypress()
     h:reset_render_count()
 
     h:press("down")
+    h:rerender()
     h:expect_renders(1, "one down → one render")
 
     h:press("down")
+    h:rerender()
     h:expect_renders(2, "two downs → two renders total")
 
     h:unmount()

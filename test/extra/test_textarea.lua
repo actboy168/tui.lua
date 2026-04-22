@@ -78,6 +78,7 @@ function suite:test_char_insertion()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:type("hi")
+    h:rerender()
     lt.assertEquals(value, "hi")
     h:unmount()
 end
@@ -103,6 +104,7 @@ function suite:test_enter_submits()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("enter")
+    h:rerender()
     lt.assertEquals(#submitted, 1)
     lt.assertEquals(submitted[1], "hello")
     h:unmount()
@@ -120,6 +122,7 @@ function suite:test_shift_enter_inserts_newline()
     h:type("a")
     h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter → insert newline
     h:type("b")
+    h:rerender()
     lt.assertEquals(value, "a\nb")
     h:unmount()
 end
@@ -168,6 +171,7 @@ function suite:test_scroll_when_taller_than_terminal()
         h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter
     end
     h:type("line7")
+    h:rerender()
     -- value should have 7 lines
     lt.assertEquals(value, "line1\nline2\nline3\nline4\nline5\nline6\nline7")
     -- Cursor must be visible (within the 5-row terminal)
@@ -206,6 +210,7 @@ function suite:test_scroll_taller_than_terminal_with_border()
         h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter
     end
     h:type("L8")
+    h:rerender()
     -- Cursor must be visible (within the 7-row terminal)
     local col, row = h:cursor()
     assert(row ~= nil, "cursor should be visible")
@@ -239,6 +244,7 @@ function suite:test_backspace_merges_lines()
     -- Move to beginning of "b" line then backspace to merge.
     h:press("home")
     h:press("backspace")
+    h:rerender()
     lt.assertEquals(value, "ab")
     h:unmount()
 end
@@ -266,6 +272,7 @@ function suite:test_up_down_navigation()
     -- Then type to confirm we're on line 1.
     h:press("up")
     h:type("!")
+    h:rerender()
     lt.assertEquals(value, "abc!\nxyz")
     h:unmount()
 end
@@ -352,6 +359,7 @@ function suite:test_delete_merges_next_line()
     h:press("up")
     h:press("end")
     h:press("delete")
+    h:rerender()
     lt.assertEquals(value, "ab")
     h:unmount()
 end
@@ -449,15 +457,19 @@ function suite:test_ctrl_home_and_ctrl_end_move_across_document()
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("ctrl+a")
     h:type("X")
+    h:rerender()
     lt.assertEquals(value, "X")
     h:press("backspace")
     h:paste("abc\ndef")
+    h:rerender()
     lt.assertEquals(value, "abc\ndef")
     h:press("ctrl+home")
     h:type("Y")
+    h:rerender()
     lt.assertEquals(value, "Yabc\ndef")
     h:press("ctrl+end")
     h:type("Z")
+    h:rerender()
     lt.assertEquals(value, "Yabc\ndefZ")
     h:unmount()
 end
@@ -472,17 +484,21 @@ function suite:test_ctrl_u_ctrl_k_and_ctrl_w_are_line_local()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("ctrl+w")
+    h:rerender()
     lt.assertEquals(value, "hello\nwide words ")
     h:press("ctrl+u")
+    h:rerender()
     lt.assertEquals(value, "hello\n")
     h:type("again")
     h:press("ctrl+a")
     h:type("X")
+    h:rerender()
     lt.assertEquals(value, "X")
     h:press("backspace")
     h:paste("hello\nagain")
     h:press("home")
     h:press("ctrl+k")
+    h:rerender()
     lt.assertEquals(value, "hello\n")
     h:unmount()
 end
@@ -499,8 +515,10 @@ function suite:test_ctrl_left_right_and_delete_are_word_aware()
     h:press("ctrl+left")
     h:press("ctrl+left")
     h:type("X")
+    h:rerender()
     lt.assertEquals(value, "hello Xbrave world")
     h:press("ctrl+delete")
+    h:rerender()
     lt.assertEquals(value, "hello Xworld")
     h:unmount()
 end
@@ -522,9 +540,11 @@ function suite:test_enter_behavior_newline()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("enter")
+    h:rerender()
     lt.assertEquals(value, "hello\n")
     lt.assertEquals(#submitted, 0)
     h:press("ctrl+enter")
+    h:rerender()
     lt.assertEquals(#submitted, 1)
     lt.assertEquals(submitted[1], "hello\n")
     h:unmount()
@@ -541,6 +561,7 @@ function suite:test_shift_left_type_replaces_textarea_selection()
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("shift+left")
     h:type("X")
+    h:rerender()
     lt.assertEquals(value, "abcX")
     h:unmount()
 end
@@ -556,6 +577,7 @@ function suite:test_shift_up_paste_replaces_multiline_selection()
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("shift+up")
     h:paste("Z")
+    h:rerender()
     lt.assertEquals(value, "abZ")
     h:unmount()
 end
@@ -570,8 +592,11 @@ function suite:test_textarea_ime_confirm_replaces_selection()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("home")
+    h:rerender()
     h:press("shift+end")
+    h:rerender()
     h:type_composing_confirm("中")
+    h:rerender()
     lt.assertEquals(value, "ab\n中")
     h:unmount()
 end
@@ -635,6 +660,7 @@ function suite:test_textarea_typing_undo_coalesces()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:type("ab")
+    h:rerender()
     h:dispatch_event(key_event("char", "z", true))
     lt.assertEquals(value, "")
     h:dispatch_event(key_event("char", "y", true))
@@ -657,6 +683,7 @@ function suite:test_can_disable_undo_and_redo_feature()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:type("c")
+    h:rerender()
     lt.assertEquals(value, "abc")
     h:dispatch_event(key_event("char", "z", true))
     lt.assertEquals(value, "abc")
@@ -694,14 +721,17 @@ function suite:test_can_disable_selection_copy_word_kill_features()
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("shift+up")
     h:type("!")
+    h:rerender()
     lt.assertEquals(value, "ab!\ncd")
     h:dispatch_event(key_event("char", "x", true))
     lt.assertEquals(value, "ab!\ncd")
     lt.assertEquals(#copied, 0)
     h:press("ctrl+left")
     h:type("?")
+    h:rerender()
     lt.assertEquals(value, "ab!?\ncd")
     h:press("ctrl+k")
+    h:rerender()
     lt.assertEquals(value, "ab!?\ncd")
     clipboard.copy = old_copy
     h:unmount()
@@ -728,8 +758,10 @@ function suite:test_can_disable_paste_submit_and_ime_preview_features()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:paste("ZZ")
+    h:rerender()
     lt.assertEquals(value, "ab")
     h:press("enter")
+    h:rerender()
     lt.assertEquals(#submitted, 0)
     lt.assertEquals(value, "ab")
     h:type_composing("中")
@@ -762,6 +794,7 @@ function suite:test_can_customize_textarea_keymap()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("enter")
+    h:rerender()
     lt.assertEquals(value, "ab")
     lt.assertEquals(#submitted, 0)
     h:dispatch_event(key_event("char", "j", true))
@@ -795,12 +828,15 @@ function suite:test_can_customize_textarea_core_keymap()
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:press("left")
     h:type("x")
+    h:rerender()
     lt.assertEquals(value, "ab\ncdx")
     h:dispatch_event(key_event("char", "b", true))
     h:type("?")
+    h:rerender()
     lt.assertEquals(value, "ab\ncd?x")
     h:dispatch_event(key_event("char", "p", true))
     h:type("!")
+    h:rerender()
     lt.assertEquals(value, "ab!\ncd?x")
     h:dispatch_event(key_event("char", "d", true))
     lt.assertEquals(value, "ab!cd?x")
@@ -817,6 +853,7 @@ function suite:test_composing_preview_and_confirm_on_textarea()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:type_composing("中")
+    h:rerender()
     lt.assertEquals(value, "ab")
     lt.assertEquals(h:row(1):match("^ab中") ~= nil, true)
     h:type_composing_confirm("中")
@@ -834,6 +871,7 @@ function suite:test_escape_clears_textarea_composing_preview()
     end
     local h = testing.render(App, { cols = 20, rows = 4 })
     h:type_composing("中")
+    h:rerender()
     lt.assertEquals(h:row(1):match("^ab中") ~= nil, true)
     h:dispatch_event({ name = "escape", ctrl = false, meta = false, shift = false, input = "", raw = "\27" })
     lt.assertEquals(value, "ab")
@@ -894,8 +932,11 @@ function suite:test_up_snaps_to_display_column()
     local h = testing.render(App, { cols = 20, rows = 4 })
     -- Caret starts at end of "xyz" (line 2, col 3, x=3).
     h:press("up")    -- → line 1, col 3 (after 中, x=4 or x=3 clamped)
+    h:rerender()
     h:press("end")   -- → line 1, col 4 (after 'c')
+    h:rerender()
     h:type("!")
+    h:rerender()
     -- value should be "ab中c!\nxyz"
     lt.assertEquals(value, "ab\xe4\xb8\xad" .. "c!\nxyz")
     h:unmount()
@@ -938,6 +979,7 @@ function suite:test_split_esc_up_arrow()
     h:dispatch(input_helpers.raw("\x1b"))
     h:dispatch("[A")           -- up arrow split
     h:type("!")                -- should land on line 1
+    h:rerender()
     lt.assertEquals(value, "foo!\nbar")
     h:unmount()
 end
@@ -956,6 +998,7 @@ function suite:test_split_esc_bracket_then_final()
     h:dispatch("[")
     h:dispatch("A")            -- up arrow delivered byte-by-byte
     h:type("!")
+    h:rerender()
     lt.assertEquals(value, "foo!\nbar")
     h:unmount()
 end
@@ -978,6 +1021,7 @@ function suite:test_sticky_x_through_short_line()
     h:press("up")   -- line 3→2, sticky x=5, col clamped to 1
     h:press("up")   -- line 2→1, sticky x=5 still, col=5
     h:type("!")
+    h:rerender()
     lt.assertEquals(value, "abcde!\nx\nfghij")
     h:unmount()
 end
@@ -1055,8 +1099,10 @@ function suite:test_click_focuses_textarea()
         h:mouse("down", 1, r.x + 1, r.y + 1)
         h:mouse("up", 1, r.x + 1, r.y + 1)
 
+
         -- Type into the now-focused Textarea.
         h:type("hello")
+        h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("hello", 1, true), nil,
             "typed text should appear in the Textarea")
@@ -1072,6 +1118,7 @@ function suite:test_click_positions_cursor_in_textarea()
 
         -- Type some text first (autoFocus).
         h:type("abcde")
+        h:rerender()
 
         -- Find the Textarea's clickable Box.
         local box = find_clickable_box(h:tree())
@@ -1084,8 +1131,10 @@ function suite:test_click_positions_cursor_in_textarea()
         h:mouse("down", 1, click_x, click_y)
         h:mouse("up", 1, click_x, click_y)
 
+
         -- Type at the new cursor position.
         h:type("X")
+        h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("abXcde", 1, true), nil,
             "cursor should be repositioned by click")
@@ -1102,8 +1151,11 @@ function suite:test_click_moves_to_different_line()
 
         -- Type two lines of text.
         h:type("line1")
+        h:rerender()
         h:press("shift+enter")
+        h:rerender()
         h:type("line2")
+        h:rerender()
 
         -- Find the Textarea's clickable Box.
         local box = find_clickable_box(h:tree())
@@ -1117,8 +1169,10 @@ function suite:test_click_moves_to_different_line()
         h:mouse("down", 1, click_x, click_y)
         h:mouse("up", 1, click_x, click_y)
 
+
         -- Type to verify we're at end of line 1.
         h:type("!")
+        h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("line1!", 1, true), nil,
             "should type on line 1 after clicking it")
@@ -1140,11 +1194,15 @@ function suite:test_scroll_in_textarea()
         end
         h:type("L6")
 
+
         -- Move cursor to line 3 (middle of viewport) so scrolling down
         -- keeps the cursor visible and clamp_scroll won't undo it.
         h:press("ctrl+home")  -- cursor at line 1
+        h:rerender()
         h:press("down")       -- line 2
+        h:rerender()
         h:press("down")       -- line 3
+        h:rerender()
 
         -- Verify L1 is visible.
         local frame_before = h:frame()
@@ -1159,6 +1217,7 @@ function suite:test_scroll_in_textarea()
         -- Scroll down. Cursor is at line 3, scroll_top=0, visible rows 1-4.
         -- After scroll_down, scroll_top=1, visible rows 2-5. Cursor at line 3 is still visible.
         h:mouse("scroll_down", nil, r.x + 1, r.y + 1)
+        h:rerender()
 
         -- After scrolling down, L1 should have moved out of view.
         local frame_after = h:frame()

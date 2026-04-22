@@ -220,72 +220,19 @@ function M.render(root, opts)
     local _mouse_auto_release = nil
 
     local function paint(term)
-        local w, h = terminal.get_size()
-        local cw, ch = screen_mod.size(screen_state)
-        local resized = (cw ~= w or ch ~= h)
-        if resized then
-            screen_mod.resize(screen_state, w, h)
-        end
-        if resize_mod.observe(w, h) then
-            screen_mod.invalidate(screen_state)
-        end
-        local tree = paint_frame.stabilize(rec_state, root, app_handle, w, h, interactive)
-        -- Store the laid-out tree for mouse hit testing before painting
-        -- (painting may modify elements in-place, but rects are stable).
-        hit_test.set_tree(tree)
-        -- Auto-enable mouse mode when the tree has click/scroll handlers.
-        -- This ensures components like TextInput/Textarea work without the
-        -- user needing to call useMouse manually.
-        local needs_mouse = interactive and hit_test.has_mouse_props(tree)
-        if needs_mouse and not _mouse_auto_release then
-            _mouse_auto_release = input_mod.request_mouse_level(1)
-        elseif not needs_mouse and _mouse_auto_release then
-            _mouse_auto_release()
-            _mouse_auto_release = nil
-        end
-        screen_mod.clear(screen_state)
-        renderer.paint(tree, screen_state)
-
-        -- Content height: how many rows the layout actually used. Clamped to h.
-        -- In main-screen mode this limits how many rows are claimed in the
-        -- terminal (so a small widget doesn't scroll the whole screen).
-        local content_h = tree.rect and math.min(tree.rect.h, h) or h
-        local diff = screen_mod.diff(screen_state, interactive and resized,
-                                     interactive and content_h or nil)
-
-        -- Post-commit: cursor positioning.
-        -- In main-screen mode: use relative cursor movement from cursor_pos()
-        -- (the virtual position after cursor_restore) to the TextInput coords.
-        -- In non-interactive mode: no cursor handling.
-        local cursor_seq = ""
-        if interactive then
-            local ccol, crow = paint_frame.find_cursor(tree)
-            -- Guard: if the declared cursor row is outside the visible area
-            -- (content taller than the terminal), treat it as hidden. Storing
-            -- an out-of-bounds display_y would corrupt the next frame's preamble
-            -- because the terminal clamps the physical cursor but diff_main
-            -- calculates relative moves using the unclamped value.
-            if ccol and crow and (crow - 1) < content_h then
-                local cx, cy = screen_mod.cursor_pos(screen_state)
-                local dx = (ccol - 1) - cx
-                local dy = (crow - 1) - cy
-                cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
-                screen_mod.set_display_cursor(screen_state, ccol - 1, crow - 1)
-                last_display_y = crow - 1
-            else
-                cursor_seq = ansi.cursorHide()
-                screen_mod.set_display_cursor(screen_state, -1, -1)
-                last_display_y = nil
-            end
-        end
-
-        -- Single write: BSU + diff + cursor + ESU. The terminal buffers
-        -- everything until ESU, then refreshes atomically.
-        if interactive and (#diff > 0 or #cursor_seq > 0) then
-            terminal.write(ansi.beginSyncUpdate() .. diff .. cursor_seq .. ansi.endSyncUpdate())
-        elseif #diff > 0 then
-            terminal.write(diff)
-        end
+        local mouse_ref = { current = _mouse_auto_release }
+        local tree, _ = paint_frame.frame {
+            rec_state  = rec_state,
+            root       = root,
+            app_handle = app_handle,
+            get_size   = terminal.get_size,
+            screen     = screen_state,
+            interactive = interactive,
+            write_fn   = terminal.write,
+            on_cursor_move = function(col, row) last_display_y = row end,
+            mouse_auto_release = mouse_ref,
+        }
+        _mouse_auto_release = mouse_ref.current
 
         hit_test.clear_tree()
         layout.free(tree)

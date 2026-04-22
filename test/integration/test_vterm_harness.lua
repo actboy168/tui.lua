@@ -420,7 +420,7 @@ function suite:test_error_fallback_banner_with_throw_on_error_false()
 
     -- throw_on_error=false (production path) should catch the error
     -- and produce a fallback error banner tree
-    local tree = paint_frame.render_and_layout(rec_state, BuggyApp, app_handle, W, H, false, false)
+    local tree = paint_frame.stabilize(rec_state, BuggyApp, app_handle, W, H, false, false)
     lt.assertNotEquals(tree, nil)
     lt.assertEquals(tree.kind, "box")
     -- The tree should have a child text with the error banner
@@ -452,7 +452,7 @@ function suite:test_error_fallback_banner_renders_to_screen()
     local app_handle = { exit = function() end }
     local W, H = 40, 3
 
-    local tree = paint_frame.render_and_layout(rec_state, BuggyApp, app_handle, W, H, false, false)
+    local tree = paint_frame.stabilize(rec_state, BuggyApp, app_handle, W, H, false, false)
     local scr = screen_mod.new(W, H)
     local renderer_mod = require "tui.internal.renderer"
     screen_mod.clear(scr)
@@ -480,7 +480,7 @@ function suite:test_error_fallback_does_not_fire_with_good_component()
     local app_handle = { exit = function() end }
     local W, H = 40, 3
 
-    local tree = paint_frame.render_and_layout(rec_state, GoodApp, app_handle, W, H, false, false)
+    local tree = paint_frame.stabilize(rec_state, GoodApp, app_handle, W, H, false, false)
     lt.assertNotEquals(tree, nil)
     -- Tree should have the actual content, not an error banner
     lt.assertEquals(tree.kind, "box")

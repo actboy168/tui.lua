@@ -50,6 +50,7 @@ function suite:test_down_moves_highlight_and_fires_onchange()
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
     h:press("down")
+    h:rerender()
     lt.assertEquals(#changes, 1)
     lt.assertEquals(changes[1][1], "b")
     lt.assertEquals(changes[1][2], 2)
@@ -68,6 +69,7 @@ function suite:test_up_wraps_to_last()
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
     h:press("up")
+    h:rerender()
     row_starts_with(h, 3, "❯ c")
     h:unmount()
 end
@@ -82,6 +84,7 @@ function suite:test_down_wraps_to_first()
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
     h:press("down")
+    h:rerender()
     row_starts_with(h, 1, "❯ a")
     h:unmount()
 end
@@ -96,8 +99,10 @@ function suite:test_home_end_jump()
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
     h:press("end")
+    h:rerender()
     row_starts_with(h, 3, "❯ c")
     h:press("home")
+    h:rerender()
     row_starts_with(h, 1, "❯ a")
     h:unmount()
 end
@@ -117,6 +122,7 @@ function suite:test_enter_fires_onselect()
     local h = testing.render(App, { cols = 30, rows = 3 })
     h:press("down")
     h:press("enter")
+    h:rerender()
     lt.assertEquals(selected[1], "b")
     lt.assertEquals(selected[2], 2)
     h:unmount()
@@ -137,6 +143,7 @@ function suite:test_disabled_ignores_keys()
     end
     local h = testing.render(App, { cols = 30, rows = 3 })
     h:press("down")
+    h:rerender()
     lt.assertEquals(changes, 0)
     -- Highlight stays on the first row.
     row_starts_with(h, 1, "❯ a")
@@ -177,6 +184,7 @@ function suite:test_table_items_value_distinct_from_label()
     local h = testing.render(App, { cols = 30, rows = 3 })
     h:press("down")
     h:press("enter")
+    h:rerender()
     lt.assertEquals(got[1], "B")
     lt.assertEquals(got[2], 2)
     lt.assertEquals(got[3], "Beta")
@@ -204,6 +212,7 @@ function suite:test_limit_window_scrolls()
     h:press("down") -- hl=2
     h:press("down") -- hl=3
     h:press("down") -- hl=4 — window must shift to show 'd'
+    h:rerender()
     -- Whichever row the highlighted 'd' ends up on, it must be visible.
     local found
     for i = 1, 3 do
@@ -232,6 +241,7 @@ function suite:test_render_item_override()
     row_starts_with(h, 1, "[*] a")
     row_starts_with(h, 2, "[ ] b")
     h:press("down")
+    h:rerender()
     row_starts_with(h, 1, "[ ] a")
     row_starts_with(h, 2, "[*] b")
     h:unmount()
@@ -272,6 +282,7 @@ function suite:test_unknown_key_is_noop()
     end
     local h = testing.render(App, { cols = 30, rows = 2 })
     h:type("x")
+    h:rerender()
     lt.assertEquals(changes, 0)
     h:unmount()
 end

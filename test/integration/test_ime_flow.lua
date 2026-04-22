@@ -33,6 +33,7 @@ function suite:test_composing_appears()
     local h = testing.render(IMEApp, { cols = 35, rows = 5 })
 
     h:type_composing("ni")
+    h:rerender()
 
     -- During composing the text should be visible in the frame
     local frame = h:frame()
@@ -90,11 +91,13 @@ function suite:test_cursor_past_double_width()
 
     -- ASCII: cursor moves 1 per character
     h:type("ab")
+    h:rerender()
     local col_ascii = h:cursor()
     lt.assertEquals(col_ascii, col0 + 2)
 
     -- Confirm a double-width character: cursor moves 2 per character
     h:type_composing_confirm("你")   -- 1 wide char = 2 columns
+    h:rerender()
     local col_after = h:cursor()
     lt.assertEquals(col_after, col_ascii + 2,
         "double-width char should advance cursor by 2 columns")
@@ -128,6 +131,7 @@ end
 function suite:test_snapshot_composing()
     local h = testing.render(IMEApp, { cols = 35, rows = 5 })
     h:type_composing("abc")
+    h:rerender()
     h:match_snapshot("ime_composing_35x5")
     h:unmount()
 end
@@ -135,6 +139,7 @@ end
 function suite:test_snapshot_confirmed()
     local h = testing.render(IMEApp, { cols = 35, rows = 5 })
     h:type_composing_confirm("Hello")
+    h:rerender()
     h:match_snapshot("ime_confirmed_35x5")
     h:unmount()
 end

@@ -51,6 +51,7 @@ local timers        = {}    -- id -> { fire_at, interval, fn }
 local next_timer_id = 1
 local dirty         = true  -- force first paint
 local running       = false
+local last_frame    = 0    -- timestamp of last paint (updated by loop_once and run)
 local <const> frame_ms      = 16    -- ~60 fps cap
 local <const> input_poll_ms = 8     -- how often to look at stdin
 
@@ -97,6 +98,17 @@ end
 
 function M.stop()
     running = false
+end
+
+-- Start the scheduler loop. Called by the test harness after mount so that
+-- loop_once() can process iterations. The harness calls stop() at unmount.
+-- The dirty flag is cleared here because mount already performed the initial
+-- paint via _paint() (bypassing the scheduler), so the first loop_once iteration
+-- should not repaint.
+function M.start()
+    running = true
+    last_frame = 0
+    dirty = false
 end
 
 -- ---------------------------------------------------------------------------
@@ -160,19 +172,54 @@ end
 --   terminal = <terminal object>  -- passed as first arg to paint
 -- }
 
+-- Do one iteration of the run loop: read → on_input → tick_timers →
+-- paint if dirty and frame_ms has elapsed (or immediately if immediate=true).
+-- Exposed so the test harness can simulate one iteration after injecting
+-- input via h:dispatch, going through the full production code path.
+function M.loop_once(opts, terminal, now, immediate)
+    now = now or now_ms()
+
+    -- Input: forward raw bytes; handler can stop loop by returning true.
+    if opts.read then
+        local s = opts.read()
+        if s and #s > 0 and opts.on_input then
+            if opts.on_input(s) then
+                running = false
+                return false
+            end
+        end
+    end
+
+    -- Timers.
+    tick_timers(now)
+
+    -- Repaint if dirty and a frame worth of time has elapsed (or immediately
+    -- for harness:immediate mode that bypasses frame throttle).
+    local elapsed = now - last_frame
+    if dirty and (immediate or elapsed >= frame_ms) then
+        dirty = false
+        opts.paint(terminal)
+        last_frame = now
+    end
+
+    return running
+end
+
 function M.run(opts)
 	assert(opts and opts.paint and opts.read, "scheduler.run requires paint+read")
 	local terminal = opts.terminal
 	running = true
-	local last_frame = 0
+	last_frame = 0
 
 	-- Initial paint so the screen isn't blank before first event.
-	dirty = false
-	opts.paint(terminal)
-	last_frame = now_ms()
+	if not opts.skip_initial_paint then
+		dirty = false
+		opts.paint(terminal)
+		last_frame = now_ms()
+	end
 
 	while running do
-		local now = now_ms()
+        local now = now_ms()
 
 		-- Input: forward raw bytes; handler can stop loop by returning true.
 		if opts.read then
@@ -190,8 +237,9 @@ function M.run(opts)
 			-- Timer callbacks may have flipped dirty via requestRedraw.
 		end
 
-		-- Repaint if dirty and a frame worth of time has elapsed.
-		if dirty and (now - last_frame) >= frame_ms then
+		-- Repaint if dirty and a frame worth of time has elapsed (or immediately).
+		local elapsed = now - last_frame
+		if dirty and (opts.immediate or elapsed >= frame_ms) then
 			dirty = false
 			opts.paint(terminal)
 			last_frame = now

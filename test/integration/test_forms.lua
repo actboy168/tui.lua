@@ -69,12 +69,14 @@ function suite:test_login_form_submit()
 
     -- Type in username field and submit
     h:type("admin")
+    h:rerender()
 
     -- Cursor advanced by 5 chars
     local col_after, _ = h:cursor()
     lt.assertEquals(col_after, col0 + 5)
 
     h:press("enter")
+    h:rerender()
 
     lt.assertNotEquals(submitted, nil)
     lt.assertEquals(submitted.username, "admin")
@@ -137,9 +139,11 @@ function suite:test_login_form_full_flow()
 
     -- Fill username
     h:type("john")
+    h:rerender()
 
     -- Use Tab to move to password field
     h:press("tab")
+    h:rerender()
 
     -- Focus must have moved to a different field
     local focus_after_tab = h:focus_id()
@@ -154,7 +158,9 @@ function suite:test_login_form_full_flow()
 
     -- Fill password and submit
     h:type("secret123")
+    h:rerender()
     h:press("return")
+    h:rerender()
 
     lt.assertNotEquals(submitted, nil)
     lt.assertEquals(submitted.username, "john")
@@ -243,13 +249,16 @@ function suite:test_wizard_form_navigation()
     -- Step 1: Fill name, then Enter to next step
     h:type("John Doe")
     h:press("return")
+    h:rerender()
 
     -- Step 2: Fill email, then Enter to next step
     h:type("john@example.com")
     h:press("return")
+    h:rerender()
 
     -- Step 3: Submit
     h:press("return")
+    h:rerender()
 
     lt.assertEquals(#submissions, 1)
     lt.assertEquals(submissions[1].name, "John Doe")
@@ -299,14 +308,19 @@ function suite:test_form_with_validation()
 
     -- Submit invalid email
     h:type("invalid")
+    h:rerender()
     h:press("enter")
+    h:rerender()
     lt.assertEquals(submitted, false)
     lt.assertEquals(#errors, 1)
 
     -- Clear and submit valid email
     h:press("ctrl+u")  -- clear line
+    h:rerender()
     h:type("valid@example.com")
+    h:rerender()
     h:press("enter")
+    h:rerender()
 
     lt.assertEquals(submitted, true)
 
@@ -346,6 +360,7 @@ function suite:test_form_with_select()
     h:press("down")
     h:press("down")
     h:press("return")
+    h:rerender()
 
     lt.assertEquals(selectedValue, "opt3")
 

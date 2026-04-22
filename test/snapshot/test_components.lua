@@ -251,6 +251,7 @@ function suite:test_textinput_typed()
     end
     local h = testing.render(App, { cols = 25, rows = 5 })
     h:type("abc")
+    h:rerender()
     h:match_snapshot("textinput_typed_25x5")
     h:unmount()
 end

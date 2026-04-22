@@ -36,13 +36,19 @@ function suite:test_increment()
     lt.assertEquals(h:row(2), "0                        ")
 
     h:press("up")
+    h:rerender()
     lt.assertEquals(h:row(2), "1                        ")
 
     h:press("up")
+    h:rerender()
+    lt.assertEquals(h:row(2), "2                        ")
+
     h:press("up")
+    h:rerender()
     lt.assertEquals(h:row(2), "3                        ")
 
     h:press("down")
+    h:rerender()
     lt.assertEquals(h:row(2), "2                        ")
 
     h:unmount()
@@ -52,7 +58,11 @@ function suite:test_decrement_below_zero()
     local h = testing.render(Counter, { cols = 25, rows = 7 })
 
     h:press("down")
+    h:rerender()
+    lt.assertEquals(h:row(2), "-1                       ")
+
     h:press("down")
+    h:rerender()
     lt.assertEquals(h:row(2), "-2                       ")
 
     h:unmount()
@@ -67,10 +77,13 @@ function suite:test_render_count_per_keypress()
     h:reset_render_count()
 
     h:press("up")
+    h:rerender()
     h:expect_renders(1, "one keypress → one render")
 
     h:press("up")
+    h:rerender()
     h:press("down")
+    h:rerender()
     h:expect_renders(3, "three keypresses → three renders")
 
     h:unmount()
@@ -89,8 +102,11 @@ end
 function suite:test_snapshot_after_increments()
     local h = testing.render(Counter, { cols = 25, rows = 7 })
     h:press("up")
+    h:rerender()
     h:press("up")
+    h:rerender()
     h:press("up")
+    h:rerender()
     h:match_snapshot("counter_at_3_25x7")
     h:unmount()
 end

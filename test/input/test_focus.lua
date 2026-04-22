@@ -71,10 +71,13 @@ function suite:test_tab_and_shift_tab_cycle()
     lt.assertEquals(h:focus_id(), "a")
 
     h:press("tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "b")
     h:press("tab")     -- wrap back to "a"
+    h:rerender()
     lt.assertEquals(h:focus_id(), "a")
     h:press("shift+tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "b")   -- prev from a wraps to last
     h:unmount()
 end
@@ -134,10 +137,12 @@ function suite:test_disable_focus_falls_back_to_broadcast()
     lt.assertEquals(h:focus_id(), "only")
 
     h:press("tab")
+    h:rerender()
     lt.assertEquals(seen_tab, false, "tab should be swallowed while focus is enabled")
 
     disable_it()
     h:press("tab")
+    h:rerender()
     lt.assertEquals(seen_tab, true, "tab should reach useInput once focus is disabled")
     h:unmount()
 end
@@ -170,8 +175,9 @@ function suite:test_unmount_transfers_focus()
     local h = testing.render(App, { cols = 1, rows = 3 })
     lt.assertEquals(h:focus_id(), "a")
 
-    h:press("tab"); lt.assertEquals(h:focus_id(), "b")
-    h:press("tab"); lt.assertEquals(h:focus_id(), "c")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "b")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "c")
+
 
     set_show(false)                         -- unmount "c"
     h:rerender()
@@ -181,8 +187,8 @@ function suite:test_unmount_transfers_focus()
     lt.assertEquals(h:focus_id(), "b")
 
     -- "c" must no longer appear in the chain.
-    h:press("tab"); lt.assertEquals(h:focus_id(), "a")
-    h:press("tab"); lt.assertEquals(h:focus_id(), "b")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "a")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "b")
     h:unmount()
 end
 
@@ -203,6 +209,7 @@ function suite:test_textinput_autofocus_default()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:type("hi")
+    h:rerender()
     lt.assertEquals(value, "hi")
     h:unmount()
 end
@@ -232,12 +239,15 @@ function suite:test_two_textinputs_tab_routes()
     local h = testing.render(App, { cols = 20, rows = 2 })
     lt.assertEquals(h:focus_id(), "inA")
     h:type("x")
+    h:rerender()
     lt.assertEquals(a, "x")
     lt.assertEquals(b, "")
 
     h:press("tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "inB")
     h:type("y")
+    h:rerender()
     lt.assertEquals(a, "x")
     lt.assertEquals(b, "y")
     h:unmount()
@@ -283,8 +293,8 @@ function suite:test_tab_order_stable_across_rerenders()
     lt.assertEquals(entries[2].id, "q")
 
     -- Tab traversal still cleanly flips p ↔ q.
-    h:press("tab"); lt.assertEquals(h:focus_id(), "q")
-    h:press("tab"); lt.assertEquals(h:focus_id(), "p")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "q")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "p")
     h:unmount()
 end
 
@@ -352,10 +362,11 @@ function suite:test_inactive_entry_is_skipped_by_tab()
     lt.assertEquals(h:focus_id(), "a")
 
     -- Tab skips the inactive "b" and lands on "c".
-    h:press("tab");       lt.assertEquals(h:focus_id(), "c")
-    h:press("tab");       lt.assertEquals(h:focus_id(), "a")   -- wraps, still skipping b
-    h:press("shift+tab"); lt.assertEquals(h:focus_id(), "c")   -- wrap back, skip b
-    h:press("shift+tab"); lt.assertEquals(h:focus_id(), "a")
+    h:press("tab");       h:rerender(); lt.assertEquals(h:focus_id(), "c")
+    h:press("tab");       h:rerender(); lt.assertEquals(h:focus_id(), "a")   -- wraps, still skipping b
+    h:press("shift+tab"); h:rerender(); lt.assertEquals(h:focus_id(), "c")   -- wrap back, skip b
+    h:press("shift+tab"); h:rerender(); lt.assertEquals(h:focus_id(), "a")
+
 
     -- Explicit focus(id) still lands on an inactive entry (user intent).
     require("tui.internal.focus").focus("b")
@@ -412,14 +423,15 @@ function suite:test_isactive_hot_update_transfers_focus()
     lt.assertEquals(h:focus_id(), "c")
 
     -- Tab now skips b.
-    h:press("tab"); lt.assertEquals(h:focus_id(), "a")
-    h:press("tab"); lt.assertEquals(h:focus_id(), "c")    -- skips b
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "a")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "c")    -- skips b
+
 
     -- Reactivating b does not steal focus, but b is reachable via Tab again.
     set_b_active(true)
     h:rerender()
     lt.assertEquals(h:focus_id(), "c")
-    h:press("shift+tab"); lt.assertEquals(h:focus_id(), "b")
+    h:press("shift+tab"); h:rerender(); lt.assertEquals(h:focus_id(), "b")
     h:unmount()
 end
 
@@ -502,7 +514,7 @@ function suite:test_textinput_disabled_is_inactive_entry()
     -- First active one autoFocuses (TextInput default).
     lt.assertEquals(h:focus_id(), "top")
     -- Tab skips the inactive middle input.
-    h:press("tab"); lt.assertEquals(h:focus_id(), "bottom")
-    h:press("tab"); lt.assertEquals(h:focus_id(), "top")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "bottom")
+    h:press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "top")
     h:unmount()
 end

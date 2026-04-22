@@ -82,13 +82,16 @@ function suite:test_tab_forward()
     lt.assertEquals(h:focus_id(), "field_a")
 
     h:press("tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "field_b")
 
     h:press("tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "field_c")
 
     -- Tab wraps from last back to first
     h:press("tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "field_a")
 
     h:unmount()
@@ -106,12 +109,15 @@ function suite:test_shift_tab_backward()
 
     -- Shift+Tab from first wraps to last
     h:press("shift+tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "field_c")
 
     h:press("shift+tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "field_b")
 
     h:press("shift+tab")
+    h:rerender()
     lt.assertEquals(h:focus_id(), "field_a")
 
     h:unmount()
@@ -153,6 +159,7 @@ function suite:test_cursor_col_advances()
     lt.assertNotEquals(col0, nil)
 
     h:type("hi")
+    h:rerender()
     local col2 = h:cursor()
     lt.assertEquals(col2, col0 + 2)
 

@@ -68,6 +68,7 @@ function suite:test_rapid_resize_sequence()
     for _, sz in ipairs(sizes) do
         h:resize(sz[1], sz[2])
     end
+    h:rerender()
     -- Final size 25x5: row 1 should still show "content" (clipped to 7 cols).
     lt.assertEquals(h:row(1):sub(1, 7), "content")
     h:unmount()
@@ -93,6 +94,7 @@ function suite:test_focused_element_clipped_after_shrink()
     lt.assertEquals(h:focus_id(), "only")
     -- Shrink viewport to fewer cols than the input's content.
     h:resize(5, 1)
+    h:rerender()
     lt.assertEquals(h:focus_id(), "only",
         "focus must survive a viewport resize")
     local row = h:row(1)

@@ -37,6 +37,7 @@ local function load_frame_after(path, opts, drive_fn)
         local App = testing.load_app(path)
         local h   = testing.render(App, opts)
         drive_fn(h)
+        h:rerender()
         frame = h:frame()
         h:unmount()
     end)
@@ -72,14 +73,16 @@ end
 
 function suite:test_counter_increment()
     local frame = load_frame_after("examples/counter.lua", { cols = 30, rows = 10 }, function(h)
-        h:press("up"):press("up"):press("up")
+        h:press("up"); h:rerender()
+        h:press("up"); h:rerender()
+        h:press("up"); h:rerender()
     end)
     lt.assertNotEquals(frame:find("3", 1, true), nil)
 end
 
 function suite:test_counter_decrement()
     local frame = load_frame_after("examples/counter.lua", { cols = 30, rows = 10 }, function(h)
-        h:press("down")
+        h:press("down"); h:rerender()
     end)
     lt.assertNotEquals(frame:find("-1", 1, true), nil)
 end
@@ -208,6 +211,7 @@ function suite:test_chat_click_focuses_textarea()
 
         -- Now type — should go into the Textarea.
         h:type("hi")
+        h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("hi", 1, true), nil, "typed text should appear in the frame")
         h:unmount()
@@ -223,6 +227,7 @@ function suite:test_chat_click_positions_cursor()
 
         -- First focus by typing (autoFocus should handle this).
         h:type("abcde")
+        h:rerender()
 
         -- Find the Textarea's clickable Box.
         local box = find_clickable_box(h:tree())
@@ -238,6 +243,7 @@ function suite:test_chat_click_positions_cursor()
 
         -- Type at the new cursor position.
         h:type("X")
+        h:rerender()
         local frame = h:frame()
         -- Cursor was between 'b' and 'c', so "abXcde" should appear.
         lt.assertNotEquals(frame:find("abXcde", 1, true), nil,

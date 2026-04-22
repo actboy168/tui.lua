@@ -57,6 +57,8 @@ function suite:test_input_paste_helper_matches_harness_paste()
     h:dispatch(testing.input.paste("alpha"))
     h:paste("beta")
 
+    h:rerender()
+
     lt.assertEquals(#pasted, 2)
     lt.assertEquals(pasted[1], "alpha")
     lt.assertEquals(pasted[2], "beta")

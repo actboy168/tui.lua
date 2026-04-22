@@ -1,6 +1,5 @@
 local element       = require "tui.internal.element"
 local layout        = require "tui.internal.layout"
-local renderer      = require "tui.internal.renderer"
 local screen_mod    = require "tui.internal.screen"
 local reconciler    = require "tui.internal.reconciler"
 local scheduler     = require "tui.internal.scheduler"
@@ -46,80 +45,43 @@ local Harness = {}
 Harness.__index = Harness
 
 --- Re-render, diff, and commit one harness frame.
+-- Delegates to paint_frame.frame() for the full production paint pipeline.
 function Harness:_paint()
-    resize_mod.observe(self._w, self._h)
-
     -- Free the previous frame's tree before stabilizing the new one.
     -- hit_test must be cleared first to avoid dangling pointer access.
     if self._tree then
         hit_test.clear_tree()
-        layout.free(self._tree)
-        self._tree = nil
     end
 
-    local interactive = self._interactive
-    local tree, passes = paint_frame.stabilize(self._state, self._App, self._app_handle, self._w, self._h, interactive, true)
+    local mouse_ref = { current = self._mouse_auto_release }
+    local tree, passes = paint_frame.frame {
+        rec_state  = self._state,
+        root       = self._App,
+        app_handle = self._app_handle,
+        get_size   = self._terminal.get_size,
+        screen     = self._screen,
+        interactive = self._interactive,
+        throw_on_error = true,
+        prev_tree  = self._tree,
+        write_fn   = self._terminal.write,
+        on_cursor_move = function(col, row)
+            self._last_cursor_col, self._last_cursor_row = col, row
+            self._ime = { col = col, row = row }
+        end,
+        mouse_auto_release = mouse_ref,
+    }
+
     self._render_count = (self._render_count or 0) + passes
-
-    -- Store the laid-out tree for mouse hit testing (mirrors init.lua paint()).
-    hit_test.set_tree(tree)
-
-    -- Auto-enable mouse mode when the tree has click/scroll handlers.
-    if interactive then
-        local needs_mouse = hit_test.has_mouse_props(tree)
-        if needs_mouse and not self._mouse_auto_release then
-            self._mouse_auto_release = input_mod.request_mouse_level(1)
-        elseif not needs_mouse and self._mouse_auto_release then
-            self._mouse_auto_release()
-            self._mouse_auto_release = nil
-        end
-    end
-
-    screen_mod.clear(self._screen)
-    renderer.paint(tree, self._screen)
-
-    if interactive then
-        -- Interactive paint path (mirrors init.lua paint())
-        local content_h = tree.rect and math.min(tree.rect.h, self._h) or self._h
-        local diff = screen_mod.diff(self._screen, false, content_h)
-
-        local cursor_seq = ""
-        local ccol, crow = paint_frame.find_cursor(tree)
-        if ccol and crow and (crow - 1) < content_h then
-            local cx, cy = screen_mod.cursor_pos(self._screen)
-            local dx = (ccol - 1) - cx
-            local dy = (crow - 1) - cy
-            cursor_seq = ansi_mod.cursorShow() .. ansi_mod.cursorMove(dx, dy)
-            screen_mod.set_display_cursor(self._screen, ccol - 1, crow - 1)
-            self._last_cursor_col, self._last_cursor_row = ccol, crow
-            self._ime = { col = ccol, row = crow }
-        else
-            cursor_seq = ansi_mod.cursorHide()
-        end
-
-        if #diff > 0 or #cursor_seq > 0 then
-            self._terminal.write(ansi_mod.beginSyncUpdate() .. diff .. cursor_seq .. ansi_mod.endSyncUpdate())
-        end
-    else
-        -- Non-interactive paint path (original harness behavior)
-        local ansi = screen_mod.diff(self._screen)
-        if #ansi > 0 then
-            self._terminal.write(ansi)
-        end
-
-        local ccol, crow = paint_frame.find_cursor(tree)
-        if ccol and crow then
-            self._terminal.write(ansi_mod.cursorShow() .. ansi_mod.cursorPosition(ccol, crow))
-            self._last_cursor_col, self._last_cursor_row = ccol, crow
-            self._ime = { col = ccol, row = crow }
-        end
-    end
-
+    self._mouse_auto_release = mouse_ref.current
     self._tree = tree
 end
 
+--- Re-render through the production scheduler path.
+-- Drains vterm input via read→on_input, then loop_once handles
+-- tick_timers + paint-if-dirty, matching the production main loop.
 function Harness:rerender()
-    self:_paint()
+    scheduler.requestRedraw()
+    scheduler.loop_once(self._scheduler_opts, self._terminal, self._fake_now, true)
     return self
 end
 
@@ -204,6 +166,12 @@ function Harness:ime_pos()
     return p.col, p.row
 end
 
+--- Dispatch a pre-built event object directly through input_mod (no paint).
+function Harness:dispatch_event(ev)
+    input_mod._dispatch_event(ev)
+    return self
+end
+
 function Harness:type_composing(text)
     input_mod._dispatch_event({
         name  = "composing",
@@ -213,7 +181,7 @@ function Harness:type_composing(text)
         meta  = false,
         shift = false,
     })
-    self:_paint()
+    return self
 end
 
 function Harness:type_composing_confirm(text)
@@ -226,7 +194,7 @@ function Harness:type_composing_confirm(text)
         meta  = false,
         shift = false,
     })
-    self:_paint()
+    return self
 end
 
 function Harness:composing()
@@ -247,30 +215,49 @@ function Harness:vterm()
     return self._vt
 end
 
---- Dispatch raw bytes through tui.internal.input and repaint.
+--- Enqueue raw bytes to the vterm input queue.
+function Harness:_enqueue_input(bytes)
+    if bytes and #bytes > 0 then
+        local vt = self._vt
+        vt.input_queue[#vt.input_queue + 1] = bytes
+    end
+    return self
+end
+
+--- Dispatch raw bytes through the production input path.
+-- Enqueues to vterm, then loop_once reads → on_input → dispatch + paint.
 function Harness:dispatch(bytes)
     if bytes and #bytes > 0 then
-        input_mod.dispatch(bytes)
+        self:_enqueue_input(bytes)
+        scheduler.requestRedraw()
+        scheduler.loop_once(self._scheduler_opts, self._terminal, self._fake_now, true)
     end
-    self:_paint()
     return self
 end
 
---- Simulate a bracketed paste burst and repaint.
+--- Simulate a bracketed paste burst (enqueue only, no paint).
 function Harness:paste(text)
-    input_mod.dispatch(testing_input.paste(text))
-    self:_paint()
+    self:_enqueue_input(testing_input.paste(text))
     return self
 end
 
---- Simulate a mouse event through the shared testing.mouse encoder and repaint.
+--- Simulate a mouse event through the shared testing.mouse encoder (enqueue only, no paint).
 function Harness:mouse(ev_type, btn, x, y, mods)
-    input_mod.dispatch(testing_mouse.harness(ev_type, btn, x, y, mods))
-    self:_paint()
+    self:_enqueue_input(testing_mouse.harness(ev_type, btn, x, y, mods))
     return self
 end
 
---- Simulate user typing, dispatching one UTF-8 codepoint per repaint.
+--- Simulate a named key (enqueue only, no paint).
+function Harness:press(name)
+    local raw = testing_input.resolve_key(name)
+    if raw == nil then
+        return self:type(name)
+    end
+    self:_enqueue_input(raw)
+    return self
+end
+
+--- Simulate typing a string, enqueueing one UTF-8 codepoint at a time.
 function Harness:type(str)
     if type(str) ~= "string" then
         error("type: expected string, got " .. type(str), 2)
@@ -285,21 +272,9 @@ function Harness:type(str)
         elseif b < 0xF0 then n = 3
         else                 n = 4 end
         local chunk = str:sub(i, i + n - 1)
-        input_mod.dispatch(chunk)
-        self:_paint()
+        self:_enqueue_input(chunk)
         i = i + n
     end
-    return self
-end
-
---- Simulate a named key via testing.input.resolve_key() and repaint.
-function Harness:press(name)
-    local raw = testing_input.resolve_key(name)
-    if raw == nil then
-        return self:type(name)
-    end
-    input_mod.dispatch(raw)
-    self:_paint()
     return self
 end
 
@@ -312,14 +287,15 @@ function Harness:advance(ms)
     return self
 end
 
---- Resize the harness screen and repaint.
+--- Resize the harness terminal dimensions.
+-- Does not resize the screen or paint; _paint() detects the size change
+-- (comparing screen size vs terminal size) and resizes automatically,
+-- matching the production resize path in init.lua paint().
 function Harness:resize(cols, rows)
     assert(type(cols) == "number" and cols > 0, "resize: cols must be positive number")
     assert(type(rows) == "number" and rows > 0, "resize: rows must be positive number")
     self._w, self._h = cols, rows
-    screen_mod.resize(self._screen, cols, rows)
     self._vt:resize(cols, rows)
-    self:_paint()
     return self
 end
 
@@ -329,19 +305,16 @@ end
 
 function Harness:focus_next()
     focus_mod.focus_next()
-    self:_paint()
     return self
 end
 
 function Harness:focus_prev()
     focus_mod.focus_prev()
-    self:_paint()
     return self
 end
 
 function Harness:focus(id)
     focus_mod.focus(id)
-    self:_paint()
     return self
 end
 
@@ -411,6 +384,7 @@ function Bare:dispatch(bytes)
     return self
 end
 
+--- Simulate typing a string on Bare (dispatch only, no paint).
 function Bare:type(str)
     if type(str) ~= "string" then
         error("type: expected string, got " .. type(str), 2)
@@ -553,7 +527,9 @@ function M.render(App, opts)
         end,
         read_raw = function()
             if #vt.input_queue > 0 then
-                return table.remove(vt.input_queue, 1)
+                local all = table.concat(vt.input_queue)
+                vt.input_queue = {}
+                return all
             end
             return nil
         end,
@@ -599,6 +575,20 @@ function M.render(App, opts)
         scheduler._reset()
         error(err, 2)
     end
+
+    -- Set up scheduler opts for run(), then start the scheduler.
+    h._scheduler_opts = {
+        read = h._terminal.read_raw,
+        on_input = function(bytes)
+            return input_mod.dispatch(bytes)
+        end,
+        paint = function(terminal)
+            h:_paint()
+        end,
+        terminal = h._terminal,
+    }
+    scheduler.start()
+
     return h
 end
 

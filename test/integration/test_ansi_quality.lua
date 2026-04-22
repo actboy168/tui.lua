@@ -94,6 +94,7 @@ function suite:test_incremental_diff_size()
     -- Clear ANSI buffer, then perform one keypress (incremental diff)
     h:clear_ansi()
     h:press("up")
+    h:rerender()
     local incremental_size = #h:ansi()
 
     -- The incremental diff must be strictly smaller than the full redraw
@@ -128,6 +129,7 @@ function suite:test_resize_triggers_full_redraw()
     -- Resize forces a full redraw
     h:clear_ansi()
     h:resize(40, 12)
+    h:rerender()
     local resize_size = #h:ansi()
 
     lt.assertTrue(resize_size > stable_size,
@@ -322,6 +324,8 @@ function suite:test_paste_received_by_text_input()
 
     local h = testing.render(App, { cols = 35, rows = 5, interactive = true })
     h:paste("hello world")
+
+    h:rerender()
 
     lt.assertEquals(received, "hello world")
 

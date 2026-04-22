@@ -41,6 +41,7 @@ function test_ime:test_ime_pos_updates_after_typing()
     local h = testing.render(App)
 
     h:type("abc")
+    h:rerender()
     local col, row = h:ime_pos()
     lt.assertEquals(col ~= nil, true)
     -- After typing "abc", caret is after "c" at column 4 (1-based).
@@ -69,8 +70,10 @@ function test_ime:test_composing_then_confirm()
 
     -- Simulate IME confirmation: user selects "你".
     h:type_composing_confirm("你")
+    h:rerender()
     -- The confirmed text is now in the value.
     lt.assertEquals(lastValue, "你")
+    h:rerender()
 
     h:unmount()
 end
@@ -127,6 +130,7 @@ function test_ime:test_composing_shown_at_caret()
 
     -- Start composing — the composing text appears between 'a' and 'b'.
     h:type_composing("x")
+    h:rerender()
     -- Value should still be "ab" (composing text not committed).
     -- The visual display includes composing text but value is unchanged.
     local col, row = h:ime_pos()
@@ -218,6 +222,7 @@ function test_ime:test_physical_cursor_tracks_typing()
     -- autoFocus sets isFocused state on the next paint; the first
     -- character's _paint() also consumes this dirty flag.
     h:type("abc")
+    h:rerender()
 
     local cursor_col, cursor_row = h:cursor()
     local ime_col, ime_row = h:ime_pos()
