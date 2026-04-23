@@ -1,7 +1,7 @@
 -- test/test_yoga.lua — Yoga layout binding tests
 
 local lt   = require "ltest"
-local yoga = require "yoga"
+local yoga = require "tui.core".yoga
 
 local suite = lt.test "yoga"
 
