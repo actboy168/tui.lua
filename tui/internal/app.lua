@@ -10,6 +10,7 @@ local screen_mod   = require "tui.internal.screen"
 local scheduler    = require "tui.internal.scheduler"
 local terminal_mod = require "tui.internal.terminal"
 local app_base     = require "tui.internal.app_base"
+local log_bar      = require "tui.internal.log_bar"
 
 local M = {}
 
@@ -45,6 +46,7 @@ function M.render(root, opts)
         interactive    = interactive,
         use_kkp        = use_kkp,
         throw_on_error = false,
+        extension      = log_bar,
     })
 
     inst._running = false

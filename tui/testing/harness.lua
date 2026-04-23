@@ -7,6 +7,7 @@ local capture       = require "tui.testing.capture"
 local vterm         = require "tui.testing.vterm"
 local vclock        = require "tui.testing.vclock"
 local terminal_mod  = require "tui.internal.terminal"
+local log_bar       = require "tui.internal.log_bar"
 local tui_core      = require "tui.core"
 
 local M = {}
@@ -210,6 +211,7 @@ function M.render(App, opts)
             use_kkp        = false,
             throw_on_error = true,
             clock          = vclock.as_backend(clock),
+            extension      = log_bar,
         })
 
         -- Add harness-specific fields

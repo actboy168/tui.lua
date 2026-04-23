@@ -67,11 +67,14 @@ function teardown_interactive(inst)
 end
 
 --- Reset the framework singletons that both production and harness use.
-function M.reset_framework()
+function M.reset_framework(extension)
     input_mod._reset()
     resize_mod._reset()
     focus_mod._reset()
     scheduler._reset()
+    if extension and extension.reset then
+        extension.reset()
+    end
 end
 
 --- Install the shared hit-test handler for mouse events.
@@ -103,12 +106,21 @@ local function fallback_error_tree(msg, w, h)
     }
 end
 
+local function ensure_root_bounds(tree, w, h, is_main)
+    if tree.kind == "box" then
+        tree.props = tree.props or {}
+        if tree.props.width  == nil then tree.props.width  = w end
+        if not is_main and tree.props.height == nil then tree.props.height = h end
+    end
+    return tree
+end
+
 --- Stabilize the tree by re-rendering until no components are dirty.
 -- This ensures effects that synchronously trigger setState are fully
 -- resolved within a single frame, matching the harness behavior.
 -- Returns the final tree and the number of render passes performed.
 -- Caller is responsible for freeing the returned tree when done.
-stabilize = function(rec_state, root, app_handle, w, h, is_main, throw_on_error)
+stabilize = function(rec_state, root, app_handle, w, h, is_main, throw_on_error, extension)
     local function render_once()
         local tree
         if throw_on_error then
@@ -128,12 +140,15 @@ stabilize = function(rec_state, root, app_handle, w, h, is_main, throw_on_error)
             end
         end
 
-        -- Expand root Box to fill the terminal width; fill height only in alt mode.
-        if tree.kind == "box" then
-            tree.props = tree.props or {}
-            if tree.props.width  == nil then tree.props.width  = w end
-            if not is_main and tree.props.height == nil then tree.props.height = h end
+        tree = ensure_root_bounds(tree, w, h, is_main)
+        if extension and extension.decorate then
+            tree = extension.decorate(tree, {
+                width = w,
+                height = h,
+                interactive = is_main,
+            })
         end
+        tree = ensure_root_bounds(tree, w, h, is_main)
 
         reconciler.clear_dirty(rec_state)
         layout.compute(tree, h)
@@ -206,8 +221,12 @@ end
 --   app_handle     — { exit = fn }
 --   interactive    — bool
 --   use_kkp        — bool
---   throw_on_error — bool (app: false, harness: true)
---   on_paint_done  — function(inst, tree, passes) or nil
+--   throw_on_error  — bool (app: false, harness: true)
+--   extension       — optional object with methods:
+--     * decorate(tree, ctx) -> tree
+--     * subscribe(request_redraw) -> unsubscribe_fn
+--     * reset() -> nil
+--   on_paint_done   — function(inst, tree, passes) or nil
 --     App uses this to free the tree; Harness uses it to store the tree.
 function M.mount(terminal, screen_state, opts)
     local interactive = opts.interactive
@@ -221,7 +240,7 @@ function M.mount(terminal, screen_state, opts)
 
     local w, h = terminal.get_size()
     local rec_state = reconciler.new()
-    M.reset_framework()
+    M.reset_framework(opts.extension)
 
     -- If a clock backend is provided (e.g. vclock for testing),
     -- configure the scheduler before any timers are created.
@@ -241,9 +260,17 @@ function M.mount(terminal, screen_state, opts)
         _mouse_auto_release = nil,
         _tree              = nil,
         _render_count      = 0,
-        _capabilities      = opts.capabilities,
-        _last_content_h    = 0,
+        _capabilities        = opts.capabilities,
+        _last_content_h       = 0,
+        _extension_unsubscribe = nil,
+        _extension            = opts.extension,
     }
+
+    if opts.extension and opts.extension.subscribe then
+        inst._extension_unsubscribe = opts.extension.subscribe(function()
+            scheduler.requestRedraw()
+        end)
+    end
 
     local function check_resize()
         local w, h = terminal.get_size()
@@ -317,7 +344,7 @@ function M.mount(terminal, screen_state, opts)
             layout.free(inst._tree)
         end
 
-        local tree, passes = stabilize(rec_state, opts.root, opts.app_handle, w, h, interactive, throw_on_error)
+        local tree, passes = stabilize(rec_state, opts.root, opts.app_handle, w, h, interactive, throw_on_error, opts.extension)
 
         hit_test.set_tree(tree)
 
@@ -379,10 +406,17 @@ function M.unmount(inst)
         layout.free(inst._tree)
         inst._tree = nil
     end
+    if inst._extension_unsubscribe then
+        inst._extension_unsubscribe()
+        inst._extension_unsubscribe = nil
+    end
     inst._mouse_auto_release = nil
     teardown_interactive(inst)
     require("tui.internal.hooks")._set_terminal_write(nil)
     require("tui.internal.hooks")._set_terminal_caps(nil)
+    if inst._extension and inst._extension.reset then
+        inst._extension.reset()
+    end
 end
 
 --- Re-render through the scheduler path.

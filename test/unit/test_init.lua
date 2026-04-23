@@ -155,6 +155,7 @@ function suite:test_hooks_exported()
     lt.assertEquals(type(tui.useFocusManager), "function")
     lt.assertEquals(type(tui.useDeclaredCursor), "function")
     lt.assertEquals(type(tui.useErrorBoundary), "function")
+    lt.assertEquals(type(tui.log), "function")
 end
 
 -- ============================================================================

@@ -8,6 +8,7 @@ local scheduler  = require "tui.internal.scheduler"
 local hooks      = require "tui.internal.hooks"
 local tui_input  = require "tui.input"
 local app_base   = require "tui.internal.app_base"
+local log_bar    = require "tui.internal.log_bar"
 local capture    = require "tui.testing.capture"
 local vclock     = require "tui.testing.vclock"
 
@@ -57,14 +58,14 @@ function Bare:unmount()
     if self._dead then return end
     self._dead = true
     reconciler.shutdown(self._state)
-    app_base.reset_framework()
+    app_base.reset_framework(log_bar)
     hooks._set_dev_mode(false)
     capture.drain_and_fatal_if_any()
 end
 
 --- Mount a bare reconciler harness.
 function M.mount(App)
-    app_base.reset_framework()
+    app_base.reset_framework(log_bar)
     hooks._set_dev_mode(true)
 
     local clock = vclock.new(0)
