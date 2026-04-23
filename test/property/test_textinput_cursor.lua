@@ -11,8 +11,6 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local extra = require "tui.extra"
 local testing = require "tui.testing"
 local pbt     = require "test.property.pbt"
@@ -190,7 +188,8 @@ function suite:test_cursor_within_bounds_after_navigation()
             local steps = rng.int(1, 10)
             local ok, err
             for _ = 1, steps do
-                tui_input.press(rng.pick(NAV_KEYS))
+                h:press(rng.pick(NAV_KEYS))
+    h:rerender()
                 ok, err = pcall(assert_cursor_valid, h)
                 if not ok then
                     h:unmount()

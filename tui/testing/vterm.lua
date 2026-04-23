@@ -4,7 +4,7 @@
 -- and clipboard log are managed entirely in Lua — the C layer has no
 -- registry refs for these tables.
 
-local vterm_c = require("tui_core").vterm
+local vterm_c = require("tui.core").vterm
 
 local M = {}
 
@@ -17,6 +17,33 @@ function M.new(cols, rows)
     vt.input_queue  = {}
     vt.clipboard_log = {}
     return vt
+end
+
+-- ---------------------------------------------------------------------------
+-- CSI integer validation
+
+-- Validate CSI numeric parameters — catch framework bugs that emit float
+-- coordinates (e.g. \27[73.0;3.0H) which real terminals silently reject.
+function M.check_csi_integers(s)
+    local i = 1
+    while i <= #s do
+        local esc = s:find("\27%[", i)
+        if not esc then return nil end
+        local j = esc + 2
+        while j <= #s do
+            local b = s:byte(j)
+            if b >= 0x40 and b <= 0x7E then break end
+            j = j + 1
+        end
+        if j > #s then return nil end
+        local params = s:sub(esc + 2, j - 1)
+        if params:find("%d%.%d") then
+            return ("malformed CSI parameter (non-integer) in sequence ESC[%s%s"):
+                format(params, s:sub(j, j))
+        end
+        i = j + 1
+    end
+    return nil
 end
 
 -- ---------------------------------------------------------------------------
@@ -95,12 +122,68 @@ M.enqueue_focus_out = function(vt)
 end
 
 -- ---------------------------------------------------------------------------
--- Terminal interface (Lua, uses write_log and input_queue)
+-- Input simulation (enqueue bytes into the vterm input queue)
+--
+-- These methods encode high-level input actions as terminal bytes and
+-- push them into the vterm input queue.  The next read_raw() / loop_once()
+-- will pick them up and feed them through the production input pipeline
+-- (on_input → input_mod.dispatch), matching the real terminal path.
 
-function M.as_terminal(vt)
+function M.press(vt, name)
+    local testing_input = require "tui.testing.input"
+    local raw = testing_input.resolve_key(name)
+    if raw == nil then
+        M.type(vt, name)
+        return
+    end
+    M.enqueue_input(vt, raw)
+end
+
+function M.type(vt, str)
+    local i = 1
+    while i <= #str do
+        local b = str:byte(i)
+        local n = b < 0x80 and 1 or b < 0xC0 and 1 or b < 0xE0 and 2 or b < 0xF0 and 3 or 4
+        M.enqueue_input(vt, str:sub(i, i + n - 1))
+        i = i + n
+    end
+end
+
+M.paste = M.enqueue_paste
+
+function M.dispatch(vt, bytes)
+    if bytes and #bytes > 0 then
+        M.enqueue_input(vt, bytes)
+    end
+end
+
+function M.mouse(vt, ev_type, btn, x, y, mods)
+    local testing_mouse = require "tui.testing.mouse"
+    M.enqueue_input(vt, testing_mouse.harness(ev_type, btn, x, y, mods))
+end
+
+-- ---------------------------------------------------------------------------
+-- Terminal interface (Lua, uses write_log and input_queue)
+--
+-- opts (optional):
+--   ansi_buf     — table to additionally log writes to
+--   validate_csi — bool, enable CSI integer parameter validation
+
+function M.as_terminal(vt, opts)
+    opts = opts or {}
+    local ansi_buf     = opts.ansi_buf
+    local validate_csi = opts.validate_csi
+
     return {
         write = function(s)
+            if validate_csi then
+                local bad = M.check_csi_integers(s)
+                if bad then
+                    error("[tui:fatal] harness terminal: " .. bad, 0)
+                end
+            end
             vt.write_log[#vt.write_log + 1] = s
+            if ansi_buf then ansi_buf[#ansi_buf + 1] = s end
             vt:write(s)
         end,
         get_size = function()
@@ -108,7 +191,9 @@ function M.as_terminal(vt)
         end,
         read_raw = function()
             if #vt.input_queue > 0 then
-                return table.remove(vt.input_queue, 1)
+                local all = table.concat(vt.input_queue)
+                vt.input_queue = {}
+                return all
             end
             return nil
         end,
@@ -117,6 +202,9 @@ function M.as_terminal(vt)
         end,
         windows_vt_enable = function()
             return true
+        end,
+        resize = function(cols, rows)
+            vt:resize(cols, rows)
         end,
     }
 end

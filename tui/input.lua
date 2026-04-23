@@ -1,19 +1,12 @@
 -- tui/input.lua — public input simulation API.
 --
 -- Provides press(), type(), paste(), mouse(), dispatch() for simulating
--- terminal input. Works with both the test harness and production scripts.
+-- terminal input in the bare test harness (no vterm / no scheduler).
 --
--- Usage in tests:
---   local h = harness.render(...)
---   h.input.press("enter")
---   h.input.type("hello")
---   h.input.paste("clipboard text")
---
--- Usage in production scripts:
---   local app = tui.app(root, opts)
---   tui.input.ingest(function(bytes) app:feed_input(bytes) end)
---   tui.input.press("enter")
---   app:run()
+-- For the full harness (with vterm), use the methods on the harness
+-- instance directly: h:press(), h:type(), h:paste(), h:mouse(),
+-- h:dispatch(), h:dispatch_event(), h:type_composing(),
+-- h:type_composing_confirm().
 
 local input_mod = require "tui.internal.input"
 local testing_input = require "tui.testing.input"
@@ -21,41 +14,10 @@ local testing_mouse = require "tui.testing.mouse"
 
 local M = {}
 
---- Set the enqueue function for dispatch().
--- When set, dispatch() calls enqueue_fn(bytes) instead of input_mod.dispatch().
--- The harness uses this to redirect simulated input into the vterm queue.
--- Production scripts use this to feed input into the app's scheduler.
-function M.ingest(enqueue_fn)
-    input_mod._set_ingest(enqueue_fn)
-end
-
---- Dispatch a raw event table directly through input_mod._dispatch_event().
--- Used for IME composing simulation.
-function M.dispatch_event(ev)
-    input_mod._dispatch_event(ev)
-end
-
---- Send a composing event (IME composition start/update).
-function M.type_composing(text)
-    input_mod._dispatch_event {
-        name = "composing", input = text or "", raw = text or "",
-        ctrl = false, meta = false, shift = false,
-    }
-end
-
---- Confirm a composing event (IME composition commit).
-function M.type_composing_confirm(text)
-    local fake = text or ""
-    input_mod._dispatch_event {
-        name = "composing_confirm", input = fake, raw = fake,
-        ctrl = false, meta = false, shift = false,
-    }
-end
-
---- Feed raw bytes through the ingest redirect or input_mod.dispatch().
+--- Feed raw bytes through input_mod.dispatch().
 function M.dispatch(bytes)
     if not bytes or #bytes == 0 then return end
-    input_mod._dispatch_bytes(bytes)
+    input_mod.dispatch(bytes)
 end
 
 --- Encode a mouse event spec as SGR bytes and dispatch it.

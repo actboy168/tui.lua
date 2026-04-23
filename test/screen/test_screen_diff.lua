@@ -52,7 +52,7 @@ end
 -- Case 3: single cell change is localized (no full clear).
 
 function suite:test_single_cell_change_localized()
-    local tui_core = require "tui_core"
+    local tui_core = require "tui.core"
     local s = screen.new(10, 3)
     -- frame 1: fill with 'A'
     screen.clear(s)
@@ -85,7 +85,7 @@ end
 -- Case 4: segment merge within MERGE_GAP (=3).
 
 function suite:test_segment_merge_within_gap()
-    local tui_core = require "tui_core"
+    local tui_core = require "tui.core"
     local s = screen.new(10, 1)
     screen.clear(s)
     screen.diff(s)
@@ -104,7 +104,7 @@ end
 -- Case 5: segment break when gap > MERGE_GAP.
 
 function suite:test_segment_break_over_gap()
-    local tui_core = require "tui_core"
+    local tui_core = require "tui.core"
     local s = screen.new(15, 1)
     screen.clear(s)
     screen.diff(s)
@@ -122,7 +122,7 @@ end
 -- Case 6: wide char + WIDE_TAIL handled correctly.
 
 function suite:test_wide_char_and_tail()
-    local tui_core = require "tui_core"
+    local tui_core = require "tui.core"
     local s = screen.new(4, 1)
     screen.clear(s)
     tui_core.screen.put(s, 0, 0, "中", 2)
@@ -144,7 +144,7 @@ end
 -- Case 7: long cluster stored in slab round-trips through rows() and diff().
 
 function suite:test_long_cluster_to_slab()
-    local tui_core = require "tui_core"
+    local tui_core = require "tui.core"
     local s = screen.new(3, 1)
     screen.clear(s)
     -- 20-byte "cluster" (simulating a long ZWJ emoji sequence).
@@ -161,7 +161,7 @@ end
 -- Case 8: slab growth via many long cells.
 
 function suite:test_slab_growth()
-    local tui_core = require "tui_core"
+    local tui_core = require "tui.core"
     local s = screen.new(8, 1)
     screen.clear(s)
     for i = 0, 7 do
@@ -181,7 +181,7 @@ end
 -- valid until the 4th subsequent rows() call overwrites that generation.
 
 function suite:test_row_pool_stability()
-    local tui_core = require "tui_core"
+    local tui_core = require "tui.core"
     local s = screen.new(3, 1)
 
     screen.clear(s)

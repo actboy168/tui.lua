@@ -4,7 +4,7 @@
 -- GB11 approximated ZWJ, GB12/13 regional indicator pairs, VS16 promotion).
 
 local lt = require "ltest"
-local wc = require "tui_core".wcwidth
+local wc = require "tui.core".wcwidth
 
 local suite = lt.test "grapheme"
 

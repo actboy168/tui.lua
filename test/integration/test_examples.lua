@@ -11,8 +11,6 @@
 
 local lt       = require "ltest"
 local testing  = require "tui.testing"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local hit_test = require "tui.internal.hit_test"
 local input_helpers = require "tui.testing.input"
 
@@ -75,16 +73,18 @@ end
 
 function suite:test_counter_increment()
     local frame = load_frame_after("examples/counter.lua", { cols = 30, rows = 10 }, function(h)
-        tui_input.press("up"); h:rerender()
-        tui_input.press("up"); h:rerender()
-        tui_input.press("up"); h:rerender()
+        h:press("up"); h:rerender()
+    h:rerender()
+        h:press("up"); h:rerender()
+    h:rerender()
+        h:press("up"); h:rerender()
     end)
     lt.assertNotEquals(frame:find("3", 1, true), nil)
 end
 
 function suite:test_counter_decrement()
     local frame = load_frame_after("examples/counter.lua", { cols = 30, rows = 10 }, function(h)
-        tui_input.press("down"); h:rerender()
+        h:press("down"); h:rerender()
     end)
     lt.assertNotEquals(frame:find("-1", 1, true), nil)
 end
@@ -208,11 +208,12 @@ function suite:test_chat_click_focuses_textarea()
         -- SGR coordinates are 1-based; rect is 0-based, so add 1.
         local click_x = r.x + 1
         local click_y = r.y + 1
-        tui_input.mouse("down", 1, click_x, click_y)
-        tui_input.mouse("up", 1, click_x, click_y)
+        h:mouse("down", 1, click_x, click_y)
+    h:rerender()
+        h:mouse("up", 1, click_x, click_y)
 
         -- Now type — should go into the Textarea.
-        tui_input.type("hi")
+        h:type("hi")
         h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("hi", 1, true), nil, "typed text should appear in the frame")
@@ -228,7 +229,7 @@ function suite:test_chat_click_positions_cursor()
         local h   = testing.render(App, { cols = 40, rows = 10 })
 
         -- First focus by typing (autoFocus should handle this).
-        tui_input.type("abcde")
+        h:type("abcde")
         h:rerender()
 
         -- Find the Textarea's clickable Box.
@@ -240,11 +241,12 @@ function suite:test_chat_click_positions_cursor()
         -- between 'b' and 'c'.  SGR x = rect.x + 1 (1-based) + 2 (offset).
         local click_x = r.x + 1 + 2
         local click_y = r.y + 1
-        tui_input.mouse("down", 1, click_x, click_y)
-        tui_input.mouse("up", 1, click_x, click_y)
+        h:mouse("down", 1, click_x, click_y)
+    h:rerender()
+        h:mouse("up", 1, click_x, click_y)
 
         -- Type at the new cursor position.
-        tui_input.type("X")
+        h:type("X")
         h:rerender()
         local frame = h:frame()
         -- Cursor was between 'b' and 'c', so "abXcde" should appear.
@@ -266,10 +268,11 @@ function suite:test_chat_scroll_in_textarea()
         -- A 6-row terminal has room for border (2 rows) + ~4 content rows.
         -- Adding 6 lines forces scrolling.
         for i = 1, 5 do
-            tui_input.type("L" .. i)
+            h:type("L" .. i)
+    h:rerender()
             h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter → newline
         end
-        tui_input.type("L6")
+        h:type("L6")
 
         -- Find the scrollable Box.
         local box = find_scrollable_box(h:tree())
@@ -279,7 +282,7 @@ function suite:test_chat_scroll_in_textarea()
         -- Scroll down inside the Textarea.
         local scroll_x = r.x + 1
         local scroll_y = r.y + 1
-        tui_input.mouse("scroll_down", nil, scroll_x, scroll_y)
+        h:mouse("scroll_down", nil, scroll_x, scroll_y)
 
         -- After scrolling down, the first line should have moved up
         -- out of view.

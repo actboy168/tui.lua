@@ -1,4 +1,4 @@
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 
 local M = {}
 

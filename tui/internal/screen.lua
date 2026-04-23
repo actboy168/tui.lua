@@ -5,7 +5,7 @@
 -- (tui/init.lua, tui/testing.lua) can keep their `screen_mod.new / diff /
 -- rows / ...` style instead of reaching into tui_core directly.
 
-local screen_c = require "tui_core".screen
+local screen_c = require "tui.core".screen
 
 local M = {}
 

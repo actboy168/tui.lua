@@ -3,9 +3,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local extra = require "tui.extra"
+local focus_mod = require "tui.internal.focus"
 
 local suite = lt.test "forms"
 
@@ -62,22 +61,22 @@ function suite:test_login_form_submit()
 
     -- Initial state: focus should be on username field (autoFocus default)
     h:rerender()
-    lt.assertNotEquals(h:focus_id(), nil)
-    local initial_focus = h:focus_id()
+    lt.assertNotEquals(focus_mod.get_focused_id(), nil)
+    local initial_focus = focus_mod.get_focused_id()
 
     -- Cursor must be visible (row 1 area, some column)
     local col0, row0 = h:cursor()
     lt.assertNotEquals(col0, nil, "cursor should be set on initial focused TextInput")
 
     -- Type in username field and submit
-    tui_input.type("admin")
+    h:type("admin")
     h:rerender()
 
     -- Cursor advanced by 5 chars
     local col_after, _ = h:cursor()
     lt.assertEquals(col_after, col0 + 5)
 
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
 
     lt.assertNotEquals(submitted, nil)
@@ -85,7 +84,7 @@ function suite:test_login_form_submit()
     lt.assertEquals(submitted.password, "")
 
     -- Focus should not have changed on submit (stays in same field)
-    lt.assertEquals(h:focus_id(), initial_focus)
+    lt.assertEquals(focus_mod.get_focused_id(), initial_focus)
 
     h:unmount()
 end
@@ -136,19 +135,19 @@ function suite:test_login_form_full_flow()
 
     -- Focus starts on username
     h:rerender()
-    local focus_before_tab = h:focus_id()
+    local focus_before_tab = focus_mod.get_focused_id()
     lt.assertNotEquals(focus_before_tab, nil)
 
     -- Fill username
-    tui_input.type("john")
+    h:type("john")
     h:rerender()
 
     -- Use Tab to move to password field
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
 
     -- Focus must have moved to a different field
-    local focus_after_tab = h:focus_id()
+    local focus_after_tab = focus_mod.get_focused_id()
     lt.assertNotEquals(focus_after_tab, focus_before_tab,
         "Tab should move focus to next field")
 
@@ -159,9 +158,9 @@ function suite:test_login_form_full_flow()
     lt.assertTrue(row_pass >= 1)
 
     -- Fill password and submit
-    tui_input.type("secret123")
+    h:type("secret123")
     h:rerender()
-    tui_input.press("return")
+    h:press("return")
     h:rerender()
 
     lt.assertNotEquals(submitted, nil)
@@ -249,17 +248,19 @@ function suite:test_wizard_form_navigation()
     local h = testing.render(App, { cols = 45, rows = 12 })
 
     -- Step 1: Fill name, then Enter to next step
-    tui_input.type("John Doe")
-    tui_input.press("return")
+    h:type("John Doe")
+    h:rerender()
+    h:press("return")
     h:rerender()
 
     -- Step 2: Fill email, then Enter to next step
-    tui_input.type("john@example.com")
-    tui_input.press("return")
+    h:type("john@example.com")
+    h:rerender()
+    h:press("return")
     h:rerender()
 
     -- Step 3: Submit
-    tui_input.press("return")
+    h:press("return")
     h:rerender()
 
     lt.assertEquals(#submissions, 1)
@@ -309,19 +310,19 @@ function suite:test_form_with_validation()
     local h = testing.render(App, { cols = 45, rows = 10 })
 
     -- Submit invalid email
-    tui_input.type("invalid")
+    h:type("invalid")
     h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
     lt.assertEquals(submitted, false)
     lt.assertEquals(#errors, 1)
 
     -- Clear and submit valid email
-    tui_input.press("ctrl+u")  -- clear line
+    h:press("ctrl+u")  -- clear line
     h:rerender()
-    tui_input.type("valid@example.com")
+    h:type("valid@example.com")
     h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
 
     lt.assertEquals(submitted, true)
@@ -359,9 +360,11 @@ function suite:test_form_with_select()
     local h = testing.render(App, { cols = 35, rows = 12 })
 
     -- Select an item
-    tui_input.press("down")
-    tui_input.press("down")
-    tui_input.press("return")
+    h:press("down")
+    h:rerender()
+    h:press("down")
+    h:rerender()
+    h:press("return")
     h:rerender()
 
     lt.assertEquals(selectedValue, "opt3")

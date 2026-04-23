@@ -30,7 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "wcwidth.h"
+#include "tui_wcwidth.h"
 #include "tui_fatal.h"
 
 /* Growable byte buffer for building the "current line" before flushing it

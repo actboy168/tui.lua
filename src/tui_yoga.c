@@ -791,8 +791,8 @@ lnodeSet(lua_State *L) {
 	return 0;
 }
 
-DLL_EXPORT LUAMOD_API int
-luaopen_yoga(lua_State *L) {
+int
+tui_open_yoga(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "node_new",                lnodeNew                },

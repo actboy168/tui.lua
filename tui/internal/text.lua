@@ -11,7 +11,7 @@
 -- uses the same grapheme-aware algorithm as the old Lua impl but avoids
 -- the C→Lua→C per-cluster round trip.
 
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 local wcwidth  = tui_core.wcwidth
 local text_c   = tui_core.text
 

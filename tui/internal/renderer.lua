@@ -14,7 +14,7 @@
 -- A child Text (or Box) that sets its own explicit color overrides the
 -- inherited value for itself and its subtree.
 
-local screen_c = require "tui_core".screen
+local screen_c = require "tui.core".screen
 local sgr      = require "tui.internal.sgr"
 local text_mod = require "tui.internal.text"
 

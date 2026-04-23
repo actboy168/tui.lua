@@ -1,7 +1,7 @@
 local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 
 local suite = lt.test "testing_support_modules"
 

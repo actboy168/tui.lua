@@ -15,7 +15,7 @@
 -- Any unknown color name raises an error at render time — mistyped colors
 -- should fail fast rather than silently render as default.
 
-local screen_c = require "tui_core".screen
+local screen_c = require "tui.core".screen
 
 local M = {}
 

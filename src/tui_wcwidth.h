@@ -1,5 +1,5 @@
 /*
- * wcwidth.h — internal API shared across tui_core.dll sub-modules.
+ * tui_wcwidth.h — internal API shared across tui_core.dll sub-modules.
  *
  * These are NOT Lua bindings. The Lua-facing API lives in wcwidth.c and is
  * registered under `tui_core.wcwidth`. This header exists so that other C

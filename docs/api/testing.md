@@ -141,8 +141,8 @@ h:type_composing_confirm("你")
 -- 获取组合中文本
 local text = h:composing()
 
--- 获取 IME 光标位置
-local col, row = h:ime_pos()
+-- 获取光标位置
+local col, row = h:cursor()
 ```
 
 ### 焦点控制

@@ -33,7 +33,7 @@ function suite:test_middleware_observes_events()
         seen[#seen+1] = ev.name
     end), { cols = 10, rows = 1 })
     input_mod.dispatch("a")
-    h:_paint()
+    h:paint()
     lt.assertEquals(#seen, 1)
     lt.assertEquals(seen[1], "char")
     h:unmount()
@@ -51,7 +51,7 @@ function suite:test_middleware_can_consume_event()
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
     input_mod.dispatch("a")
-    h:_paint()
+    h:paint()
     lt.assertEquals(broadcast_count, 0, "consumed event must not reach useInput")
     h:unmount()
 end
@@ -68,7 +68,7 @@ function suite:test_middleware_runs_in_registration_order()
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
     input_mod.dispatch("a")
-    h:_paint()
+    h:paint()
     lt.assertEquals(order[1], 1)
     lt.assertEquals(order[2], 2)
     h:unmount()
@@ -86,7 +86,7 @@ function suite:test_middleware_stops_at_first_consumer()
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
     input_mod.dispatch("a")
-    h:_paint()
+    h:paint()
     lt.assertFalse(second_called, "second middleware must not run after event is consumed")
     h:unmount()
 end
@@ -104,7 +104,7 @@ function suite:test_unsubscribe_removes_middleware()
     local h = testing.render(App, { cols = 10, rows = 1 })
     unsub()
     input_mod.dispatch("a")
-    h:_paint()
+    h:paint()
     lt.assertFalse(called, "unsubscribed middleware must not be called")
     h:unmount()
 end
@@ -123,7 +123,7 @@ function suite:test_middleware_sees_assembled_paste_event()
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
     input_mod.dispatch(input_helpers.paste("hello"))
-    h:_paint()
+    h:paint()
     -- Middleware must see exactly one "paste" event
     local paste_count = 0
     for _, name in ipairs(mw_names) do
@@ -146,7 +146,7 @@ function suite:test_middleware_does_not_intercept_paste_accumulation()
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
     input_mod.dispatch(input_helpers.paste("hello"))
-    h:_paint()
+    h:paint()
     -- paste_start / paste_end should NOT appear in middleware (consumed before chain)
     for _, name in ipairs(mw_names) do
         lt.assertTrue(name ~= "paste_start" and name ~= "paste_end",
@@ -172,6 +172,7 @@ function suite:test_middleware_sees_mouse_events_before_bus()
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
+    h:rerender()
     lt.assertEquals(#mw_types, 1)
     lt.assertEquals(#bus_types, 1)
     lt.assertEquals(mw_types[1], "down")

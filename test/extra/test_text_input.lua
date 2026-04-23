@@ -8,7 +8,6 @@ local lt        = require "ltest"
 local tui       = require "tui"
 local TextInput = require "tui.extra.text_input".TextInput
 local testing   = require "tui.testing"
-local tui_input = require "tui.input"
 local input_helpers = require "tui.testing.input"
 
 -- Local mirror of text_input.lua's to_chars for asserting grapheme counts.
@@ -66,7 +65,7 @@ function suite:test_char_insertion_updates_value()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("hi")   -- 'h' then 'i'; each keystroke auto-rerenders between
+    h:type("hi")   -- 'h' then 'i'; each keystroke auto-rerenders between
     h:rerender()
     lt.assertEquals(value, "hi")
     h:unmount()
@@ -86,7 +85,7 @@ function suite:test_cjk_insertion_updates_value()
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- Simulate IME-confirmed "中" then "文" as two UTF-8 bursts; :type walks
     -- UTF-8 boundaries so each 3-byte codepoint goes out as one dispatch.
-    tui_input.type("\228\184\173\230\150\135")  -- "中文"
+    h:type("\228\184\173\230\150\135")  -- "中文"
     h:rerender()
     lt.assertEquals(value, "\228\184\173\230\150\135")
     h:unmount()
@@ -104,7 +103,7 @@ function suite:test_backspace_deletes_last_char()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("backspace")
+    h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "ab")
     h:unmount()
@@ -122,8 +121,9 @@ function suite:test_left_arrow_moves_caret_and_insert_in_middle()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("left")  -- caret 2 → 1; :press auto-rerenders so caret is committed
-    tui_input.type("b")      -- insert "b" at position 1 → "abc"
+    h:press("left")  -- caret 2 → 1; :press auto-rerenders so caret is committed
+    h:rerender()
+    h:type("b")      -- insert "b" at position 1 → "abc"
     h:rerender()
     lt.assertEquals(value, "abc")
     h:unmount()
@@ -143,7 +143,7 @@ function suite:test_enter_triggers_onsubmit()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
     lt.assertEquals(submitted, "hello")
     h:unmount()
@@ -162,7 +162,7 @@ function suite:test_unfocused_ignores_input()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("xyz")
+    h:type("xyz")
     h:rerender()
     lt.assertEquals(value, "start")
     h:unmount()
@@ -222,11 +222,11 @@ function suite:test_cursor_advances_on_type_and_backspace()
     h:rerender()
     local col0 = h:cursor()
     lt.assertEquals(col0, 1, "empty input caret sits at col 1")
-    tui_input.type("abc")
+    h:type("abc")
     h:rerender()
     local col1 = h:cursor()
     lt.assertEquals(col1, 4, "after 'abc' caret sits at col 4")
-    tui_input.press("backspace")
+    h:press("backspace")
     h:rerender()
     local col2 = h:cursor()
     lt.assertEquals(col2, 3, "after backspace caret moves one back")
@@ -290,7 +290,7 @@ function suite:test_backspace_removes_cluster()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("backspace")
+    h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "")
     h:unmount()
@@ -315,7 +315,7 @@ function suite:test_flag_is_single_cluster()
     -- Caret sits after the single flag cluster (width 2).
     lt.assertEquals(te._cursor_offset, 2)
     -- One backspace should remove the whole flag.
-    tui_input.press("backspace")
+    h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "")
     h:unmount()
@@ -338,7 +338,7 @@ function suite:test_large_sequential_typing()
     end
     local h = testing.render(App, { cols = 1000, rows = 1 })
     local payload = string.rep("a", 1000)
-    tui_input.type(payload)
+    h:type(payload)
     h:rerender()
     lt.assertEquals(#value, 1000)
     lt.assertEquals(value:sub(1, 5), "aaaaa")
@@ -360,8 +360,9 @@ function suite:test_backspace_on_empty_noop()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("backspace")
-    tui_input.press("backspace")
+    h:press("backspace")
+    h:rerender()
+    h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "")
     lt.assertEquals(fired, 0, "onChange must not fire on empty backspace")
@@ -386,15 +387,15 @@ function suite:test_left_arrow_over_wide_char_moves_one_cluster()
     local te = testing.find_text_with_cursor(h:tree())
     -- Initial caret at end: col = 1 + 2 + 1 = 4.
     lt.assertEquals(te._cursor_offset, 4)
-    tui_input.press("left")  -- past "b" → col 3
+    h:press("left")  -- past "b" → col 3
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 3)
-    tui_input.press("left")  -- past "中" (wide) → col 1
+    h:press("left")  -- past "中" (wide) → col 1
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 1)
-    tui_input.press("left")  -- past "a" → col 0
+    h:press("left")  -- past "a" → col 0
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 0)
@@ -415,8 +416,9 @@ function suite:test_delete_removes_cluster_forward()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")         -- caret to 0
-    tui_input.press("delete")       -- remove the "é" cluster
+    h:press("home")         -- caret to 0
+    h:rerender()
+    h:press("delete")       -- remove the "é" cluster
     h:rerender()
     lt.assertEquals(value, "x")
     h:unmount()
@@ -435,15 +437,15 @@ function suite:test_right_arrow_moves_caret()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
+    h:press("home")
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 0)
-    tui_input.press("right")
+    h:press("right")
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 1)
-    tui_input.press("right")
+    h:press("right")
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 2)
@@ -463,15 +465,15 @@ function suite:test_right_arrow_over_wide_char()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
+    h:press("home")
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 0)
-    tui_input.press("right")  -- past "a" → col 1
+    h:press("right")  -- past "a" → col 1
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 1)
-    tui_input.press("right")  -- past "中" (wide) → col 3
+    h:press("right")  -- past "中" (wide) → col 3
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 3)
@@ -492,8 +494,9 @@ function suite:test_right_arrow_at_end_noop()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("right")
-    tui_input.press("right")
+    h:press("right")
+    h:rerender()
+    h:press("right")
     h:rerender()
     lt.assertEquals(fired, 0, "right at end must not fire onChange")
     h:rerender()
@@ -515,11 +518,11 @@ function suite:test_home_and_end()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
+    h:press("home")
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 0)
-    tui_input.press("end")
+    h:press("end")
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 3)
@@ -538,16 +541,19 @@ function suite:test_ctrl_a_selects_all_then_ctrl_e_moves_to_end()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("ctrl+a")
-    tui_input.type("X")
+    h:press("ctrl+a")
+    h:rerender()
+    h:type("X")
     h:rerender()
     lt.assertEquals(value, "X")
-    tui_input.press("backspace")
-    tui_input.type("abcd")
+    h:press("backspace")
+    h:rerender()
+    h:type("abcd")
     h:rerender()
     lt.assertEquals(value, "abcd")
-    tui_input.press("ctrl+e")
-    tui_input.type("Y")
+    h:press("ctrl+e")
+    h:rerender()
+    h:type("Y")
     h:rerender()
     lt.assertEquals(value, "abcdY")
     h:unmount()
@@ -565,9 +571,9 @@ function suite:test_ctrl_u_deletes_to_line_start()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
-    for _ = 1, 6 do tui_input.press("right") end
-    tui_input.press("ctrl+u")
+    h:press("home")
+    for _ = 1, 6 do h:press("right") end
+    h:press("ctrl+u")
     h:rerender()
     lt.assertEquals(value, "world")
     h:rerender()
@@ -588,9 +594,9 @@ function suite:test_ctrl_k_deletes_to_line_end()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
-    for _ = 1, 6 do tui_input.press("right") end
-    tui_input.press("ctrl+k")
+    h:press("home")
+    for _ = 1, 6 do h:press("right") end
+    h:press("ctrl+k")
     h:rerender()
     lt.assertEquals(value, "hello ")
     h:rerender()
@@ -611,10 +617,10 @@ function suite:test_ctrl_w_deletes_previous_word()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("ctrl+w")
+    h:press("ctrl+w")
     h:rerender()
     lt.assertEquals(value, "hello brave ")
-    tui_input.press("ctrl+w")
+    h:press("ctrl+w")
     h:rerender()
     lt.assertEquals(value, "hello ")
     h:unmount()
@@ -632,15 +638,15 @@ function suite:test_ctrl_left_and_ctrl_right_move_by_word()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 1 })
-    tui_input.press("ctrl+left")
+    h:press("ctrl+left")
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 12)
-    tui_input.press("ctrl+left")
+    h:press("ctrl+left")
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 6)
-    tui_input.press("ctrl+right")
+    h:press("ctrl+right")
     h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 12)
@@ -659,11 +665,12 @@ function suite:test_ctrl_backspace_and_ctrl_delete_delete_words()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 1 })
-    tui_input.press("ctrl+backspace")
+    h:press("ctrl+backspace")
     h:rerender()
     lt.assertEquals(value, "hello brave ")
-    tui_input.press("ctrl+left")
-    tui_input.press("ctrl+delete")
+    h:press("ctrl+left")
+    h:rerender()
+    h:press("ctrl+delete")
     h:rerender()
     lt.assertEquals(value, "hello ")
     h:unmount()
@@ -681,8 +688,9 @@ function suite:test_shift_left_type_replaces_selection()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("shift+left")
-    tui_input.type("X")
+    h:press("shift+left")
+    h:rerender()
+    h:type("X")
     h:rerender()
     lt.assertEquals(value, "abcX")
     h:unmount()
@@ -700,8 +708,9 @@ function suite:test_shift_home_paste_replaces_selection()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("shift+home")
-    tui_input.paste("Z")
+    h:press("shift+home")
+    h:rerender()
+    h:paste("Z")
     h:rerender()
     lt.assertEquals(value, "Z")
     h:unmount()
@@ -770,7 +779,7 @@ function suite:test_undo_and_redo()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("ab")
+    h:type("ab")
     h:rerender()
     h:dispatch_event(key_event("char", "z", true))
     lt.assertEquals(value, "")
@@ -791,11 +800,11 @@ function suite:test_undo_coalescing_starts_new_group_after_cursor_move()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("ab")
+    h:type("ab")
     h:rerender()
-    tui_input.press("left")
+    h:press("left")
     h:rerender()
-    tui_input.type("X")
+    h:type("X")
     h:rerender()
     lt.assertEquals(value, "aXb")
     h:dispatch_event(key_event("char", "z", true))
@@ -818,7 +827,7 @@ function suite:test_can_disable_undo_and_redo_feature()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("ab")
+    h:type("ab")
     h:rerender()
     h:dispatch_event(key_event("char", "z", true))
     h:rerender()
@@ -855,12 +864,13 @@ function suite:test_can_disable_selection_copy_word_kill_features()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 1 })
-    tui_input.press("shift+left")
-    tui_input.type("!")
+    h:press("shift+left")
+    h:rerender()
+    h:type("!")
     h:rerender()
     lt.assertEquals(value, "hello worl!d")
     h:dispatch_event(key_event("char", "a", true))
-    tui_input.type("?")
+    h:type("?")
     h:rerender()
     lt.assertEquals(value, "hello worl!?d")
     h:dispatch_event(key_event("char", "x", true))
@@ -868,10 +878,11 @@ function suite:test_can_disable_selection_copy_word_kill_features()
     lt.assertEquals(#copied, 0)
     local te = testing.find_text_with_cursor(h:tree())
     local before = te._cursor_offset
-    tui_input.press("ctrl+left")
+    h:press("ctrl+left")
+    h:rerender()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, before)
-    tui_input.press("ctrl+k")
+    h:press("ctrl+k")
     h:rerender()
     lt.assertEquals(value, "hello worl!?d")
     clipboard.copy = old_copy
@@ -897,16 +908,16 @@ function suite:test_can_disable_paste_submit_and_ime_preview_features()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.paste("ZZ")
+    h:paste("ZZ")
     h:rerender()
     lt.assertEquals(value, "ab")
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
     lt.assertNil(submitted)
-    tui_input.type_composing("中")
+    h:type_composing("中")
     lt.assertEquals(value, "ab")
     lt.assertEquals(h:row(1):match("中") ~= nil, false)
-    tui_input.type_composing_confirm("中")
+    h:type_composing_confirm("中")
     lt.assertEquals(value, "ab中")
     h:unmount()
 end
@@ -929,7 +940,7 @@ function suite:test_can_customize_text_input_keymap()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
     lt.assertNil(submitted)
     h:dispatch_event(key_event("char", "s", true))
@@ -957,16 +968,17 @@ function suite:test_can_customize_text_input_core_keymap()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("left")
-    tui_input.type("x")
+    h:press("left")
+    h:rerender()
+    h:type("x")
     h:rerender()
     lt.assertEquals(value, "acx")
     h:dispatch_event(key_event("char", "b", true))
-    tui_input.type("?")
+    h:type("?")
     h:rerender()
     lt.assertEquals(value, "ac?x")
     h:dispatch_event(key_event("char", "a", true))
-    tui_input.type("!")
+    h:type("!")
     h:rerender()
     lt.assertEquals(value, "!ac?x")
     h:dispatch_event(key_event("char", "h", true))
@@ -986,13 +998,13 @@ function suite:test_ime_confirm_replaces_selected_text()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
+    h:press("home")
     h:rerender()
-    tui_input.press("right")
+    h:press("right")
     h:rerender()
-    tui_input.press("shift+right")
+    h:press("shift+right")
     h:rerender()
-    tui_input.type_composing_confirm("中")
+    h:type_composing_confirm("中")
     h:rerender()
     lt.assertEquals(value, "a中cd")
     h:unmount()
@@ -1012,8 +1024,9 @@ function suite:test_delete_on_empty_noop()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("delete")
-    tui_input.press("delete")
+    h:press("delete")
+    h:rerender()
+    h:press("delete")
     h:rerender()
     lt.assertEquals(value, "")
     lt.assertEquals(fired, 0, "delete on empty must not fire onChange")
@@ -1034,7 +1047,7 @@ function suite:test_delete_at_end_noop()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("delete")
+    h:press("delete")
     h:rerender()
     lt.assertEquals(fired, 0, "delete at end must not fire onChange")
     lt.assertEquals(value, "abc")
@@ -1145,7 +1158,7 @@ function suite:test_typing_past_width_scrolls()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("abcdef")  -- 6 chars in a 5-col window
+    h:type("abcdef")  -- 6 chars in a 5-col window
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset <= 5, true,
@@ -1189,7 +1202,7 @@ function suite:test_enter_on_empty_fires_onsubmit()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
     lt.assertEquals(submitted, "")
     h:unmount()
@@ -1231,9 +1244,9 @@ function suite:test_left_at_start_noop()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")  -- caret to 0
+    h:press("home")  -- caret to 0
     h:rerender()
-    tui_input.press("left")  -- no-op at start
+    h:press("left")  -- no-op at start
     h:rerender()
     lt.assertEquals(fired, 0, "left at start must not fire onChange")
     local te = testing.find_text_with_cursor(h:tree())
@@ -1254,10 +1267,13 @@ function suite:test_insert_after_home_right_right()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
-    tui_input.press("right")   -- caret at 1 (after "a")
-    tui_input.press("right")   -- caret at 2 (after "b")
-    tui_input.type("X")        -- insert "X" at position 2 → "abXcde"
+    h:press("home")
+    h:rerender()
+    h:press("right")   -- caret at 1 (after "a")
+    h:rerender()
+    h:press("right")   -- caret at 2 (after "b")
+    h:rerender()
+    h:type("X")        -- insert "X" at position 2 → "abXcde"
     h:rerender()
     lt.assertEquals(value, "abXcde")
     h:unmount()
@@ -1276,9 +1292,11 @@ function suite:test_delete_in_middle()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
-    tui_input.press("right")   -- caret at 1 (after "a")
-    tui_input.press("delete")  -- remove "b" → "acde"
+    h:press("home")
+    h:rerender()
+    h:press("right")   -- caret at 1 (after "a")
+    h:rerender()
+    h:press("delete")  -- remove "b" → "acde"
     h:rerender()
     lt.assertEquals(value, "acde")
     h:unmount()
@@ -1297,10 +1315,13 @@ function suite:test_backspace_in_middle()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
-    tui_input.press("right")      -- caret at 1
-    tui_input.press("right")      -- caret at 2 (after "b")
-    tui_input.press("backspace")  -- remove "b" → "acde"
+    h:press("home")
+    h:rerender()
+    h:press("right")      -- caret at 1
+    h:rerender()
+    h:press("right")      -- caret at 2 (after "b")
+    h:rerender()
+    h:press("backspace")  -- remove "b" → "acde"
     h:rerender()
     lt.assertEquals(value, "acde")
     h:unmount()
@@ -1319,12 +1340,14 @@ function suite:test_key_sequence_home_delete_end_backspace()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")     -- caret at 0
-    tui_input.press("delete")   -- remove "a" → "bcde"
+    h:press("home")     -- caret at 0
+    h:rerender()
+    h:press("delete")   -- remove "a" → "bcde"
     h:rerender()
     lt.assertEquals(value, "bcde")
-    tui_input.press("end")      -- caret at 4 (end of "bcde")
-    tui_input.press("backspace") -- remove "e" → "bcd"
+    h:press("end")      -- caret at 4 (end of "bcde")
+    h:rerender()
+    h:press("backspace") -- remove "e" → "bcd"
     h:rerender()
     lt.assertEquals(value, "bcd")
     h:unmount()
@@ -1338,7 +1361,7 @@ end
 -- parser (keys.parse) splits them into one `name="char"` event per codepoint.
 -- Two dispatch modes matter:
 --
---   tui_input.type(str)  – one codepoint per dispatch + re-render (matches real
+--   h:type(str)  – one codepoint per dispatch + re-render (matches real
 --                   keystroke-by-keystroke input)
 --   h:dispatch(bytes) – all codepoints in one batch, one re-render at end
 --                   (matches a single terminal read() that returns a buffer
@@ -1362,6 +1385,7 @@ function suite:test_ime_single_cjk_via_dispatch()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中" as a single 3-byte event
+    h:rerender()
     lt.assertEquals(value, "\228\184\173")
     h:unmount()
 end
@@ -1381,6 +1405,7 @@ function suite:test_ime_multi_cjk_via_dispatch()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173\230\150\135")  -- "中文" as two codepoints in one batch
+    h:rerender()
     lt.assertEquals(value, "\228\184\173\230\150\135")
     h:unmount()
 end
@@ -1399,7 +1424,7 @@ function suite:test_ime_multi_cjk_via_type_works()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("\228\184\173\230\150\135")  -- "中文" — one char at a time
+    h:type("\228\184\173\230\150\135")  -- "中文" — one char at a time
     h:rerender()
     lt.assertEquals(value, "\228\184\173\230\150\135")
     h:unmount()
@@ -1422,7 +1447,7 @@ function suite:test_ime_combining_mark_via_type()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- "e" + COMBINING ACUTE (U+0301) = "é"
-    tui_input.type("e\204\129")
+    h:type("e\204\129")
     h:rerender()
     -- The combined "é" is one grapheme cluster; value should be the full
     -- 3-byte sequence (1 byte 'e' + 2 bytes combining mark).
@@ -1447,7 +1472,7 @@ function suite:test_ime_flag_emoji_via_type()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- 🇯🇵 = RI_J + RI_P, each 4 bytes
-    tui_input.type("\240\159\135\175\240\159\135\181")
+    h:type("\240\159\135\175\240\159\135\181")
     h:rerender()
     lt.assertEquals(value, "\240\159\135\175\240\159\135\181")
     lt.assertEquals(#to_chars(value), 1, "two RI codepoints form one flag cluster")
@@ -1468,9 +1493,11 @@ function suite:test_ime_insert_cjk_in_middle()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
-    tui_input.press("right")  -- caret at 1 (between "a" and "b")
-    tui_input.type("\228\184\173")  -- insert "中" at caret → "a中b"
+    h:press("home")
+    h:rerender()
+    h:press("right")  -- caret at 1 (between "a" and "b")
+    h:rerender()
+    h:type("\228\184\173")  -- insert "中" at caret → "a中b"
     h:rerender()
     lt.assertEquals(value, "a\228\184\173b")
     h:unmount()
@@ -1489,8 +1516,9 @@ function suite:test_ime_insert_cjk_at_start()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")  -- caret at 0
-    tui_input.type("\228\184\173")  -- insert "中" → "中ab"
+    h:press("home")  -- caret at 0
+    h:rerender()
+    h:type("\228\184\173")  -- insert "中" → "中ab"
     h:rerender()
     lt.assertEquals(value, "\228\184\173ab")
     h:unmount()
@@ -1510,6 +1538,7 @@ function suite:test_ime_single_cjk_dispatch_cursor()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中"
+    h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     -- "中" is width 2; caret at end → offset 2
     lt.assertEquals(te._cursor_offset, 2)
@@ -1529,7 +1558,7 @@ function suite:test_ime_mixed_ascii_cjk_via_type()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("a\228\184\173b")  -- "a" + "中" + "b"
+    h:type("a\228\184\173b")  -- "a" + "中" + "b"
     h:rerender()
     lt.assertEquals(value, "a\228\184\173b")
     local te = testing.find_text_with_cursor(h:tree())
@@ -1552,6 +1581,7 @@ function suite:test_ime_multi_ascii_via_dispatch()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("abc")  -- 3 ASCII chars in one batch
+    h:rerender()
     lt.assertEquals(value, "abc")
     h:unmount()
 end
@@ -1570,7 +1600,8 @@ function suite:test_ime_bulk_dispatch_then_backspace()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("abc")   -- bulk: 3 chars
-    tui_input.press("backspace") -- delete "c" → "ab"
+    h:rerender()
+    h:press("backspace") -- delete "c" → "ab"
     h:rerender()
     lt.assertEquals(value, "ab")
     h:unmount()
@@ -1591,6 +1622,7 @@ function suite:test_ime_mixed_ascii_cjk_via_dispatch()
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- "a" + "中" + "b" in one dispatch batch
     h:dispatch("a\228\184\173b")
+    h:rerender()
     lt.assertEquals(value, "a\228\184\173b")
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 4)
@@ -1627,8 +1659,10 @@ function suite:test_ime_consecutive_commits()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\189\160")  -- "你"
+    h:rerender()
     lt.assertEquals(value, "\228\189\160")
     h:dispatch("\229\165\189")  -- "好"
+    h:rerender()
     lt.assertEquals(value, "\228\189\160\229\165\189")
     local te = testing.find_text_with_cursor(h:tree())
     -- "你好" width = 2 + 2 = 4; caret at end → offset 4
@@ -1650,8 +1684,9 @@ function suite:test_ime_commit_then_backspace()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中"
+    h:rerender()
     lt.assertEquals(value, "\228\184\173")
-    tui_input.press("backspace")
+    h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "", "backspace after IME commit should clear value")
     h:unmount()
@@ -1671,8 +1706,10 @@ function suite:test_ime_commit_then_left_then_insert()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173\230\150\135")  -- "中文"
-    tui_input.press("left")  -- caret moves past "文" to col 2 (after "中")
-    tui_input.type("x")      -- insert "x" between "中" and "文" → "中x文"
+    h:rerender()
+    h:press("left")  -- caret moves past "文" to col 2 (after "中")
+    h:rerender()
+    h:type("x")      -- insert "x" between "中" and "文" → "中x文"
     h:rerender()
     lt.assertEquals(value, "\228\184\173x\230\150\135")
     h:unmount()
@@ -1694,6 +1731,7 @@ function suite:test_ime_commit_in_narrow_window_scrolls()
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- Type 3 CJK chars (6 display cols) into width=5 window
     h:dispatch("\228\184\173\230\150\135\228\186\186")  -- "中文人"
+    h:rerender()
     lt.assertEquals(value, "\228\184\173\230\150\135\228\186\186")
     local te = testing.find_text_with_cursor(h:tree())
     -- Caret should be within the visible window (≤ width=5)
@@ -1717,11 +1755,13 @@ function suite:test_ime_two_phase_commit()
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- Phase 1: commit "你"
     h:dispatch("\228\189\160")
+    h:rerender()
     lt.assertEquals(value, "\228\189\160")
     local te1 = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te1._cursor_offset, 2, "after first commit caret at col 2")
     -- Phase 2: commit "好" at end
     h:dispatch("\229\165\189")
+    h:rerender()
     lt.assertEquals(value, "\228\189\160\229\165\189")
     local te2 = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te2._cursor_offset, 4, "after second commit caret at col 4")
@@ -1742,10 +1782,12 @@ function suite:test_ime_commit_in_middle_with_wide_chars()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- Move caret to position after "a" (caret index 1)
-    tui_input.press("home")
-    tui_input.press("right")  -- past "a"
+    h:press("home")
+    h:rerender()
+    h:press("right")  -- past "a"
     -- Commit "好" at caret position 1 → "a好中b"
     h:dispatch("\229\165\189")
+    h:rerender()
     lt.assertEquals(value, "a\229\165\189\228\184\173b")
     -- Cursor offset: a(1) + 好(2) = 3; but caret index is now 2 (after "a","好")
     -- Display: a(1) + 好(2) = offset 3
@@ -1772,9 +1814,12 @@ function suite:test_ime_commit_flag_in_middle()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
-    tui_input.press("right")  -- caret between "x" and "y"
+    h:press("home")
+    h:rerender()
+    h:press("right")  -- caret between "x" and "y"
+    h:rerender()
     h:dispatch("\240\159\135\175\240\159\135\181")  -- 🇯🇵 (two RI codepoints)
+    h:rerender()
     lt.assertEquals(value, "x\240\159\135\175\240\159\135\181y")
     local te = testing.find_text_with_cursor(h:tree())
     -- Caret must be valid (non-nil, non-negative) and within the
@@ -1801,7 +1846,8 @@ function suite:test_ime_commit_then_submit()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中"
-    tui_input.press("enter")
+    h:rerender()
+    h:press("enter")
     h:rerender()
     lt.assertEquals(submitted, "\228\184\173")
     h:unmount()
@@ -1821,10 +1867,11 @@ function suite:test_ime_after_backspace_replace()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("backspace")  -- "abc" → "ab"
+    h:press("backspace")  -- "abc" → "ab"
     h:rerender()
     lt.assertEquals(value, "ab")
     h:dispatch("\228\184\173")  -- commit "中" → "ab中"
+    h:rerender()
     lt.assertEquals(value, "ab\228\184\173")
     local te = testing.find_text_with_cursor(h:tree())
     -- a(1) + b(1) + 中(2) = 4
@@ -1959,13 +2006,13 @@ function suite:test_caret_in_middle_clamped_when_value_shrinks_below()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- Move caret to position 3 (between "c" and "d")
-    tui_input.press("home")
+    h:press("home")
     h:rerender()
-    tui_input.press("right")
+    h:press("right")
     h:rerender()
-    tui_input.press("right")
+    h:press("right")
     h:rerender()
-    tui_input.press("right")  -- caret at index 3
+    h:press("right")  -- caret at index 3
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 3)
@@ -2001,7 +2048,7 @@ function suite:test_caret_after_select_all_delete()
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 0, "caret at 0 after select-all delete")
     -- Can type again after select-all delete
-    tui_input.type("x")
+    h:type("x")
     h:rerender()
     lt.assertEquals(v, "x")
     te = testing.find_text_with_cursor(h:tree())
@@ -2028,7 +2075,7 @@ function suite:test_type_after_caret_clamp_from_shrink()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 1)
     -- Type "x" at clamped position → "ax"
-    tui_input.type("x")
+    h:type("x")
     h:rerender()
     lt.assertEquals(v, "ax")
     te = testing.find_text_with_cursor(h:tree())
@@ -2054,13 +2101,13 @@ function suite:test_backspace_wide_char_caret_offset()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 4)
     -- Backspace removes "b": value = "a中", offset = a(1)+中(2) = 3
-    tui_input.press("backspace")
+    h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "a\228\184\173")
     te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 3)
     -- Backspace removes "中" (wide): value = "a", offset = 1
-    tui_input.press("backspace")
+    h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "a")
     te = testing.find_text_with_cursor(h:tree())
@@ -2082,14 +2129,14 @@ function suite:test_delete_wide_char_caret_offset_unchanged()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     -- Move caret to after "中" (index 1), offset = 2
-    tui_input.press("home")
+    h:press("home")
     h:rerender()
-    tui_input.press("right")  -- past "中"
+    h:press("right")  -- past "中"
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 2)
     -- Delete removes "文" (wide char ahead): value = "中b"
-    tui_input.press("delete")
+    h:press("delete")
     h:rerender()
     lt.assertEquals(value, "\228\184\173b")
     te = testing.find_text_with_cursor(h:tree())
@@ -2134,12 +2181,13 @@ function suite:test_click_focuses_textinput()
         -- Click the second TextInput.
         local box2 = boxes[2]
         local r = box2.rect
-        tui_input.mouse("down", 1, r.x + 1, r.y + 1)
-        tui_input.mouse("up", 1, r.x + 1, r.y + 1)
+        h:mouse("down", 1, r.x + 1, r.y + 1)
+    h:rerender()
+        h:mouse("up", 1, r.x + 1, r.y + 1)
 
 
         -- Type into the now-focused second TextInput.
-        tui_input.type("hi")
+        h:type("hi")
         h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("hi", 1, true), nil,
@@ -2156,7 +2204,7 @@ function suite:test_click_positions_cursor_in_textinput()
         local h   = testing.render(App, { cols = 40, rows = 5 })
 
         -- Type some text first (autoFocus is on the first field).
-        tui_input.type("hello")
+        h:type("hello")
         h:rerender()
 
         -- Find the first TextInput's clickable Box.
@@ -2168,12 +2216,13 @@ function suite:test_click_positions_cursor_in_textinput()
         -- Click at column offset 2 (3rd cell) to move the cursor between 'e' and 'l'.
         local click_x = r.x + 1 + 2
         local click_y = r.y + 1
-        tui_input.mouse("down", 1, click_x, click_y)
-        tui_input.mouse("up", 1, click_x, click_y)
+        h:mouse("down", 1, click_x, click_y)
+    h:rerender()
+        h:mouse("up", 1, click_x, click_y)
 
 
         -- Type at the new cursor position → "heXllo"
-        tui_input.type("X")
+        h:type("X")
         h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("heXllo", 1, true), nil,
@@ -2189,29 +2238,31 @@ function suite:test_click_switches_focus_between_textinputs()
         local h   = testing.render(App, { cols = 40, rows = 5 })
 
         -- Type into the first TextInput (autoFocus).
-        tui_input.type("user")
+        h:type("user")
         h:rerender()
 
         -- Click on the second TextInput.
         local boxes = find_clickable_boxes(h:tree())
         lt.assertTrue(#boxes >= 2)
         local r2 = boxes[2].rect
-        tui_input.mouse("down", 1, r2.x + 1, r2.y + 1)
-        tui_input.mouse("up", 1, r2.x + 1, r2.y + 1)
+        h:mouse("down", 1, r2.x + 1, r2.y + 1)
+    h:rerender()
+        h:mouse("up", 1, r2.x + 1, r2.y + 1)
 
 
         -- Type into the second field.
-        tui_input.type("pw")
+        h:type("pw")
         h:rerender()
 
         -- Click back on the first TextInput (at the end of "user" = col 4).
         local r1 = boxes[1].rect
-        tui_input.mouse("down", 1, r1.x + 1 + 4, r1.y + 1)
-        tui_input.mouse("up", 1, r1.x + 1 + 4, r1.y + 1)
+        h:mouse("down", 1, r1.x + 1 + 4, r1.y + 1)
+    h:rerender()
+        h:mouse("up", 1, r1.x + 1 + 4, r1.y + 1)
 
 
         -- Type at end of first field.
-        tui_input.type("1")
+        h:type("1")
         h:rerender()
         local frame = h:frame()
         lt.assertNotEquals(frame:find("user1", 1, true), nil,
@@ -2282,7 +2333,7 @@ function suite:test_caret_at_home_unaffected_by_shrink()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.press("home")
+    h:press("home")
     h:rerender()
     local te = testing.find_text_with_cursor(h:tree())
     lt.assertEquals(te._cursor_offset, 0)
@@ -2353,7 +2404,7 @@ function suite:test_multi_input_focused_cursor_wins()
     lt.assertEquals(row, 1, "cursor should be on first row")
 
     -- Tab to input2
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
 
     -- Now input2 is focused, caret after "world" = col 6 (on row 2)
@@ -2381,6 +2432,7 @@ function suite:test_paste_into_empty_input()
     end
     local h = testing.render(App, { cols = 40, rows = 1 })
     h:dispatch(input_helpers.paste("hello world"))
+    h:rerender()
     lt.assertEquals(value, "hello world")
     h:unmount()
 end
@@ -2397,8 +2449,10 @@ function suite:test_paste_inserts_at_caret_middle()
         }
     end
     local h = testing.render(App, { cols = 40, rows = 1 })
-    tui_input.press("left")  -- move caret before 'c'
+    h:press("left")  -- move caret before 'c'
+    h:rerender()
     h:dispatch(input_helpers.paste("b"))
+    h:rerender()
     lt.assertEquals(value, "abc")
     h:unmount()
 end
@@ -2417,6 +2471,7 @@ function suite:test_paste_multiline()
     local h = testing.render(App, { cols = 40, rows = 1 })
     -- TextInput is single-line: newlines in pasted text are replaced with spaces.
     h:dispatch(input_helpers.paste("line1\nline2"))
+    h:rerender()
     lt.assertEquals(value, "line1 line2")
     h:unmount()
 end

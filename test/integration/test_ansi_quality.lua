@@ -7,8 +7,6 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local extra   = require "tui.extra"
 local vterm   = require "tui.testing.vterm"
 
@@ -95,7 +93,7 @@ function suite:test_incremental_diff_size()
 
     -- Clear ANSI buffer, then perform one keypress (incremental diff)
     h:clear_ansi()
-    tui_input.press("up")
+    h:press("up")
     h:rerender()
     local incremental_size = #h:ansi()
 
@@ -325,7 +323,7 @@ function suite:test_paste_received_by_text_input()
     end
 
     local h = testing.render(App, { cols = 35, rows = 5, interactive = true })
-    tui_input.paste("hello world")
+    h:paste("hello world")
 
     h:rerender()
 

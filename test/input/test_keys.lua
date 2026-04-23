@@ -1,7 +1,7 @@
 -- test/test_keys.lua — unit tests for tui_core.keys.parse and tui.input.
 
 local lt        = require "ltest"
-local tui_core  = require "tui_core"
+local tui_core  = require "tui.core"
 local keys      = tui_core.keys
 local input_mod = require "tui.internal.input"
 local input_helpers = require "tui.testing.input"

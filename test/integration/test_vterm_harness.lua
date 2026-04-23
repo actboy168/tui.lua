@@ -21,11 +21,11 @@ function suite:test_vterm_always_available()
 end
 
 function suite:test_vterm_without_interactive()
-    -- Default (no interactive flag): non-interactive paint path
+    -- Explicit non-interactive paint path
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.render(App, { cols = 10, rows = 3, interactive = false })
     lt.assertNotEquals(h:vterm(), nil)
     -- Non-interactive: no BSU/ESU, no cursorHide, no bracketed paste
     local vt = h:vterm()
@@ -208,9 +208,11 @@ function suite:test_focus_in_dispatched_to_component()
     lt.assertEquals(focus_states[#focus_states], true)
     -- Dispatch focus_out as raw bytes through input_mod
     h:dispatch(input_helpers.posix("\x1b[O"))
+    h:rerender()
     lt.assertEquals(focus_states[#focus_states], false)
     -- Dispatch focus_in
     h:dispatch(input_helpers.posix("\x1b[I"))
+    h:rerender()
     lt.assertEquals(focus_states[#focus_states], true)
     h:unmount()
 end
@@ -229,6 +231,7 @@ function suite:test_focus_event_sequences_via_dispatch()
     local h = testing.render(App, { cols = 5, rows = 1 })
     -- Dispatch focus events as raw bytes
     h:dispatch(input_helpers.posix("\x1b[I"))
+    h:rerender()
     h:dispatch(input_helpers.posix("\x1b[O"))
     lt.assertEquals(focus_count["focus_in"], 0, "focus events should not reach useInput")
     lt.assertEquals(focus_count["focus_out"], 0, "focus events should not reach useInput")
@@ -324,24 +327,24 @@ function suite:test_mouse_level_upgrade_and_downgrade()
     -- Request mouse level 1 via the input module
     local input_mod = require "tui.internal.input"
     local release1 = input_mod.request_mouse_level(1)
-    h:_paint()
+    h:paint()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1000h"), true,
         "level 1 click tracking should be enabled")
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1006h"), true,
         "SGR extended coordinates should be enabled")
     -- Upgrade to level 2
     local release2 = input_mod.request_mouse_level(2)
-    h:_paint()
+    h:paint()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1002h"), true,
         "level 2 drag tracking should be enabled")
     -- Release level 2 — should downgrade back to level 1
     release2()
-    h:_paint()
+    h:paint()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1002l"), true,
         "level 2 should be disabled after release")
     -- Release level 1 — should disable all mouse tracking
     release1()
-    h:_paint()
+    h:paint()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1000l"), true,
         "level 1 should be disabled after release")
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1006l"), true,
@@ -358,13 +361,13 @@ function suite:test_mouse_level_3_any_motion()
     local vt = h:vterm()
     local input_mod = require "tui.internal.input"
     local release3 = input_mod.request_mouse_level(3)
-    h:_paint()
+    h:paint()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1003h"), true,
         "level 3 any-motion tracking should be enabled")
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1006h"), true,
         "SGR extended coordinates should be enabled")
     release3()
-    h:_paint()
+    h:paint()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1003l"), true,
         "level 3 should be disabled after release")
     h:unmount()

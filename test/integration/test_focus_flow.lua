@@ -3,9 +3,8 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local extra   = require "tui.extra"
+local focus_mod = require "tui.internal.focus"
 
 local suite = lt.test "focus_flow"
 
@@ -63,7 +62,7 @@ function suite:test_initial_focus()
     local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()  -- needed after autoFocus to register cursor
 
-    lt.assertEquals(h:focus_id(), "field_a")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_a")
 
     -- Cursor must be in row 1 (field_a is on the first content row)
     local col, row = h:cursor()
@@ -81,20 +80,20 @@ function suite:test_tab_forward()
     local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
-    lt.assertEquals(h:focus_id(), "field_a")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_a")
 
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_b")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_b")
 
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_c")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_c")
 
     -- Tab wraps from last back to first
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_a")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_a")
 
     h:unmount()
 end
@@ -107,20 +106,20 @@ function suite:test_shift_tab_backward()
     local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
-    lt.assertEquals(h:focus_id(), "field_a")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_a")
 
     -- Shift+Tab from first wraps to last
-    tui_input.press("shift+tab")
+    h:press("shift+tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_c")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_c")
 
-    tui_input.press("shift+tab")
+    h:press("shift+tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_b")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_b")
 
-    tui_input.press("shift+tab")
+    h:press("shift+tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_a")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_a")
 
     h:unmount()
 end
@@ -136,12 +135,12 @@ function suite:test_cursor_follows_focus()
     local _, row_a = h:cursor()
     lt.assertEquals(row_a, 1)
 
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
     local _, row_b = h:cursor()
     lt.assertEquals(row_b, 2)
 
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
     local _, row_c = h:cursor()
     lt.assertEquals(row_c, 3)
@@ -160,7 +159,7 @@ function suite:test_cursor_col_advances()
     local col0 = h:cursor()
     lt.assertNotEquals(col0, nil)
 
-    tui_input.type("hi")
+    h:type("hi")
     h:rerender()
     local col2 = h:cursor()
     lt.assertEquals(col2, col0 + 2)
@@ -176,9 +175,9 @@ function suite:test_focus_direct()
     local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
-    h:focus("field_c")
+    focus_mod.focus("field_c")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_c")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_c")
 
     local _, row = h:cursor()
     lt.assertEquals(row, 3)
@@ -194,13 +193,13 @@ function suite:test_focus_next_prev_api()
     local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
-    h:focus_next()
+    focus_mod.focus_next()
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_b")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_b")
 
-    h:focus_prev()
+    focus_mod.focus_prev()
     h:rerender()
-    lt.assertEquals(h:focus_id(), "field_a")
+    lt.assertEquals(focus_mod.get_focused_id(), "field_a")
 
     h:unmount()
 end

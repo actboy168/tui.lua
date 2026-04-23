@@ -3,8 +3,6 @@
 local lt      = require "ltest"
 local testing = require "tui.testing"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local extra   = require "tui.extra"
 
 local suite = lt.test "todo_list"
@@ -79,9 +77,9 @@ end
 function suite:test_add_single_task()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
-    tui_input.type("Buy milk")
+    h:type("Buy milk")
     h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
 
     local frame = h:frame()
@@ -101,19 +99,19 @@ end
 function suite:test_add_multiple_tasks()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
-    tui_input.type("Task one")
+    h:type("Task one")
     h:rerender()
-    tui_input.press("enter")
-    h:rerender()
-
-    tui_input.type("Task two")
-    h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
 
-    tui_input.type("Task three")
+    h:type("Task two")
     h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
+    h:rerender()
+
+    h:type("Task three")
+    h:rerender()
+    h:press("enter")
     h:rerender()
 
     -- All three tasks appear in the tree
@@ -132,9 +130,9 @@ end
 function suite:test_input_clears_after_submit()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
-    tui_input.type("Do something")
+    h:type("Do something")
     h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
 
     -- The task was added to the list
@@ -156,7 +154,7 @@ end
 function suite:test_empty_submit_noop()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
-    tui_input.press("enter")  -- submit with empty input
+    h:press("enter")  -- submit with empty input
 
     lt.assertNotEquals(h:frame():find("No tasks"), nil)
 
@@ -170,13 +168,13 @@ end
 function suite:test_snapshot_with_tasks()
     local h = testing.render(TodoApp, { cols = 45, rows = 17 })
 
-    tui_input.type("First task")
+    h:type("First task")
     h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
-    tui_input.type("Second task")
+    h:type("Second task")
     h:rerender()
-    tui_input.press("enter")
+    h:press("enter")
     h:rerender()
 
     h:match_snapshot("todo_two_tasks_45x17")

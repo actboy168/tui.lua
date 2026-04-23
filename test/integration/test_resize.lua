@@ -8,6 +8,7 @@ local lt      = require "ltest"
 local tui     = require "tui"
 local extra = require "tui.extra"
 local testing = require "tui.testing"
+local focus_mod = require "tui.internal.focus"
 
 local suite = lt.test "resize"
 
@@ -91,11 +92,11 @@ function suite:test_focused_element_clipped_after_shrink()
         }
     end
     local h = testing.render(App, { cols = 30, rows = 1 })
-    lt.assertEquals(h:focus_id(), "only")
+    lt.assertEquals(focus_mod.get_focused_id(), "only")
     -- Shrink viewport to fewer cols than the input's content.
     h:resize(5, 1)
     h:rerender()
-    lt.assertEquals(h:focus_id(), "only",
+    lt.assertEquals(focus_mod.get_focused_id(), "only",
         "focus must survive a viewport resize")
     local row = h:row(1)
     lt.assertEquals(#row, 5, "row length matches new viewport width")

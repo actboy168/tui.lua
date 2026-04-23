@@ -37,7 +37,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "wcwidth.h"
+#include "tui_wcwidth.h"
 #include "tui_fatal.h"
 #include "tui_cell.h"
 
@@ -558,7 +558,7 @@ l_put_border(lua_State *L) {
  * to get the cluster's byte span and display width, writes each cluster as
  * one cell. Combining marks, ZWJ sequences, VS16 emoji promotion, regional
  * indicator pairs and Hangul L/V/T conjoining are all fused into a single
- * cell — see wcwidth.h for the UAX#29 subset actually covered. Zero-width
+ * cell — see tui_wcwidth.h for the UAX#29 subset actually covered. Zero-width
  * base clusters (lone combining marks, controls) are skipped. */
 static int
 l_draw_line(lua_State *L) {

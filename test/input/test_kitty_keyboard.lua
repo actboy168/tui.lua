@@ -6,7 +6,7 @@
 --   • ansi.supports_kitty_keyboard type
 
 local lt       = require "ltest"
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 local ansi     = require "tui.internal.ansi"
 local keys     = tui_core.keys
 

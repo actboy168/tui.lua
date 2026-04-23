@@ -4,6 +4,7 @@
 local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
+local focus_mod = require "tui.internal.focus"
 
 local suite = lt.test "bare_mode"
 
@@ -190,7 +191,7 @@ function suite:test_bare_focus_id()
         return tui.Text { "" }
     end
     local b = testing.mount_bare(App)
-    lt.assertEquals(b:focus_id(), "test")
+    lt.assertEquals(focus_mod.get_focused_id(), "test")
     b:unmount()
 end
 
@@ -209,16 +210,16 @@ function suite:test_bare_focus_next_prev()
         }
     end
     local b = testing.mount_bare(App)
-    lt.assertEquals(b:focus_id(), "b")  -- b has autoFocus
+    lt.assertEquals(focus_mod.get_focused_id(), "b")  -- b has autoFocus
 
-    b:focus_next()
-    lt.assertEquals(b:focus_id(), "c")
+    focus_mod.focus_next()
+    lt.assertEquals(focus_mod.get_focused_id(), "c")
 
-    b:focus_next()
-    lt.assertEquals(b:focus_id(), "a")  -- wrap
+    focus_mod.focus_next()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")  -- wrap
 
-    b:focus_prev()
-    lt.assertEquals(b:focus_id(), "c")  -- wrap back
+    focus_mod.focus_prev()
+    lt.assertEquals(focus_mod.get_focused_id(), "c")  -- wrap back
     b:unmount()
 end
 
@@ -234,10 +235,10 @@ function suite:test_bare_focus_explicit()
         }
     end
     local b = testing.mount_bare(App)
-    lt.assertEquals(b:focus_id(), "a")
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
 
-    b:focus("b")
-    lt.assertEquals(b:focus_id(), "b")
+    focus_mod.focus("b")
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
     b:unmount()
 end
 
@@ -318,7 +319,7 @@ function suite:test_bare_focus_with_input()
     end
     local b = testing.mount_bare(App)
     b:rerender()  -- run effect after initial render
-    lt.assertEquals(b:focus_id(), "main")
+    lt.assertEquals(focus_mod.get_focused_id(), "main")
     lt.assertEquals(focus_changes[#focus_changes], true)
     b:unmount()
 end

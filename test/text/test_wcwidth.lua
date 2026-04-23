@@ -1,7 +1,7 @@
 -- test/test_wcwidth.lua — unit tests for tui_core.wcwidth.
 
 local lt      = require "ltest"
-local wc      = require "tui_core".wcwidth
+local wc      = require "tui.core".wcwidth
 
 local suite = lt.test "wcwidth"
 

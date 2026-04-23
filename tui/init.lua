@@ -19,7 +19,6 @@ local scheduler  = require "tui.internal.scheduler"
 local hooks      = require "tui.internal.hooks"
 local cursor_mod = require "tui.internal.cursor"
 local text_mod   = require "tui.internal.text"
-local tui_core   = require "tui_core"
 
 local M = {}
 -- Pre-register in package.loaded so that circular requires from tui.extra.*

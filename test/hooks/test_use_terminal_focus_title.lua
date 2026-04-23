@@ -30,6 +30,7 @@ function suite:test_focus_out_event_changes_state()
     local h = testing.render(FocusApp, { cols = 20, rows = 1 })
     -- ESC [ O  →  CSI O  →  focus_out
     h:dispatch(input_helpers.posix("\x1b[O"))
+    h:rerender()
     lt.assertEquals(h:row(1):match("^%S+"), "blurred")
     h:unmount()
 end
@@ -37,7 +38,9 @@ end
 function suite:test_focus_in_event_restores_state()
     local h = testing.render(FocusApp, { cols = 20, rows = 1 })
     h:dispatch(input_helpers.posix("\x1b[O"))  -- lose focus
+    h:rerender()
     h:dispatch(input_helpers.posix("\x1b[I"))  -- regain focus
+    h:rerender()
     lt.assertEquals(h:row(1):match("^%S+"), "focused")
     h:unmount()
 end
@@ -83,6 +86,7 @@ function suite:test_multiple_subscribers()
     lt.assertEquals(r1, "A:Y")
     lt.assertEquals(r2, "B:Y")
     h:dispatch(input_helpers.posix("\x1b[O"))
+    h:rerender()
     lt.assertEquals(h:row(1):match("^%S+"), "A:N")
     lt.assertEquals(h:row(2):match("^%S+"), "B:N")
     h:unmount()

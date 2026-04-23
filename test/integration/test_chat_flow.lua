@@ -5,8 +5,6 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local testing = require "tui.testing"
 local helpers = require "test.helpers"
 
@@ -21,8 +19,9 @@ function suite:test_type_submit_stream_resize_flow()
 
     -- Type "hi" and press Enter. :type walks UTF-8 boundaries and rerenders
     -- between each keystroke; :press rerenders once after.
-    tui_input.type("hi")
-    tui_input.press("enter")
+    h:type("hi")
+    h:rerender()
+    h:press("enter")
     h:rerender()
 
     -- After submit: history gains [you] hi; streaming starts at shown=0 so

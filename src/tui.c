@@ -1,5 +1,5 @@
 ﻿/*
- * tui_core.c — Aggregator entry for the tui_core Lua DLL.
+ * tui.c — Aggregator entry for the tui_core Lua DLL.
  *
  * Exposes:
  *   terminal — raw I/O, size, VT enable
@@ -7,7 +7,7 @@
  *   wcwidth  — display-width table (wcwidth/string_width/char_width)
  *   screen   — cell buffer + ANSI diff renderer (Stage 9)
  *
- * Layout after `require "tui_core"`:
+ * Layout after `require "tui.core"`:
  *   tui_core = {
  *       terminal = { set_raw, get_size, windows_vt_enable, read_raw,
  *                    write },
@@ -42,6 +42,7 @@ int tui_open_text(lua_State *L);
 int tui_open_text_extra(lua_State *L);
 int tui_open_time(lua_State *L);
 int tui_open_vterm(lua_State *L);
+int tui_open_yoga(lua_State *L);
 
 DLL_EXPORT LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
@@ -76,6 +77,9 @@ luaopen_tui_core(lua_State *L) {
     /* vterm sub-table (virtual terminal emulator) */
     tui_open_vterm(L);
     lua_setfield(L, -2, "vterm");
+
+    tui_open_yoga(L);
+    lua_setfield(L, -2, "yoga");
 
     return 1;
 }

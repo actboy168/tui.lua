@@ -5,12 +5,11 @@
 
 local reconciler = require "tui.internal.reconciler"
 local scheduler  = require "tui.internal.scheduler"
-local input_mod = require "tui.internal.input"
-local resize_mod = require "tui.internal.resize"
-local focus_mod = require "tui.internal.focus"
-local hooks     = require "tui.internal.hooks"
-local tui_input = require "tui.input"
-local capture   = require "tui.testing.capture"
+local hooks      = require "tui.internal.hooks"
+local tui_input  = require "tui.input"
+local app_base   = require "tui.internal.app_base"
+local capture    = require "tui.testing.capture"
+local vclock     = require "tui.testing.vclock"
 
 local M = {}
 
@@ -47,14 +46,9 @@ end
 
 function Bare:advance(ms)
     assert(type(ms) == "number" and ms >= 0, "advance: non-negative ms required")
-    self._fake_now = self._fake_now + ms
-    scheduler.step(self._fake_now)
+    vclock.advance(self._clock, ms)
+    scheduler.step(self._clock.t)
 end
-
-function Bare:focus_id()   return focus_mod.get_focused_id() end
-function Bare:focus_next() focus_mod.focus_next(); end
-function Bare:focus_prev() focus_mod.focus_prev(); end
-function Bare:focus(id)    focus_mod.focus(id); end
 
 function Bare:tree()  return self._tree end
 function Bare:state() return self._state end
@@ -63,34 +57,28 @@ function Bare:unmount()
     if self._dead then return end
     self._dead = true
     reconciler.shutdown(self._state)
-    input_mod._reset()
-    resize_mod._reset()
-    focus_mod._reset()
-    scheduler._reset()
+    app_base.reset_framework()
     hooks._set_dev_mode(false)
     capture.drain_and_fatal_if_any()
 end
 
 --- Mount a bare reconciler harness.
 function M.mount(App)
-    input_mod._reset()
-    resize_mod._reset()
-    focus_mod._reset()
-    scheduler._reset()
+    app_base.reset_framework()
     hooks._set_dev_mode(true)
+
+    local clock = vclock.new(0)
+    scheduler.configure(vclock.as_backend(clock))
+
     local b = setmetatable({
         _App    = App,
         _state  = reconciler.new(),
         _tree   = nil,
         _dead   = false,
-        _fake_now = 0,
+        _clock  = clock,
         _render_count = 1,
     }, Bare)
     b._app_handle = { exit = function() b._dead = true end }
-    scheduler.configure {
-        now   = function() return b._fake_now end,
-        sleep = function() end,
-    }
     b._tree = reconciler.render(b._state, App, b._app_handle)
     return b
 end

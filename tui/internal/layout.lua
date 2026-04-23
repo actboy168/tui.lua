@@ -12,10 +12,10 @@
 --     idempotent style setters preserve the internal layout cache for
 --     subtrees whose structure and props haven't changed.
 
-local yoga     = require "yoga"
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 local text_mod = require "tui.internal.text"
 
+local yoga    = tui_core.yoga
 local wcwidth = tui_core.wcwidth
 
 local M = {}

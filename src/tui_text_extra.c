@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "wcwidth.h"
+#include "tui_wcwidth.h"
 #include "tui_fatal.h"
 
 /* Local growable buffer — same layout as text.c's buf_t; separate static
@@ -279,7 +279,7 @@ static const luaL_Reg extra_lib[] = {
 };
 
 /* Add extra text functions to the table already on top of the stack.
- * Called by tui_core.c after tui_open_text pushes the base table. */
+ * Called by tui.c after tui_open_text pushes the base table. */
 int
 tui_open_text_extra(lua_State *L) {
     luaL_setfuncs(L, extra_lib, 0);

@@ -17,7 +17,7 @@
 -- a focused component sees the key, and plain `useInput` also sees it. This
 -- mirrors Ink's behavior for non-focus keys.
 
-local tui_core  = require "tui_core"
+local tui_core  = require "tui.core"
 local focus_mod = require "tui.internal.focus"
 local bus_mod   = require "tui.internal.bus"
 local keys      = tui_core.keys
@@ -130,22 +130,6 @@ local _paste_buf  = {}
 -- prefix (lone ESC, unterminated CSI "ESC [", or unterminated SS3 "ESC O"),
 -- those bytes are held here and prepended to the *next* dispatch() call.
 local _pending_bytes = ""
-
--- Ingest redirect for tui.input.lua (harness / production scripts).
-local _ingest_fn = nil
-
-function M._set_ingest(fn)
-    _ingest_fn = fn
-end
-
-function M._dispatch_bytes(bytes)
-    if not bytes or #bytes == 0 then return end
-    if _ingest_fn then
-        _ingest_fn(bytes)
-    else
-        M.dispatch(bytes)
-    end
-end
 
 -- Returns how many bytes at the END of `s` form an incomplete ANSI escape
 -- prefix that should be buffered rather than parsed now.
@@ -417,7 +401,6 @@ function M._reset()
     _mouse_bus._reset()
     _middlewares  = {}
     _hit_test_handler = nil
-    _ingest_fn = nil
     _pasting      = false
     _paste_buf    = {}
     _pending_bytes = ""

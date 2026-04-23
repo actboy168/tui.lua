@@ -11,7 +11,7 @@
 --   且 l_set_raw() 未启用 ENABLE_VIRTUAL_TERMINAL_INPUT / ENABLE_MOUSE_INPUT。
 --   因此鼠标事件可能完全无法到达应用程序。
 
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 local terminal = tui_core.terminal
 local keys     = tui_core.keys
 local time     = tui_core.time

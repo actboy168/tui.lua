@@ -5,10 +5,9 @@
 
 local lt      = require "ltest"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local testing = require "tui.testing"
 local input_helpers = require "tui.testing.input"
+local focus_mod = require "tui.internal.focus"
 
 
 local suite = lt.test "bare_render_consistency"
@@ -42,7 +41,7 @@ function suite:test_useState_setter_updates_tree()
     local h = testing.render(App)
     lt.assertEquals(tree_text(h:tree()), "0")
     refs.setVal(42)
-    h:_paint()
+    h:paint()
     lt.assertEquals(tree_text(h:tree()), "42")
     h:unmount()
 end
@@ -127,7 +126,7 @@ function suite:test_useReducer_dispatch_updates_tree()
     local h = testing.render(App)
     lt.assertEquals(tree_text(h:tree()), "0")
     refs.dispatch("inc")
-    h:_paint()
+    h:paint()
     lt.assertEquals(tree_text(h:tree()), "1")
     h:unmount()
 end
@@ -155,7 +154,7 @@ function suite:test_useRef_persists_across_renders()
     refs = {}
     local h = testing.render(App)
     lt.assertEquals(refs.ref.current, 1)
-    h:_paint()
+    h:paint()
     lt.assertEquals(refs.ref.current, 2, "harness: ref should persist")
     h:unmount()
 end
@@ -196,10 +195,10 @@ function suite:test_useMemo_caches_until_deps_change()
     local h = testing.render(make_app("harness"))
     lt.assertEquals(compute_counts.harness, 1)
     refs.harness.setD(1)
-    h:_paint()
+    h:paint()
     lt.assertEquals(compute_counts.harness, 1, "harness: memo should not recompute with same deps")
     refs.harness.setD(2)
-    h:_paint()
+    h:paint()
     lt.assertEquals(compute_counts.harness, 2, "harness: memo should recompute with new deps")
     h:unmount()
 end
@@ -255,6 +254,7 @@ function suite:test_dispatch_same_bytes()
 
     local h = testing.render(make_app(harness_keys))
     h:dispatch(input_helpers.posix("\x1b[A"))
+    h:rerender()
     lt.assertEquals(#harness_keys, 1, "harness: should receive 1 key")
     lt.assertEquals(harness_keys[1], "up")
     h:unmount()
@@ -281,7 +281,7 @@ function suite:test_type_same_chars()
     b:unmount()
 
     local h = testing.render(make_app(harness_chars))
-    tui_input.type("hi")
+    h:type("hi")
     h:rerender()
     lt.assertEquals(harness_chars, { "h", "i" }, "harness: type should deliver chars")
     h:unmount()
@@ -312,15 +312,15 @@ function suite:test_focus_next_advances_same()
     local b = testing.mount_bare(App)
     local h = testing.render(App)
 
-    lt.assertEquals(b:focus_id(), h:focus_id(), "initial focus should match")
+    lt.assertEquals(focus_mod.get_focused_id(), focus_mod.get_focused_id(), "initial focus should match")
 
-    b:focus_next()
-    h:focus_next()
-    lt.assertEquals(b:focus_id(), h:focus_id(), "focus after next should match")
+    focus_mod.focus_next()
+    focus_mod.focus_next()
+    lt.assertEquals(focus_mod.get_focused_id(), focus_mod.get_focused_id(), "focus after next should match")
 
-    b:focus_prev()
-    h:focus_prev()
-    lt.assertEquals(b:focus_id(), h:focus_id(), "focus after prev should match")
+    focus_mod.focus_prev()
+    focus_mod.focus_prev()
+    lt.assertEquals(focus_mod.get_focused_id(), focus_mod.get_focused_id(), "focus after prev should match")
 
     b:unmount()
     h:unmount()

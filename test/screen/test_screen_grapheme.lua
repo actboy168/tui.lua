@@ -6,7 +6,7 @@
 
 local lt       = require "ltest"
 local screen   = require "tui.internal.screen"
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 
 local suite = lt.test "screen_grapheme"
 

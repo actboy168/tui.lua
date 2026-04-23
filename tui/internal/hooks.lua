@@ -874,7 +874,7 @@ end
 local tui_core_mod
 function M.useStdout()
     assert(current, "useStdout called outside of a component render")
-    if not tui_core_mod then tui_core_mod = require "tui_core" end
+    if not tui_core_mod then tui_core_mod = require "tui.core" end
     return {
         write = function(s) tui_core_mod.terminal.write(s) end,
     }
@@ -962,7 +962,7 @@ function M.useTerminalTitle(title)
     if not _ansi_mod_for_title then
         _ansi_mod_for_title = require "tui.internal.ansi"
     end
-    if not tui_core_mod then tui_core_mod = require "tui_core" end
+    if not tui_core_mod then tui_core_mod = require "tui.core" end
     M.useEffect(function()
         tui_core_mod.terminal.write(_ansi_mod_for_title.setTitle(title or ""))
         return function()

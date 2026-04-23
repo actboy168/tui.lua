@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "wcwidth.h"
+#include "tui_wcwidth.h"
 
 /*
  * wcwidth — terminal display width for Unicode code points.

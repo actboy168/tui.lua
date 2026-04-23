@@ -29,21 +29,24 @@ lm:source_set "yoga_core" {
     },
 }
 
--- Lua DLL #1: yoga binding
-lm:lua_dll "yoga" {
-    sources  = "src/yoga/luayoga.c",
+lm:lua_src "tui" {
+    sources  = "src/tui_yoga.c",
     deps     = "yoga_core",
     includes = "3rd/yoga",
 }
 
--- Lua DLL #2: tui_core (Stage 4: terminal + keys + wcwidth)
-lm:lua_dll "tui_core" {
+lm:lua_dll "tui" {
     sources = {
-        "src/tui_core/*.c",
+        "src/*.c",
+        "!src/tui_yoga.c",
     },
     windows = {
         links = { "ntdll" },
+        export_luaopen = "off",
+        ldflags = {
+            "-export:luaopen_tui_core",
+        },
     },
 }
 
-lm:default { "yoga", "tui_core" }
+lm:default { "tui" }

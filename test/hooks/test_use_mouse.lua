@@ -4,8 +4,6 @@
 local lt        = require "ltest"
 local testing   = require "tui.testing"
 local tui       = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local input_mod = require "tui.internal.input"
 local mouse_helpers = require "tui.testing.mouse"
 
@@ -28,6 +26,7 @@ function suite:test_left_button_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 10, y = 5 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 1)
@@ -40,6 +39,7 @@ function suite:test_left_button_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "up", button = 1, x = 3, y = 7 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "up")
     lt.assertEquals(events[1].button, 1)
@@ -52,6 +52,7 @@ function suite:test_middle_button_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 2, x = 1, y = 1 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 2)
@@ -62,6 +63,7 @@ function suite:test_right_button_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 3, x = 1, y = 1 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 3)
@@ -75,6 +77,7 @@ function suite:test_scroll_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "scroll", scroll = 1, x = 1, y = 1 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
     lt.assertEquals(events[1].scroll, 1)
@@ -85,6 +88,7 @@ function suite:test_scroll_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "scroll", scroll = -1, x = 1, y = 1 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
     lt.assertEquals(events[1].scroll, -1)
@@ -98,6 +102,7 @@ function suite:test_mouse_move()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "move", button = 1, x = 15, y = 8 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type, "move")
     lt.assertEquals(events[1].x,    15)
@@ -114,6 +119,7 @@ function suite:test_shift_modifier()
     h:dispatch(mouse_helpers.sgr {
         type = "down", button = 1, x = 5, y = 5, shift = true,
     })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertTrue(events[1].shift)
     lt.assertFalse(events[1].meta)
@@ -127,6 +133,7 @@ function suite:test_meta_modifier()
     h:dispatch(mouse_helpers.sgr {
         type = "down", button = 1, x = 5, y = 5, meta = true,
     })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertFalse(events[1].shift)
     lt.assertTrue(events[1].meta)
@@ -140,6 +147,7 @@ function suite:test_ctrl_modifier()
     h:dispatch(mouse_helpers.sgr {
         type = "down", button = 1, x = 5, y = 5, ctrl = true,
     })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertFalse(events[1].shift)
     lt.assertFalse(events[1].meta)
@@ -159,6 +167,7 @@ function suite:test_mouse_not_forwarded_to_useInput()
     end
     local h = testing.render(App, { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
+    h:rerender()
     lt.assertFalse(got_key, "mouse event must not reach useInput")
     h:unmount()
 end
@@ -169,7 +178,7 @@ end
 function suite:test_harness_mouse_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    tui_input.mouse("down", 1, 5, 3)
+    h:mouse("down", 1, 5, 3)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
@@ -182,7 +191,7 @@ end
 function suite:test_harness_mouse_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    tui_input.mouse("up", 1, 5, 3)
+    h:mouse("up", 1, 5, 3)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "up")
@@ -193,7 +202,7 @@ end
 function suite:test_harness_mouse_scroll_up()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    tui_input.mouse("scroll_up", nil, 1, 1)
+    h:mouse("scroll_up", nil, 1, 1)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
@@ -204,7 +213,7 @@ end
 function suite:test_harness_mouse_scroll_down()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    tui_input.mouse("scroll_down", nil, 1, 1)
+    h:mouse("scroll_down", nil, 1, 1)
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "scroll")
@@ -215,7 +224,7 @@ end
 function suite:test_harness_mouse_modifiers()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
-    tui_input.mouse("down", 1, 1, 1, { shift = true, ctrl = true })
+    h:mouse("down", 1, 1, 1, { shift = true, ctrl = true })
     h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertTrue(events[1].shift)
@@ -232,6 +241,7 @@ function suite:test_x10_button_down()
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     -- left button (0) at col=10 (10+32=42=0x2A), row=5 (5+32=37=0x25)
     h:dispatch(mouse_helpers.x10 { type = "down", button = 1, x = 10, y = 5 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type,   "down")
     lt.assertEquals(events[1].button, 1)
@@ -244,6 +254,7 @@ function suite:test_x10_release()
     local events = {}
     local h = testing.render(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.x10 { type = "up", x = 1, y = 1 })
+    h:rerender()
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].type, "up")
     -- X10 release does not carry button identity

@@ -315,8 +315,8 @@ function suite:test_enqueue_input_and_read_raw()
     local vt, term = make_term(10, 3)
     vterm.enqueue_input(vt, "abc")
     vterm.enqueue_input(vt, "def")
-    lt.assertEquals(term.read_raw(), "abc")
-    lt.assertEquals(term.read_raw(), "def")
+    -- read_raw drains the entire queue at once
+    lt.assertEquals(term.read_raw(), "abcdef")
     lt.assertEquals(term.read_raw(), nil)
 end
 

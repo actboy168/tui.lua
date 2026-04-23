@@ -26,7 +26,7 @@ Lua 代码中不使用 `;` 分隔语句，用换行代替。
 
 **How to apply:**
 - 加 `<const>`：`local <const> MAX_PAINT_PASSES = 4`、`local <const> ESC = "\27"`
-- 不加 `<const>`：`local M = {}`、`local NOOP = function() end`、`local tui_core = require "tui_core"`、`local COLORS = { ... }`
+- 不加 `<const>`：`local M = {}`、`local NOOP = function() end`、`local tui_core = require "tui.core"`、`local COLORS = { ... }`
 
 ## 测试文件不加 lt.run()
 

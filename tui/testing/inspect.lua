@@ -24,11 +24,6 @@ function M.install(testing, Harness)
         return focus_mod._entries()
     end
 
-    function Harness:dispatch_event(event)
-        input_mod._dispatch_event(event)
-        self:_paint()
-    end
-
     function testing.find_text_with_cursor(tree)
         local function walk(e)
             if not e then return nil end

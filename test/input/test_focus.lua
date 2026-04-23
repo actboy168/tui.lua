@@ -2,15 +2,14 @@
 -- useFocusManager hooks.
 --
 -- Every test drives the tree through tui.testing; we assert against
--- h:focus_id() (which reads tui.focus.get_focused_id) and, where relevant,
+-- focus_mod.get_focused_id() (which reads tui.focus.get_focused_id) and, where relevant,
 -- against the rendered text to verify isFocused reflects back into state.
 
 local lt      = require "ltest"
 local tui     = require "tui"
-local tui_input = require "tui.input"
-local tui_input = require "tui.input"
 local extra = require "tui.extra"
 local testing = require "tui.testing"
+local focus_mod = require "tui.internal.focus"
 
 local suite = lt.test "focus"
 
@@ -26,7 +25,7 @@ function suite:test_bare_useFocus_does_not_autofocus()
     end
 
     local h = testing.render(App, { cols = 1, rows = 1 })
-    lt.assertEquals(h:focus_id(), nil)
+    lt.assertEquals(focus_mod.get_focused_id(), nil)
     lt.assertEquals(h:frame(), "N")
     h:unmount()
 end
@@ -38,7 +37,7 @@ function suite:test_autofocus_true_takes_focus()
     end
 
     local h = testing.render(App, { cols = 1, rows = 1 })
-    lt.assertEquals(h:focus_id(), "only")
+    lt.assertEquals(focus_mod.get_focused_id(), "only")
     -- autoFocus sets focused_id synchronously, but isFocused state is
     -- consumed on the next paint.
     h:rerender()
@@ -70,17 +69,17 @@ function suite:test_tab_and_shift_tab_cycle()
     end
 
     local h = testing.render(App, { cols = 2, rows = 2 })
-    lt.assertEquals(h:focus_id(), "a")
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
 
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "b")
-    tui_input.press("tab")     -- wrap back to "a"
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+    h:press("tab")     -- wrap back to "a"
     h:rerender()
-    lt.assertEquals(h:focus_id(), "a")
-    tui_input.press("shift+tab")
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+    h:press("shift+tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "b")   -- prev from a wraps to last
+    lt.assertEquals(focus_mod.get_focused_id(), "b")   -- prev from a wraps to last
     h:unmount()
 end
 
@@ -106,13 +105,13 @@ function suite:test_focus_manager_jump()
     end
 
     local h = testing.render(App, { cols = 1, rows = 3 })
-    lt.assertEquals(h:focus_id(), "x")
+    lt.assertEquals(focus_mod.get_focused_id(), "x")
     jump_to("z")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "z")
+    lt.assertEquals(focus_mod.get_focused_id(), "z")
     jump_to("y")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "y")
+    lt.assertEquals(focus_mod.get_focused_id(), "y")
     h:unmount()
 end
 
@@ -136,14 +135,14 @@ function suite:test_disable_focus_falls_back_to_broadcast()
     end
 
     local h = testing.render(App, { cols = 1, rows = 1 })
-    lt.assertEquals(h:focus_id(), "only")
+    lt.assertEquals(focus_mod.get_focused_id(), "only")
 
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
     lt.assertEquals(seen_tab, false, "tab should be swallowed while focus is enabled")
 
     disable_it()
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
     lt.assertEquals(seen_tab, true, "tab should reach useInput once focus is disabled")
     h:unmount()
@@ -175,10 +174,11 @@ function suite:test_unmount_transfers_focus()
     end
 
     local h = testing.render(App, { cols = 1, rows = 3 })
-    lt.assertEquals(h:focus_id(), "a")
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
 
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "b")
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "c")
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "b")
+    h:rerender()
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "c")
 
 
     set_show(false)                         -- unmount "c"
@@ -186,11 +186,12 @@ function suite:test_unmount_transfers_focus()
 
     -- "c" was focused and is gone; transfer rule picks the entry now at
     -- c's old index. With c removed, index 3 clamps to #entries (=2) → "b".
-    lt.assertEquals(h:focus_id(), "b")
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
 
     -- "c" must no longer appear in the chain.
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "a")
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "b")
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "a")
+    h:rerender()
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "b")
     h:unmount()
 end
 
@@ -210,7 +211,7 @@ function suite:test_textinput_autofocus_default()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    tui_input.type("hi")
+    h:type("hi")
     h:rerender()
     lt.assertEquals(value, "hi")
     h:unmount()
@@ -239,16 +240,16 @@ function suite:test_two_textinputs_tab_routes()
     end
 
     local h = testing.render(App, { cols = 20, rows = 2 })
-    lt.assertEquals(h:focus_id(), "inA")
-    tui_input.type("x")
+    lt.assertEquals(focus_mod.get_focused_id(), "inA")
+    h:type("x")
     h:rerender()
     lt.assertEquals(a, "x")
     lt.assertEquals(b, "")
 
-    tui_input.press("tab")
+    h:press("tab")
     h:rerender()
-    lt.assertEquals(h:focus_id(), "inB")
-    tui_input.type("y")
+    lt.assertEquals(focus_mod.get_focused_id(), "inB")
+    h:type("y")
     h:rerender()
     lt.assertEquals(a, "x")
     lt.assertEquals(b, "y")
@@ -282,7 +283,7 @@ function suite:test_tab_order_stable_across_rerenders()
     end
 
     local h = testing.render(App, { cols = 5, rows = 3 })
-    lt.assertEquals(h:focus_id(), "p")
+    lt.assertEquals(focus_mod.get_focused_id(), "p")
 
     -- Force three rerenders via unrelated state. If useFocus's subscription
     -- ran every render, each rerender would re-append p and q and the chain
@@ -295,8 +296,9 @@ function suite:test_tab_order_stable_across_rerenders()
     lt.assertEquals(entries[2].id, "q")
 
     -- Tab traversal still cleanly flips p ↔ q.
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "q")
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "p")
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "q")
+    h:rerender()
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "p")
     h:unmount()
 end
 
@@ -361,18 +363,21 @@ function suite:test_inactive_entry_is_skipped_by_tab()
     end
 
     local h = testing.render(App, { cols = 1, rows = 3 })
-    lt.assertEquals(h:focus_id(), "a")
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
 
     -- Tab skips the inactive "b" and lands on "c".
-    tui_input.press("tab");       h:rerender(); lt.assertEquals(h:focus_id(), "c")
-    tui_input.press("tab");       h:rerender(); lt.assertEquals(h:focus_id(), "a")   -- wraps, still skipping b
-    tui_input.press("shift+tab"); h:rerender(); lt.assertEquals(h:focus_id(), "c")   -- wrap back, skip b
-    tui_input.press("shift+tab"); h:rerender(); lt.assertEquals(h:focus_id(), "a")
+    h:press("tab");       h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "c")
+    h:rerender()
+    h:press("tab");       h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "a")   -- wraps, still skipping b
+    h:rerender()
+    h:press("shift+tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "c")   -- wrap back, skip b
+    h:rerender()
+    h:press("shift+tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "a")
 
 
     -- Explicit focus(id) still lands on an inactive entry (user intent).
     require("tui.internal.focus").focus("b")
-    lt.assertEquals(h:focus_id(), "b")
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
     h:unmount()
 end
 
@@ -383,7 +388,7 @@ function suite:test_inactive_does_not_autofocus()
     end
 
     local h = testing.render(App, { cols = 1, rows = 1 })
-    lt.assertEquals(h:focus_id(), nil, "autoFocus should be ignored when isActive=false")
+    lt.assertEquals(focus_mod.get_focused_id(), nil, "autoFocus should be ignored when isActive=false")
     lt.assertEquals(h:frame(), "N")
     h:unmount()
 end
@@ -417,23 +422,24 @@ function suite:test_isactive_hot_update_transfers_focus()
     end
 
     local h = testing.render(App, { cols = 1, rows = 3 })
-    lt.assertEquals(h:focus_id(), "b")
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
 
     -- Deactivate b: focus should walk forward to c (next active neighbor).
     set_b_active(false)
     h:rerender()
-    lt.assertEquals(h:focus_id(), "c")
+    lt.assertEquals(focus_mod.get_focused_id(), "c")
 
     -- Tab now skips b.
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "a")
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "c")    -- skips b
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "a")
+    h:rerender()
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "c")    -- skips b
 
 
     -- Reactivating b does not steal focus, but b is reachable via Tab again.
     set_b_active(true)
     h:rerender()
-    lt.assertEquals(h:focus_id(), "c")
-    tui_input.press("shift+tab"); h:rerender(); lt.assertEquals(h:focus_id(), "b")
+    lt.assertEquals(focus_mod.get_focused_id(), "c")
+    h:press("shift+tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "b")
     h:unmount()
 end
 
@@ -447,10 +453,10 @@ function suite:test_isactive_hot_update_clears_when_all_inactive()
     end
 
     local h = testing.render(App, { cols = 1, rows = 1 })
-    lt.assertEquals(h:focus_id(), "only")
+    lt.assertEquals(focus_mod.get_focused_id(), "only")
     set_active(false)
     h:rerender()
-    lt.assertEquals(h:focus_id(), nil, "focus clears when the only entry goes inactive")
+    lt.assertEquals(focus_mod.get_focused_id(), nil, "focus clears when the only entry goes inactive")
     h:unmount()
 end
 
@@ -514,9 +520,10 @@ function suite:test_textinput_disabled_is_inactive_entry()
     -- All three are in the chain (stable hook call order).
     lt.assertEquals(#testing.focus_entries(), 3)
     -- First active one autoFocuses (TextInput default).
-    lt.assertEquals(h:focus_id(), "top")
+    lt.assertEquals(focus_mod.get_focused_id(), "top")
     -- Tab skips the inactive middle input.
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "bottom")
-    tui_input.press("tab"); h:rerender(); lt.assertEquals(h:focus_id(), "top")
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "bottom")
+    h:rerender()
+    h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "top")
     h:unmount()
 end

@@ -18,7 +18,7 @@
 -- Production integrators (ltask / libuv / custom event loop) should call
 -- configure() with their own implementations before tui.render.
 
-local tui_core = require "tui_core"
+local tui_core = require "tui.core"
 
 local M = {}
 

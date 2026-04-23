@@ -64,6 +64,7 @@ function suite:test_useinput_sees_ctrl_c()
     end
     local h = testing.render(App, { cols = 1, rows = 1 })
     h:dispatch("\3")
+    h:rerender()
     lt.assertEquals(saw_ctrl_c, true)
     h:unmount()
 end
