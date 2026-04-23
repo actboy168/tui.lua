@@ -210,9 +210,6 @@ function M.render(App, opts)
             use_kkp        = false,
             throw_on_error = true,
             clock          = vclock.as_backend(clock),
-            on_paint_done  = function(i, tree)
-                i._tree = tree
-            end,
         })
 
         -- Add harness-specific fields

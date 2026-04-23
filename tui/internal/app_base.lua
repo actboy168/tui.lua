@@ -333,7 +333,7 @@ function M.mount(terminal, screen_state, opts)
         end
         inst._render_count = inst._render_count + passes
         inst._mouse_auto_release = new_mouse
-        inst._tree = nil  -- on_paint_done takes ownership
+        inst._tree = tree
         if opts.on_paint_done then
             opts.on_paint_done(inst, tree, passes)
         end

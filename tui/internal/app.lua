@@ -10,8 +10,6 @@ local screen_mod   = require "tui.internal.screen"
 local scheduler    = require "tui.internal.scheduler"
 local terminal_mod = require "tui.internal.terminal"
 local app_base     = require "tui.internal.app_base"
-local hit_test     = require "tui.internal.hit_test"
-local layout       = require "tui.internal.layout"
 
 local M = {}
 
@@ -47,10 +45,6 @@ function M.render(root, opts)
         interactive    = interactive,
         use_kkp        = use_kkp,
         throw_on_error = false,
-        on_paint_done  = function(_, tree)
-            hit_test.clear_tree()
-            layout.free(tree)
-        end,
     })
 
     inst._running = false
