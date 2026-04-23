@@ -42,9 +42,7 @@ _暂无_
 - `P1` **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点，解决弹窗关闭后焦点丢失问题
 - `P1` **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
 - `P2` **超链接（OSC 8）**：终端超链接支持，URL 去重存储到 HyperlinkPool
-- `P2` **RawAnsi 直通**：跳过 reconciler/layout/render 管线，直接输出预渲染 ANSI 序列；适合 `git diff --color`、LLM 流式输出等场景（C + Lua）
 - `P3` **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
-- `P3` **ANSI 感知换行**：对含 ANSI 转义的原始字符串做宽度感知换行，与 Ansi 组件配合使用（Lua 层）
 - `P3` **CharPool 字符串去重**：相同文本共享存储，减少内存占用
 - `P3` **`focus` 链表 entry→idx 映射**：当前 Tab 切换线性搜索 O(n) → O(1)
 

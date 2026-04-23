@@ -35,6 +35,18 @@ local function pool_acquire()
     return table.remove(_pool) or yoga.node_new()
 end
 
+local function raw_ansi_layout_props(element)
+    local props = {}
+    if element.props then
+        for k, v in pairs(element.props) do
+            props[k] = v
+        end
+    end
+    props.width = element.raw_width
+    props.height = element.raw_height
+    return props
+end
+
 -- Release an element subtree to the pool.
 -- PRECONDITION: element.yoga_node has no parent (owner_ == nullptr) when called.
 -- For box nodes, detaches their Yoga children first so they can be released too.
@@ -119,6 +131,8 @@ local function reconcile(element, prev)
             element._wrap = true
             element._wrap_mode = wrap
         end
+    elseif element.kind == "raw_ansi" then
+        yoga.node_set_box_props(node, raw_ansi_layout_props(element))
     end
 
     return node
@@ -152,6 +166,8 @@ local function build(element, parent_node)
             element._wrap = true
             element._wrap_mode = wrap
         end
+    elseif element.kind == "raw_ansi" then
+        yoga.node_set_box_props(node, raw_ansi_layout_props(element))
     end
 
     return node

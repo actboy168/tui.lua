@@ -88,6 +88,12 @@ local function paint(element, screen, inherit, y_off)
         for _, ch in ipairs(element.children or {}) do
             paint(ch, screen, ci, y_off)
         end
+    elseif element.kind == "raw_ansi" then
+        local lines = element.raw_lines or {}
+        for li, line in ipairs(lines) do
+            if li - 1 >= r.h then break end
+            screen_c.draw_ansi_line(screen, r.x, ry + (li - 1), line, r.w)
+        end
     elseif element.kind == "text" then
         local props = effective_props(element.props, inherit)
         if element.line_runs then

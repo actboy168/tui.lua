@@ -74,6 +74,18 @@ function suite:test_text_element_structure()
     lt.assertEquals(text.text, "Hello World")
 end
 
+function suite:test_raw_ansi_element_structure()
+    local raw = tui.RawAnsi {
+        lines = { "\27[31mhi\27[0m" },
+        width = 2,
+    }
+
+    lt.assertEquals(raw.kind, "raw_ansi")
+    lt.assertEquals(raw.raw_width, 2)
+    lt.assertEquals(raw.raw_height, 1)
+    lt.assertEquals(raw.raw_text, "\27[31mhi\27[0m")
+end
+
 function suite:test_error_boundary_element_structure()
     local fallback = tui.Text { "Error!" }
     local boundary = tui.ErrorBoundary {
@@ -155,6 +167,7 @@ function suite:test_hooks_exported()
     lt.assertEquals(type(tui.useFocusManager), "function")
     lt.assertEquals(type(tui.useCursor), "function")
     lt.assertEquals(type(tui.useErrorBoundary), "function")
+    lt.assertEquals(type(tui.RawAnsi), "function")
     lt.assertEquals(type(tui.log), "function")
 end
 

@@ -85,7 +85,8 @@ local function is_component_element(e)
 end
 
 local function is_host_element(e)
-    return type(e) == "table" and (e.kind == "box" or e.kind == "text")
+    return type(e) == "table"
+        and (e.kind == "box" or e.kind == "text" or e.kind == "raw_ansi")
 end
 
 local function is_error_boundary(e)
@@ -314,6 +315,12 @@ local function expand(state, element, path)
             for i, c in ipairs(element.children or {}) do out.children[i] = c end
             out.text = element.text
             out.runs = element.runs
+        elseif element.kind == "raw_ansi" then
+            out.raw_lines  = element.raw_lines
+            out.raw_text   = element.raw_text
+            out.raw_width  = element.raw_width
+            out.raw_height = element.raw_height
+            out.children   = nil
         else
             dev_check_keys(state, path, element.children)
             local seen_keys = {}

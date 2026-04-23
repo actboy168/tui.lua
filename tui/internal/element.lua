@@ -102,6 +102,58 @@ function M.Text(t)
     }
 end
 
+--- RawAnsi { lines = {"..."}, width = n }
+-- Pre-rendered ANSI content. `lines` must already be split by row and wrapped
+-- to the supplied width. Only SGR style sequences are supported by the render
+-- backend; cursor movement / erase controls are rejected.
+function M.RawAnsi(t)
+    t = t or {}
+    local props, children = split_props_children(t)
+    local key, _ref = pluck_reserved(props)
+    _ref = nil
+    if #children > 0 then
+        error("RawAnsi: children are not supported", 2)
+    end
+
+    local lines = props.lines
+    props.lines = nil
+    local width = props.width
+    props.width = nil
+
+    if type(lines) ~= "table" then
+        error("RawAnsi: `lines` must be an array of strings", 2)
+    end
+    if type(width) ~= "number" or width ~= math.floor(width) or width < 0 then
+        error("RawAnsi: `width` must be a non-negative integer", 2)
+    end
+
+    for k in pairs(props) do
+        error(("RawAnsi: unsupported prop %q"):format(k), 2)
+    end
+
+    local raw_lines = {}
+    for i, line in ipairs(lines) do
+        if type(line) ~= "string" then
+            error(("RawAnsi: lines[%d] must be a string, got %s"):format(i, type(line)), 2)
+        end
+        raw_lines[i] = line
+    end
+
+    if #raw_lines == 0 then
+        return nil
+    end
+
+    return {
+        kind       = "raw_ansi",
+        key        = key,
+        props      = props,
+        raw_lines  = raw_lines,
+        raw_text   = table.concat(raw_lines, "\n"),
+        raw_width  = width,
+        raw_height = #raw_lines,
+    }
+end
+
 --- ErrorBoundary { fallback = element_or_fn_or_nil, child1, child2, ... }
 -- Catches errors raised while expanding any descendant during reconciliation,
 -- and errors bubbled from post-commit channels (useEffect body/cleanup,

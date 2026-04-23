@@ -8,5 +8,6 @@
 - [workflow.md](workflow.md) — 工作流约束（PowerShell 构建/不用管道验证 TUI/Example 验证清单/hook-in-function 注意事项）
 - [yoga_binding.md](yoga_binding.md) — Yoga 绑定决策（flex shorthand 删除/PointScaleFactor/overflowX/Y fallback/border 转换）
 - [component_semantics.md](component_semantics.md) — 组件与 Hook 语义决策（Focus/ErrorBoundary/Hook 语义/Dev-mode/动画/Harness/TextInput）
+- [raw_ansi.md](raw_ansi.md) — RawAnsi 组件语义（Ink 风格 API / screen backend 接入 / SGR-only 范围）
 - [hit_test_offset.md](hit_test_offset.md) — Hit Test 坐标偏移（终端坐标 vs 内容坐标 / row_offset / harness 偏移为 0）
 - [overflow_clipping.md](overflow_clipping.md) — 内容溢出裁剪方向（底部优先/y_off）

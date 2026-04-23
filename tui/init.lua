@@ -53,6 +53,7 @@ M.configureScheduler = scheduler.configure
 -- Host elements (core)
 M.Box            = element.Box
 M.Text           = element.Text
+M.RawAnsi        = element.RawAnsi
 M.ErrorBoundary  = element.ErrorBoundary
 
 -- Component factory helper

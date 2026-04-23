@@ -586,6 +586,214 @@ l_draw_line(lua_State *L) {
     return 0;
 }
 
+typedef struct {
+    uint8_t fg_mode;
+    uint32_t fg_val;
+    uint8_t bg_mode;
+    uint32_t bg_val;
+    uint8_t attrs;
+} sgr_state_t;
+
+static void
+sgr_state_reset(sgr_state_t *state) {
+    state->fg_mode = COLOR_MODE_DEFAULT;
+    state->fg_val = 0;
+    state->bg_mode = COLOR_MODE_DEFAULT;
+    state->bg_val = 0;
+    state->attrs = 0;
+}
+
+static uint16_t
+sgr_state_style_id(screen_t *s, const sgr_state_t *state) {
+    return style_intern(&s->pool,
+                        state->fg_mode, state->fg_val,
+                        state->bg_mode, state->bg_val,
+                        state->attrs);
+}
+
+static void
+sgr_state_apply_params(lua_State *L, sgr_state_t *state, const int *params, int count) {
+    if (count == 0) {
+        sgr_state_reset(state);
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        int p = params[i];
+        if (p == 0) {
+            sgr_state_reset(state);
+        } else if (p == 1) {
+            state->attrs |= ATTR_BOLD;
+        } else if (p == 2) {
+            state->attrs |= ATTR_DIM;
+        } else if (p == 3) {
+            state->attrs |= ATTR_ITALIC;
+        } else if (p == 4) {
+            state->attrs |= ATTR_UNDERLINE;
+        } else if (p == 7) {
+            state->attrs |= ATTR_INVERSE;
+        } else if (p == 9) {
+            state->attrs |= ATTR_STRIKETHROUGH;
+        } else if (p == 22) {
+            state->attrs &= (uint8_t)~(ATTR_BOLD | ATTR_DIM);
+        } else if (p == 23) {
+            state->attrs &= (uint8_t)~ATTR_ITALIC;
+        } else if (p == 24) {
+            state->attrs &= (uint8_t)~ATTR_UNDERLINE;
+        } else if (p == 27) {
+            state->attrs &= (uint8_t)~ATTR_INVERSE;
+        } else if (p == 29) {
+            state->attrs &= (uint8_t)~ATTR_STRIKETHROUGH;
+        } else if (p == 39) {
+            state->fg_mode = COLOR_MODE_DEFAULT;
+            state->fg_val = 0;
+        } else if (p == 49) {
+            state->bg_mode = COLOR_MODE_DEFAULT;
+            state->bg_val = 0;
+        } else if (p >= 30 && p <= 37) {
+            state->fg_mode = COLOR_MODE_16;
+            state->fg_val = (uint32_t)(p - 30);
+        } else if (p >= 90 && p <= 97) {
+            state->fg_mode = COLOR_MODE_16;
+            state->fg_val = (uint32_t)(p - 90 + 8);
+        } else if (p >= 40 && p <= 47) {
+            state->bg_mode = COLOR_MODE_16;
+            state->bg_val = (uint32_t)(p - 40);
+        } else if (p >= 100 && p <= 107) {
+            state->bg_mode = COLOR_MODE_16;
+            state->bg_val = (uint32_t)(p - 100 + 8);
+        } else if (p == 38 || p == 48) {
+            int is_fg = (p == 38);
+            if (i + 1 >= count) {
+                luaL_error(L, "screen.draw_ansi_line: truncated extended SGR sequence");
+            }
+            int mode = params[++i];
+            if (mode == 5) {
+                if (i + 1 >= count) {
+                    luaL_error(L, "screen.draw_ansi_line: missing xterm color index in SGR sequence");
+                }
+                int idx = params[++i];
+                if (idx < 0 || idx > 255) {
+                    luaL_error(L, "screen.draw_ansi_line: xterm color index out of range: %d", idx);
+                }
+                if (is_fg) {
+                    state->fg_mode = COLOR_MODE_256;
+                    state->fg_val = (uint32_t)idx;
+                } else {
+                    state->bg_mode = COLOR_MODE_256;
+                    state->bg_val = (uint32_t)idx;
+                }
+            } else if (mode == 2) {
+                if (i + 3 >= count) {
+                    luaL_error(L, "screen.draw_ansi_line: truncated truecolor SGR sequence");
+                }
+                int r = params[++i];
+                int g = params[++i];
+                int b = params[++i];
+                if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
+                    luaL_error(L, "screen.draw_ansi_line: truecolor channel out of range");
+                }
+                uint32_t rgb = ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
+                if (is_fg) {
+                    state->fg_mode = COLOR_MODE_24BIT;
+                    state->fg_val = rgb;
+                } else {
+                    state->bg_mode = COLOR_MODE_24BIT;
+                    state->bg_val = rgb;
+                }
+            } else {
+                luaL_error(L, "screen.draw_ansi_line: unsupported extended SGR mode: %d", mode);
+            }
+        } else {
+            luaL_error(L, "screen.draw_ansi_line: unsupported SGR parameter: %d", p);
+        }
+    }
+}
+
+static size_t
+parse_sgr_escape(lua_State *L, const char *text, size_t tlen, size_t i, sgr_state_t *state) {
+    if (i + 1 >= tlen || text[i + 1] != '[') {
+        luaL_error(L, "screen.draw_ansi_line: only CSI SGR escape sequences are supported");
+    }
+
+    int params[32];
+    int count = 0;
+    int current = 0;
+    int have_digits = 0;
+    size_t j = i + 2;
+
+    if (j < tlen && text[j] == 'm') {
+        sgr_state_apply_params(L, state, NULL, 0);
+        return j + 1;
+    }
+
+    while (j < tlen) {
+        unsigned char ch = (unsigned char)text[j];
+        if (ch >= '0' && ch <= '9') {
+            have_digits = 1;
+            current = current * 10 + (int)(ch - '0');
+            j++;
+            continue;
+        }
+        if (ch == ';') {
+            if (count >= 32) {
+                luaL_error(L, "screen.draw_ansi_line: too many SGR parameters");
+            }
+            params[count++] = have_digits ? current : 0;
+            current = 0;
+            have_digits = 0;
+            j++;
+            continue;
+        }
+        if (ch == 'm') {
+            if (count >= 32) {
+                luaL_error(L, "screen.draw_ansi_line: too many SGR parameters");
+            }
+            params[count++] = have_digits ? current : 0;
+            sgr_state_apply_params(L, state, params, count);
+            return j + 1;
+        }
+        luaL_error(L, "screen.draw_ansi_line: unsupported ANSI control sequence");
+    }
+
+    luaL_error(L, "screen.draw_ansi_line: unterminated ANSI escape sequence");
+    return tlen;
+}
+
+static int
+l_draw_ansi_line(lua_State *L) {
+    screen_t *s = check_screen(L, 1);
+    int x = (int)luaL_checkinteger(L, 2);
+    int y = (int)luaL_checkinteger(L, 3);
+    size_t tlen;
+    const char *text = luaL_checklstring(L, 4, &tlen);
+    int max_w = (int)luaL_optinteger(L, 5, s->w);
+
+    sgr_state_t state;
+    sgr_state_reset(&state);
+    uint16_t style_id = 0;
+
+    int cx = x;
+    int stop = x + max_w;
+    size_t i = 0;
+    while (i < tlen) {
+        if ((unsigned char)text[i] == 0x1B) {
+            i = parse_sgr_escape(L, text, tlen, i, &state);
+            style_id = sgr_state_style_id(s, &state);
+            continue;
+        }
+
+        size_t i0 = i, clen;
+        int cw;
+        grapheme_next((const unsigned char *)text, tlen, &i, &clen, &cw);
+        if (cw <= 0) continue;
+        if (cx + cw > stop) break;
+        put_cell(s, cx, y, text + i0, clen, cw, style_id);
+        cx += cw;
+    }
+    return 0;
+}
+
 /* ── Lua API: diff (Stage 9 skeleton: full redraw + naive per-cell) ── */
 
 /* growable byte buffer for ANSI output */
@@ -1457,6 +1665,7 @@ static const luaL_Reg screen_lib[] = {
     {"put",        l_put},
     {"put_border", l_put_border},
     {"draw_line",  l_draw_line},
+    {"draw_ansi_line", l_draw_ansi_line},
     {"diff",       l_diff},
     {"rows",       l_rows},
     {"cells",      l_cells},

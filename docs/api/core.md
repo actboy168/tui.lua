@@ -130,6 +130,32 @@ tui.Text {
 }
 ```
 
+### RawAnsi
+
+预渲染 ANSI 行片段。对齐 Ink 风格，只接收 `lines` 和 `width`。内容仍进入 screen backend，因此可以参与布局、裁剪、diff 和测试，而不是直接把原始字节写到 stdout。
+
+```lua
+tui.RawAnsi {
+    lines = {
+        "\27[31m- old\27[0m",
+        "\27[32m+ new\27[0m",
+    },
+    width = 5,
+}
+```
+
+```lua
+tui.RawAnsi {
+    lines = { string, ... }, -- 已按行拆分的 ANSI 字符串
+    width = number,          -- 固定布局宽度，非负整数
+}
+```
+
+- 只支持 SGR 样式序列（颜色、bold、underline、inverse、256 色、RGB 等）
+- 不支持光标移动、擦除、清屏等控制序列，遇到会直接报错
+- `RawAnsi` 不接收 children；换行和按宽度切分由调用方负责
+- `lines = {}` 时不渲染任何节点
+
 ### ErrorBoundary
 
 错误边界，捕获子树渲染错误。
@@ -402,7 +428,7 @@ type Color = string | number
 
 ```lua
 type Element = {
-    kind = "box" | "text" | "component" | ...,
+    kind = "box" | "text" | "raw_ansi" | "component" | ...,
     props = table,
     key = any?,  -- 用于 reconciler
 }
