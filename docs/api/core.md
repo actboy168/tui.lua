@@ -10,7 +10,7 @@ local tui = require "tui"
 
 ## 全局 API
 
-### tui.render(root)
+### tui.render(root, opts?)
 
 启动应用主循环，阻塞直到调用 `useApp():exit()` 或收到 Ctrl+C/Ctrl+D。
 
@@ -18,6 +18,10 @@ local tui = require "tui"
 tui.render(App)               -- 传入函数组件
 tui.render(tui.Box { ... })   -- 传入宿主元素
 ```
+
+opts:
+- `colorLevel` — `"16"` | `"256"` | `"truecolor"`，覆盖自动检测的颜色级别
+- `kitty_keyboard` — `boolean`，强制启用/禁用 Kitty Keyboard Protocol（修饰键报告）
 
 ### tui.component(fn, props?)
 

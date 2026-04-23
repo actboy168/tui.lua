@@ -157,3 +157,29 @@ end
 function suite:test_supports_kitty_keyboard_is_boolean()
     lt.assertEquals(type(terminal.detect_capabilities().kitty_keyboard), "boolean")
 end
+
+function suite:test_vscode_kitty_keyboard()
+    lt.assertEquals(terminal.detect_capabilities("vscode").kitty_keyboard, true)
+end
+
+function suite:test_zed_kitty_keyboard()
+    lt.assertEquals(terminal.detect_capabilities("zed").kitty_keyboard, true)
+end
+
+function suite:test_hyper_kitty_keyboard()
+    lt.assertEquals(terminal.detect_capabilities("hyper").kitty_keyboard, true)
+end
+
+function suite:test_vte_old_no_kitty_keyboard()
+    -- temporarily override environment variable
+    local old = os.getenv("VTE_VERSION")
+    if old then
+        -- VTE 0.60 (version=6000) is too old for KKP
+        local caps = terminal.detect_capabilities("unknown")
+        if old and tonumber(old) < 6800 then
+            lt.assertEquals(caps.kitty_keyboard, false)
+        end
+    else
+        lt.assertEquals(terminal.detect_capabilities("unknown").kitty_keyboard, false)
+    end
+end

@@ -113,6 +113,9 @@ local KITTY_KBD_TERMS = {
     alacritty        = true,
     iterm2           = true,
     windows_terminal = true,
+    vscode           = true,
+    zed              = true,
+    hyper            = true,
 }
 
 local function check_sync_output(term_type)
@@ -176,6 +179,29 @@ end
 -- ---------------------------------------------------------------------------
 -- Capability detection entry point
 
+local function check_kitty_keyboard(term_type)
+    if KITTY_KBD_TERMS[term_type] then return true end
+    local vte = os.getenv("VTE_VERSION")
+    if vte then
+        local version = tonumber(vte)
+        if version and version >= 6800 then return true end
+    end
+    local konsole = os.getenv("KONSOLE_VERSION")
+    if konsole then
+        local version = tonumber(konsole)
+        if version and version >= 220400 then return true end
+    end
+    local xterm = os.getenv("XTERM_VERSION")
+    if xterm then
+        local ver = xterm:match("%((%d+)%)")
+        if ver then
+            local version = tonumber(ver)
+            if version and version >= 369 then return true end
+        end
+    end
+    return false
+end
+
 function M.detect_capabilities(forced_term_type)
     local term_type = forced_term_type or detect_term_type()
     local base = CAPABILITIES[term_type] or {}
@@ -185,7 +211,7 @@ function M.detect_capabilities(forced_term_type)
         sync_output     = check_sync_output(term_type),
         cursor_shape    = check_cursor_shape(term_type),
         alt_screen      = check_alt_screen(term_type),
-        kitty_keyboard  = KITTY_KBD_TERMS[term_type] or false,
+        kitty_keyboard  = check_kitty_keyboard(term_type),
         osc_st          = base.osc_st      and true or false,
         ime_osc1337     = base.ime_osc1337 and true or false,
         legacy_windows  = term_type == "windows_legacy",

@@ -148,7 +148,8 @@ M.truncateMiddle = text_mod.truncate_middle
 -- (Ctrl+C / Ctrl+D — always honored by the framework).
 --
 -- opts (optional):
---   colorLevel      "16" | "256" | "truecolor"  — override auto-detected color level
+--   colorLevel       "16" | "256" | "truecolor"  — override auto-detected color level
+--   kitty_keyboard   boolean — force enable/disable Kitty Keyboard Protocol
 function M.render(root, opts)
     local app = require("tui.internal.app").render(root, opts)
     app:run()
