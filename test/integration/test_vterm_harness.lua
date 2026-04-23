@@ -311,6 +311,74 @@ function suite:test_teardown_cursor_restore()
     lt.assertEquals(found_cursor_show, true, "cursor should be shown on teardown")
 end
 
+function suite:test_teardown_moves_cursor_below_content()
+    -- Regression: teardown must move the cursor below the rendered content
+    -- so the shell prompt doesn't overlap with the TUI output.
+    -- A multi-line app with a declared cursor (TextInput) should emit
+    -- cursorDown(N) where N = (content_h + 1) - last_display_y > 0.
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            width = 10,
+            height = 5,
+            tui.Text { key = "a", "line1" },
+            tui.Text { key = "b", "line2" },
+            tui.Text { key = "c", "line3" },
+            tui.TextInput { key = "d", value = "ab" },
+        }
+    end
+    local h = testing.render(App, { cols = 10, rows = 5, interactive = true })
+    local vt = h:vterm()
+    local log_before = #vterm.write_log(vt)
+    h:unmount()
+    local log = vterm.write_log(vt)
+    -- Collect teardown output
+    local teardown_out = {}
+    for i = log_before + 1, #log do
+        teardown_out[#teardown_out + 1] = log[i]
+    end
+    local combined = table.concat(teardown_out)
+    -- Teardown must move cursor below content:
+    --   - With declared cursor: cursorDown(dy) where dy > 0
+    --   - Without declared cursor: \n to move one line down
+    -- If neither happens, the shell prompt overlaps the TUI output.
+    local found_cursor_down = combined:find("\x1b[", 1, true) ~= nil
+        and combined:find("B", 1, true) ~= nil
+    local found_newline_move = combined:find("\n", 1, true) ~= nil
+    lt.assertEquals(found_cursor_down or found_newline_move, true,
+        "teardown should move cursor down past content")
+end
+
+function suite:test_teardown_moves_cursor_no_declared_cursor()
+    -- Regression: when no declared cursor exists (no TextInput),
+    -- teardown should still emit a newline to move below content.
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            width = 10,
+            height = 3,
+            tui.Text { key = "a", "row1" },
+            tui.Text { key = "b", "row2" },
+            tui.Text { key = "c", "row3" },
+        }
+    end
+    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local vt = h:vterm()
+    local log_before = #vterm.write_log(vt)
+    h:unmount()
+    local log = vterm.write_log(vt)
+    local teardown_out = {}
+    for i = log_before + 1, #log do
+        teardown_out[#teardown_out + 1] = log[i]
+    end
+    local combined = table.concat(teardown_out)
+    -- No declared cursor → move_seq = "\n\r" → combined has a \n before cursor show
+    lt.assertNotEquals(combined:find("\n", 1, true), nil,
+        "teardown should emit newline to move past content when no cursor")
+    lt.assertNotEquals(combined:find("\x1b[?25h", 1, true), nil,
+        "cursor should be shown on teardown")
+end
+
 -- ---------------------------------------------------------------------------
 -- Mouse mode lifecycle
 

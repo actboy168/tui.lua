@@ -40,11 +40,15 @@ end
 function teardown_interactive(inst)
     if inst._interactive then
         local move_seq = "\r"
-        if inst._last_display_y then
-            local _, vy = screen_mod.cursor_pos(inst._screen)
-            local dy = vy - inst._last_display_y
-            if dy > 0 then
-                move_seq = ansi.cursorDown(dy) .. "\r"
+        if inst._last_content_h and inst._last_content_h > 0 then
+            local target_row = inst._last_content_h + 1
+            if inst._last_display_y then
+                local dy = target_row - inst._last_display_y
+                if dy > 0 then
+                    move_seq = ansi.cursorDown(dy) .. "\r"
+                end
+            else
+                move_seq = "\n\r"
             end
         end
         local write = inst._terminal.write
@@ -238,6 +242,7 @@ function M.mount(terminal, screen_state, opts)
         _tree              = nil,
         _render_count      = 0,
         _capabilities      = opts.capabilities,
+        _last_content_h    = 0,
     }
 
     local function check_resize()
@@ -328,8 +333,9 @@ function M.mount(terminal, screen_state, opts)
         local cursor_seq, ccol, crow = build_cursor(tree, content_h)
         write_output(diff, cursor_seq)
 
-        if interactive and ccol and crow then
+        if interactive then
             inst._last_display_y = crow
+            inst._last_content_h = content_h
         end
         inst._render_count = inst._render_count + passes
         inst._mouse_auto_release = new_mouse
