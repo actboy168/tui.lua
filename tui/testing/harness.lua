@@ -186,6 +186,11 @@ function M.render(App, opts)
     local ansi_restore = nil
     if opts.term_type ~= nil then
         ansi_restore = ansi_mod.override(opts.term_type)
+    elseif use_interactive then
+        -- interactive mode without explicit term_type: override with a
+        -- terminal that supports sync_output so interactive tests are
+        -- deterministic regardless of the real terminal environment.
+        ansi_restore = ansi_mod.override("kitty")
     end
     if use_interactive then
         ansi_mod.set_interactive_fn(function() return true end)
