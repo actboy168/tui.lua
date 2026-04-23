@@ -39,16 +39,17 @@ end
 --- Write interactive-mode teardown sequences and detach writers.
 function teardown_interactive(inst)
     if inst._interactive then
+        -- _last_buf_row: 0-based buffer row where the physical cursor sits after
+        -- the last frame (C park position or TextInput position).
+        -- We need to move to one row below the last content row so the shell
+        -- prompt appears on a fresh line.
+        -- dy = content_h - last_buf_row  (always >= 0 because buf_row < content_h)
         local move_seq = "\r"
         if inst._last_content_h and inst._last_content_h > 0 then
-            local target_row = inst._last_content_h + 1
-            if inst._last_display_y then
-                local dy = target_row - inst._last_display_y
-                if dy > 0 then
-                    move_seq = ansi.cursorDown(dy) .. "\r"
-                end
-            else
-                move_seq = "\n\r"
+            local last_row = inst._last_buf_row or (inst._last_content_h - 1)
+            local dy = inst._last_content_h - last_row
+            if dy > 0 then
+                move_seq = ansi.cursorDown(dy) .. "\r"
             end
         end
         local write = inst._terminal.write
@@ -263,6 +264,7 @@ function M.mount(terminal, screen_state, opts)
         _render_count      = 0,
         _capabilities        = opts.capabilities,
         _last_content_h       = 0,
+        _last_buf_row         = nil,
         _extension_unsubscribe = nil,
         _extension            = opts.extension,
     }
@@ -300,16 +302,22 @@ function M.mount(terminal, screen_state, opts)
         return new_mouse
     end
 
-    local function build_cursor(tree, content_h)
+    local function build_cursor(tree, content_h, y_off)
         local cursor_seq = ""
         local ccol, crow = find_cursor(tree)
+        -- buf_row: 0-based buffer row where the physical cursor will be after
+        -- cursor_seq is emitted.  Defaults to the C park position (last row).
+        local buf_row = content_h - 1
         if ccol and crow then
-            if interactive and (crow - 1) < content_h then
+            -- crow-1 is absolute content row; visible range is [y_off, y_off+content_h-1].
+            local br = (crow - 1) - y_off
+            if interactive and br >= 0 and br < content_h then
                 local cx, cy = screen_mod.cursor_pos(screen_state)
                 local dx = (ccol - 1) - cx
-                local dy = (crow - 1) - cy
+                local dy = br - cy
                 cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
-                screen_mod.set_display_cursor(screen_state, ccol - 1, crow - 1)
+                screen_mod.set_display_cursor(screen_state, ccol - 1, br)
+                buf_row = br
             elseif not interactive then
                 cursor_seq = ansi.cursorShow() .. ansi.cursorPosition(ccol, crow, inst._capabilities)
             end
@@ -317,7 +325,7 @@ function M.mount(terminal, screen_state, opts)
             cursor_seq = ansi.cursorHide()
             screen_mod.set_display_cursor(screen_state, -1, -1)
         end
-        return cursor_seq, ccol, crow
+        return cursor_seq, ccol, crow, buf_row
     end
 
     local function write_output(diff, cursor_seq)
@@ -349,32 +357,41 @@ function M.mount(terminal, screen_state, opts)
 
         hit_test.set_tree(tree)
 
-        local content_h = tree.rect and math.min(tree.rect.h, h) or h
+        local raw_h = tree.rect and tree.rect.h or h
+        -- y_off: rows of content scrolled off the top (only in interactive mode
+        -- when content is taller than the terminal).  The bottom min(raw_h, h)
+        -- rows are painted; the top y_off rows scroll into the terminal's
+        -- scroll-back buffer on the first render via \r\n.
+        local y_off     = interactive and math.max(0, raw_h - h) or 0
+        local content_h = math.min(raw_h, h)
         local new_mouse = update_mouse(tree)
 
-        -- In interactive (main-screen) mode on a real terminal, content may
-        -- not start at the top of the terminal.  Assuming the cursor was at
-        -- the terminal bottom when the app launched, content row 0 maps to
-        -- terminal row (h - content_h).  opts.row_offset overrides this
-        -- when the caller knows the true offset.
+        -- In interactive (main-screen) mode the content may not start at the
+        -- top of the terminal.  row_offset maps SGR terminal rows to absolute
+        -- content rows:  content_row = (sgr_row - 1) - row_offset.
+        --   content_h <= h: row_offset = h - raw_h  (positive; content at bottom)
+        --   content_h >  h: row_offset = h - raw_h  (negative; content overflows)
+        -- The unified formula h - raw_h handles both cases.
         local row_offset = opts.row_offset
         if row_offset == nil then
-            row_offset = interactive and (h - content_h) or 0
+            row_offset = interactive and (h - raw_h) or 0
         end
         hit_test.set_row_offset(row_offset)
         inst._row_offset = row_offset
 
         -- clear + paint + diff
+        -- y_off shifts rendering up so the visible bottom content_h rows land
+        -- in the screen buffer (indices 0..content_h-1).
         screen_mod.clear(screen_state)
-        renderer.paint(tree, screen_state)
+        renderer.paint(tree, screen_state, y_off)
         local diff = screen_mod.diff(screen_state, interactive and resized,
                                      interactive and content_h or nil)
 
-        local cursor_seq, ccol, crow = build_cursor(tree, content_h)
+        local cursor_seq, ccol, crow, buf_row = build_cursor(tree, content_h, y_off)
         write_output(diff, cursor_seq)
 
         if interactive then
-            inst._last_display_y = crow
+            inst._last_buf_row   = buf_row
             inst._last_content_h = content_h
         end
         inst._render_count = inst._render_count + passes

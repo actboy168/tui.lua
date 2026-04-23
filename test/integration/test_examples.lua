@@ -95,8 +95,10 @@ end
 
 function suite:test_progress_demo_initial_render()
     local frame = load_frame("examples/progress_demo.lua", { cols = 60, rows = 15 })
-    lt.assertNotEquals(frame:find("进度演示", 1, true), nil)
+    -- Content is taller than terminal (padding+gap pushes height ~19);
+    -- bottom 15 rows are visible.  "0%" and "Esc 退出" are in the lower half.
     lt.assertNotEquals(frame:find("0%", 1, true), nil)
+    lt.assertNotEquals(frame:find("Esc", 1, true), nil)
 end
 
 function suite:test_progress_demo_advances_with_time()

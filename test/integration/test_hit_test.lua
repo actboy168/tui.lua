@@ -123,3 +123,70 @@ function suite:test_row_offset_shifts_hit_target()
 
     h:unmount()
 end
+
+-- ---------------------------------------------------------------------------
+-- Overflow: content taller than terminal
+-- ---------------------------------------------------------------------------
+
+function suite:test_overflow_shows_bottom_rows()
+    -- When content height > terminal height, the bottom content_h rows are
+    -- visible; the top rows scroll into the terminal's scroll-back buffer.
+    testing.capture_stderr(function()
+        local App = function()
+            return tui.Box {
+                height = 8,
+                flexDirection = "column",
+                tui.Text { key = "1", "Line 1" },
+                tui.Text { key = "2", "Line 2" },
+                tui.Text { key = "3", "Line 3" },
+                tui.Text { key = "4", "Line 4" },
+                tui.Text { key = "5", "Line 5" },
+                tui.Text { key = "6", "Line 6" },
+                tui.Text { key = "7", "Line 7" },
+                tui.Text { key = "8", "Line 8" },
+            }
+        end
+        -- 5-row terminal, 8-row content: rows 3-7 (0-based) are visible.
+        local h = testing.render(App, { cols = 20, rows = 5 })
+        local frame = h:frame()
+        -- Bottom 5 rows ("Line 4" .. "Line 8") should be visible.
+        lt.assertNotEquals(frame:find("Line 4", 1, true), nil, "Line 4 should be visible")
+        lt.assertNotEquals(frame:find("Line 8", 1, true), nil, "Line 8 should be visible")
+        -- Top rows ("Line 1" .. "Line 3") should be clipped (scrolled into buffer).
+        lt.assertEquals(frame:find("Line 1", 1, true), nil, "Line 1 should be clipped")
+        lt.assertEquals(frame:find("Line 3", 1, true), nil, "Line 3 should be clipped")
+        -- row_offset is negative when content overflows.
+        lt.assertEquals(h:row_offset(), -3)
+        h:unmount()
+    end)
+end
+
+function suite:test_overflow_hit_test_hits_bottom_element()
+    -- When content overflows, clicking SGR row 1 (terminal top) should hit
+    -- the element at content row (y_off), not content row 0.
+    testing.capture_stderr(function()
+        local clicked_line = nil
+        local App = function()
+            return tui.Box {
+                height = 8,
+                flexDirection = "column",
+                tui.Box { key = "1", height = 1, onClick = function() clicked_line = 1 end, tui.Text { "Line 1" } },
+                tui.Box { key = "2", height = 1, onClick = function() clicked_line = 2 end, tui.Text { "Line 2" } },
+                tui.Box { key = "3", height = 1, onClick = function() clicked_line = 3 end, tui.Text { "Line 3" } },
+                tui.Box { key = "4", height = 1, onClick = function() clicked_line = 4 end, tui.Text { "Line 4" } },
+                tui.Box { key = "5", height = 1, onClick = function() clicked_line = 5 end, tui.Text { "Line 5" } },
+                tui.Box { key = "6", height = 1, onClick = function() clicked_line = 6 end, tui.Text { "Line 6" } },
+                tui.Box { key = "7", height = 1, onClick = function() clicked_line = 7 end, tui.Text { "Line 7" } },
+                tui.Box { key = "8", height = 1, onClick = function() clicked_line = 8 end, tui.Text { "Line 8" } },
+            }
+        end
+        -- 5-row terminal, 8-row content: y_off = 3, visible rows are content 3-7.
+        -- SGR row 1 (terminal top) → content row 3 → "Line 4".
+        local h = testing.render(App, { cols = 20, rows = 5 })
+        local cx, cy = h:sgr(0, 3)  -- content row 3 = "Line 4"
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        lt.assertEquals(clicked_line, 4, "click at content row 3 should hit Line 4")
+        h:unmount()
+    end)
+end

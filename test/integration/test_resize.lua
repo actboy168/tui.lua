@@ -56,7 +56,6 @@ end
 function suite:test_rapid_resize_sequence()
     local function App()
         return tui.Box {
-            width = 200, height = 100,
             flexDirection = "column",
             tui.Text { "content" },
         }
