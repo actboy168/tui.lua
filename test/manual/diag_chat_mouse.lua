@@ -47,9 +47,9 @@ input_mod._debug_log = "diag_chat_mouse_input.txt"
 io.open(input_mod._debug_log, "w"):close()
 
 -- ── 1. 底层直接测试（复刻 diag_windows_mouse.lua 的核心逻辑）───────────
--- 先确认在这个进程里，terminal.read_raw 确实能拿到鼠标。
+-- 先确认在这个进程里，terminal.read 确实能拿到鼠标。
 local function test_raw_mouse()
-    dbg("\n=== Test 1: raw terminal.read_raw + keys.parse ===")
+    dbg("\n=== Test 1: raw terminal.read + keys.parse ===")
     local terminal = tui_core.terminal
     terminal.windows_vt_enable()
     terminal.set_raw(true)
@@ -62,7 +62,7 @@ local function test_raw_mouse()
     local deadline = 3000  -- 3 秒超时
     local start = tui_core.time.now()
     while not got and (tui_core.time.now() - start) < deadline do
-        local data = terminal.read_raw()
+        local data = terminal.read()
         if data and #data > 0 then
             local hex = data:gsub(".", function(c) return ("%02X "):format(c:byte()) end)
             dbg("raw bytes: " .. hex:gsub(" $", ""))
@@ -183,7 +183,7 @@ if raw_ok then
 else
     dbg("\nRaw mouse test failed — framework test skipped.")
     dbg("This means the terminal itself is not sending mouse events,")
-    dbg("or tui_core.terminal.read_raw() cannot read them.")
+    dbg("or tui_core.terminal.read() cannot read them.")
 end
 
 dbg("\n=== Done. See " .. log_path .. " and " .. input_mod._debug_log .. " for details. ===")

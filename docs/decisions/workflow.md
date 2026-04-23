@@ -12,7 +12,7 @@
 
 不要用 `"q" | luamake lua examples/foo.lua` 之类的 shell 管道驱动主循环。应使用离屏渲染 + 手动驱动定时器来验证。
 
-**Why:** tui.lua 主循环通过 `terminal.set_raw(true)` 启用 raw mode 并每帧轮询 `terminal.read_raw()`。Windows 上当 stdin 是管道（非真实 console）时，`ReadConsoleInput` 语义与 TTY 模式不同 — 'q' 字节经常无法到达 `read_raw`，导致无限循环必须 `taskkill`。
+**Why:** tui.lua 主循环通过 `terminal.set_raw(true)` 启用 raw mode 并每帧轮询 `terminal.read()`。Windows 上当 stdin 是管道（非真实 console）时，`ReadConsoleInput` 语义与 TTY 模式不同 — 'q' 字节经常无法到达 `read`，导致无限循环必须 `taskkill`。
 
 **How to apply:** 验证 demo 时，写一个临时脚本：
 1. `require` 组件（mirror examples/<demo>.lua body）

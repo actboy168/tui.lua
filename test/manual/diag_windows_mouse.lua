@@ -4,10 +4,10 @@
 -- 在真实 Windows 控制台（cmd / PowerShell / Windows Terminal）中运行：
 --   luamake lua test/manual/diag_windows_mouse.lua
 --
--- 目的：检测鼠标事件是否能被底层 terminal.read_raw() 读取到，并观察其原始字节格式。
+-- 目的：检测鼠标事件是否能被底层 terminal.read() 读取到，并观察其原始字节格式。
 --
 -- 预期问题（供参考）：
---   当前 Windows 下的 l_read_raw() 只处理 KEY_EVENT，未处理 MOUSE_EVENT；
+--   当前 Windows 下的 l_read() 只处理 KEY_EVENT，未处理 MOUSE_EVENT；
 --   且 l_set_raw() 未启用 ENABLE_VIRTUAL_TERMINAL_INPUT / ENABLE_MOUSE_INPUT。
 --   因此鼠标事件可能完全无法到达应用程序。
 
@@ -54,7 +54,7 @@ local function main()
     local event_count = 0
 
     while running do
-        local data = terminal.read_raw()
+        local data = terminal.read()
         if data and #data > 0 then
             event_count = event_count + 1
             io.stdout:write(string.format("[#%d] Raw bytes (%d): %s\n",

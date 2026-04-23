@@ -368,7 +368,7 @@ append_sgr_mouse(char *buf, int *len, int max_len, int pb, int px, int py, int r
     if (n > 0) *len += n;
 }
 
-/* ── l_read_raw：非阻塞，ReadConsoleInputW + 正确 IME 过滤 ─────── */
+/* ── l_read：非阻塞，ReadConsoleInputW + 正确 IME 过滤 ─────── */
 /*
  * 规则（参考 Windows 文本控件行为）：
  *   1. 只处理 bKeyDown == TRUE 的事件，忽略 key-up。
@@ -380,7 +380,7 @@ append_sgr_mouse(char *buf, int *len, int max_len, int pb, int px, int py, int r
  *   5. MOUSE_EVENT：转换为 SGR 扩展鼠标序列，供 keys.parse 统一解析。
  */
 static int
-l_read_raw(lua_State *L) {
+l_read(lua_State *L) {
     HANDLE hin = GetStdHandle(STD_INPUT_HANDLE);
     if (hin == INVALID_HANDLE_VALUE) return 0;
 
@@ -522,7 +522,7 @@ l_get_size(lua_State *L) {
 }
 
 static int
-l_read_raw(lua_State *L) {
+l_read(lua_State *L) {
     fd_set fds; struct timeval tv = {0, 0};
     FD_ZERO(&fds); FD_SET(STDIN_FILENO, &fds);
     if (select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv) <= 0) return 0;
@@ -551,7 +551,7 @@ tui_open_terminal(lua_State *L) {
         { "set_raw",           l_set_raw           },
         { "get_size",          l_get_size          },
         { "windows_vt_enable", l_windows_vt_enable },
-        { "read_raw",          l_read_raw          },
+        { "read",              l_read              },
         { "write",             l_write             },
         { "_test_normalize_input", l_test_normalize_input },
         { NULL, NULL },

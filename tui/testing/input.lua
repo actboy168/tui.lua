@@ -53,28 +53,28 @@ local MODIFIED_KEYS = {
 --   { platform = "windows", events = { { vk, char, ctrl?, meta?, shift? }, ... } }
 -- Use this when a test needs terminal-origin bytes but should stay independent
 -- of the platform-specific production read path.
-function M.normalize(spec)
+local function normalize(spec)
     return tui_core.terminal._test_normalize_input(spec)
 end
 
 --- Pass raw bytes through the shared normalization hook unchanged.
 function M.raw(bytes)
-    return M.normalize { platform = "raw", bytes = bytes }
+    return normalize { platform = "raw", bytes = bytes }
 end
 
 --- Alias of raw() for tests that want to document a POSIX-origin sequence.
 function M.posix(bytes)
-    return M.normalize { platform = "posix", bytes = bytes }
+    return normalize { platform = "posix", bytes = bytes }
 end
 
 --- Normalize a Windows-style key-event fixture into terminal bytes.
 function M.windows(events)
-    return M.normalize { platform = "windows", events = events }
+    return normalize { platform = "windows", events = events }
 end
 
 --- Parse a normalized input spec into semantic key events.
 function M.parse(spec)
-    return tui_core.keys.parse(M.normalize(spec))
+    return tui_core.keys.parse(normalize(spec))
 end
 
 --- Wrap text with bracketed-paste markers for dispatch()/Harness:dispatch().

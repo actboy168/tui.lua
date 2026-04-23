@@ -1,7 +1,7 @@
 ﻿/*
  * keys.c — stateless ANSI/UTF-8 key parser for tui.lua
  *
- * Input:  a byte string (from terminal.read_raw)
+ * Input:  a byte string (from terminal.read)
  * Output: Lua array of event tables:
  *
  *   {

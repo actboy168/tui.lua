@@ -121,7 +121,7 @@ local _paste_buf  = {}
 -- Partial escape-sequence buffer.
 --
 -- On Windows, ReadConsoleInputW sometimes delivers the bytes of an ANSI escape
--- sequence across separate read_raw calls: ESC arrives alone in one call and
+-- sequence across separate read calls: ESC arrives alone in one call and
 -- "[A" arrives in the next.  Without buffering, keys.parse treats the lone ESC
 -- as {name="escape"} and the "[A" as two char insertions — corrupting the
 -- focused component's text.

@@ -196,7 +196,7 @@ end
 
 function suite:test_focus_in_dispatched_to_component()
     -- Focus events are dispatched through input_mod.dispatch,
-    -- which is how they flow in production (terminal.read_raw -> dispatch).
+    -- which is how they flow in production (terminal.read -> dispatch).
     local focus_states = {}
     local function App()
         local state = tui.useTerminalFocus()

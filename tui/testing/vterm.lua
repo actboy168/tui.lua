@@ -125,7 +125,7 @@ end
 -- Input simulation (enqueue bytes into the vterm input queue)
 --
 -- These methods encode high-level input actions as terminal bytes and
--- push them into the vterm input queue.  The next read_raw() / loop_once()
+-- push them into the vterm input queue.  The next read() / loop_once()
 -- will pick them up and feed them through the production input pipeline
 -- (on_input → input_mod.dispatch), matching the real terminal path.
 
@@ -190,7 +190,7 @@ function M.as_terminal(vt, opts)
         get_size = function()
             return vt.cols, vt.rows
         end,
-        read_raw = function()
+        read = function()
             if #vt.input_queue > 0 then
                 local all = table.concat(vt.input_queue)
                 vt.input_queue = {}

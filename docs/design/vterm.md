@@ -106,7 +106,7 @@ write = function(s) h._ansi_buf[#h._ansi_buf+1] = s end
         synchronized_output = 0, -- BSU/ESU 嵌套计数
     },
 
-    -- 输入队列（供 read_raw 消费）
+    -- 输入队列（供 read 消费）
     input_queue = {},
 
     -- 原始写入记录（供 has_sequence 断言）
@@ -305,7 +305,7 @@ vterm.sync_depth(vt)                      -- BSU/ESU 嵌套计数
 ### 6.3 输入注入
 
 ```lua
--- 向输入队列追加字节（供 read_raw 消费）
+-- 向输入队列追加字节（供 read 消费）
 vterm.enqueue_input(vt, bytes)
 
 -- 便捷方法

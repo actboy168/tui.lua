@@ -405,7 +405,7 @@ function M.mount(terminal, screen_state, opts)
 
     -- Scheduler opts shared by rerender/dispatch/run.
     inst._scheduler_opts = {
-        read     = terminal.read_raw,
+        read     = terminal.read,
         on_input = function(bytes) return input_mod.dispatch(bytes) end,
         paint    = paint_fn,
         terminal = terminal,

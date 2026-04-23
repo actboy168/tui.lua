@@ -9,7 +9,7 @@
  *
  * Layout after `require "tui.core"`:
  *   tui_core = {
- *       terminal = { set_raw, get_size, windows_vt_enable, read_raw,
+ *       terminal = { set_raw, get_size, windows_vt_enable, read,
  *                    write },
  *       keys     = { parse },
  *       wcwidth  = { wcwidth, string_width, char_width },

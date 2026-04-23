@@ -309,22 +309,22 @@ function suite:test_has_sequence_finds_substring()
 end
 
 -- ---------------------------------------------------------------------------
--- Input queue / read_raw
+-- Input queue / read
 
-function suite:test_enqueue_input_and_read_raw()
+function suite:test_enqueue_input_and_read()
     local vt, term = make_term(10, 3)
     vterm.enqueue_input(vt, "abc")
     vterm.enqueue_input(vt, "def")
-    -- read_raw drains the entire queue at once
-    lt.assertEquals(term.read_raw(), "abcdef")
-    lt.assertEquals(term.read_raw(), nil)
+    -- read drains the entire queue at once
+    lt.assertEquals(term.read(), "abcdef")
+    lt.assertEquals(term.read(), nil)
 end
 
 function suite:test_clear_input()
     local vt, term = make_term(10, 3)
     vterm.enqueue_input(vt, "abc")
     vterm.clear_input(vt)
-    lt.assertEquals(term.read_raw(), nil)
+    lt.assertEquals(term.read(), nil)
 end
 
 -- ---------------------------------------------------------------------------

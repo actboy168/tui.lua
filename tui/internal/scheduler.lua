@@ -161,7 +161,7 @@ end
 -- Run loop
 --
 -- opts = {
---   on_input = function(str)  -- called with each non-empty read_raw batch
+--   on_input = function(str)  -- called with each non-empty read batch
 --                             -- return true to stop the loop
 --   read     = function() -> string|nil   -- non-blocking stdin read
 --   paint    = function(terminal)  -- called whenever a repaint should happen;

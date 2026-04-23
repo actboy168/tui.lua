@@ -105,7 +105,7 @@ function Harness:vterm()
 end
 
 -- ---------------------------------------------------------------------------
--- Input simulation — byte-level (via vterm queue → read_raw → on_input)
+-- Input simulation — byte-level (via vterm queue → read → on_input)
 
 --- Simulate a key press (e.g. "enter", "left", "ctrl+c").
 function Harness:press(name)

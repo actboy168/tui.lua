@@ -977,7 +977,7 @@ function suite:test_up_snaps_to_display_column()
 end
 
 -- ---------------------------------------------------------------------------
--- Split escape-sequence robustness (Windows read_raw may deliver ESC alone
+-- Split escape-sequence robustness (Windows read may deliver ESC alone
 -- in one call and the rest of the CSI sequence in the next).
 -- ---------------------------------------------------------------------------
 
