@@ -207,11 +207,11 @@ function suite:test_focus_in_dispatched_to_component()
     -- Initial state: focused
     lt.assertEquals(focus_states[#focus_states], true)
     -- Dispatch focus_out as raw bytes through input_mod
-    h:dispatch(input_helpers.posix("\x1b[O"))
+    h:dispatch("\x1b[O")
     h:rerender()
     lt.assertEquals(focus_states[#focus_states], false)
     -- Dispatch focus_in
-    h:dispatch(input_helpers.posix("\x1b[I"))
+    h:dispatch("\x1b[I")
     h:rerender()
     lt.assertEquals(focus_states[#focus_states], true)
     h:unmount()
@@ -230,9 +230,9 @@ function suite:test_focus_event_sequences_via_dispatch()
     end
     local h = testing.render(App, { cols = 5, rows = 1 })
     -- Dispatch focus events as raw bytes
-    h:dispatch(input_helpers.posix("\x1b[I"))
+    h:dispatch("\x1b[I")
     h:rerender()
-    h:dispatch(input_helpers.posix("\x1b[O"))
+    h:dispatch("\x1b[O")
     lt.assertEquals(focus_count["focus_in"], 0, "focus events should not reach useInput")
     lt.assertEquals(focus_count["focus_out"], 0, "focus events should not reach useInput")
     h:unmount()

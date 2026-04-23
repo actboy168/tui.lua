@@ -37,13 +37,13 @@ end
 
 function suite:test_dispatch_ctrl_c()
     -- Ctrl+C = \x03
-    local should_exit = input.dispatch(input_helpers.raw("\x03"))
+    local should_exit = input.dispatch("\x03")
     lt.assertEquals(should_exit, true)
 end
 
 function suite:test_dispatch_ctrl_d()
     -- Ctrl+D = \x04
-    local should_exit = input.dispatch(input_helpers.raw("\x04"))
+    local should_exit = input.dispatch("\x04")
     lt.assertEquals(should_exit, true)
 end
 
@@ -53,7 +53,7 @@ function suite:test_dispatch_regular_char()
         received[#received + 1] = { str = str, key = key }
     end)
 
-    local should_exit = input.dispatch(input_helpers.raw("a"))
+    local should_exit = input.dispatch("a")
 
     lt.assertEquals(should_exit, false)
     lt.assertEquals(#received, 1)
@@ -70,7 +70,7 @@ function suite:test_subscribe_and_receive()
         events[#events + 1] = { str = str, key = key }
     end)
 
-    input.dispatch(input_helpers.raw("x"))
+    input.dispatch("x")
 
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].str, "x")
@@ -84,12 +84,12 @@ function suite:test_unsubscribe()
         events[#events + 1] = str
     end)
 
-    input.dispatch(input_helpers.raw("a"))
+    input.dispatch("a")
     lt.assertEquals(#events, 1)
 
     unsubscribe()
 
-    input.dispatch(input_helpers.raw("b"))
+    input.dispatch("b")
     -- Should not receive "b" after unsubscribe
     lt.assertEquals(#events, 1)
 end
@@ -101,7 +101,7 @@ function suite:test_multiple_handlers()
     input.subscribe(function(str) events1[#events1 + 1] = str end)
     input.subscribe(function(str) events2[#events2 + 1] = str end)
 
-    input.dispatch(input_helpers.raw("x"))
+    input.dispatch("x")
 
     lt.assertEquals(#events1, 1)
     lt.assertEquals(#events2, 1)
@@ -192,7 +192,7 @@ function suite:test_focused_component_receives_input()
         end
     })
 
-    input.dispatch(input_helpers.raw("x"))
+    input.dispatch("x")
 
     -- Focused component should receive the input
     -- (along with broadcast handlers)
@@ -217,7 +217,7 @@ function suite:test_focus_and_broadcast_both_receive()
         broadcast[#broadcast + 1] = str
     end)
 
-    input.dispatch(input_helpers.raw("k"))
+    input.dispatch("k")
 
     -- Both should receive the event
     lt.assertEquals(#focused, 1)
@@ -239,7 +239,7 @@ function suite:test_escape_sequence()
     end)
 
     -- ESC sequence (e.g., arrow keys)
-    input.dispatch(input_helpers.posix("\x1b[A"))  -- Up arrow
+    input.dispatch("\x1b[A")  -- Up arrow
 
     -- Should be parsed and dispatched
     lt.assertEquals(#events >= 0, true)
@@ -252,7 +252,7 @@ function suite:test_multiple_events_in_one_dispatch()
     end)
 
     -- Multiple keys in one byte stream
-    input.dispatch(input_helpers.raw("ab"))
+    input.dispatch("ab")
 
     -- Both should be dispatched
     lt.assertEquals(#events >= 1, true)
@@ -266,12 +266,12 @@ function suite:test_reset_clears_handlers()
     local events = {}
     input.subscribe(function(str) events[#events + 1] = str end)
 
-    input.dispatch(input_helpers.raw("a"))
+    input.dispatch("a")
     lt.assertEquals(#events, 1)
 
     input._reset()
 
-    input.dispatch(input_helpers.raw("b"))
+    input.dispatch("b")
     -- After reset, handler should be gone
     lt.assertEquals(#events, 1)
 end
@@ -337,7 +337,7 @@ function suite:test_kkp_release_events_are_suppressed()
 
     -- Simulate a KKP sequence for 'a': press, repeat, release
     -- \x1b[97;1:1u = press, \x1b[97;1:2u = repeat, \x1b[97;1:3u = release
-    input.dispatch(input_helpers.raw("\x1b[97;1:1u\x1b[97;1:2u\x1b[97;1:3u"))
+    input.dispatch("\x1b[97;1:1u\x1b[97;1:2u\x1b[97;1:3u")
 
     -- Only press and repeat should arrive; release is filtered
     lt.assertEquals(#events, 2)
@@ -353,7 +353,7 @@ function suite:test_kkp_enter_release_not_dispatched()
     end)
 
     -- press + release of Enter via KKP
-    input.dispatch(input_helpers.raw("\x1b[13;1:1u\x1b[13;1:3u"))
+    input.dispatch("\x1b[13;1:1u\x1b[13;1:3u")
 
     lt.assertEquals(count, 1)  -- only one enter event (press)
 end
@@ -366,7 +366,7 @@ function suite:test_kkp_shift_enter_release_not_dispatched()
     end)
 
     -- Shift+Enter press + release  (mod=2 = shift)
-    input.dispatch(input_helpers.raw("\x1b[13;2:1u\x1b[13;2:3u"))
+    input.dispatch("\x1b[13;2:1u\x1b[13;2:3u")
 
     lt.assertEquals(count, 1)  -- only the press
 end
@@ -384,39 +384,33 @@ function suite:test_kkp_release_suppressed_after_middleware()
         if key.event_type == "release" then subscriber_saw_release = true end
     end)
 
-    input.dispatch(input_helpers.raw("\x1b[97;1:3u"))  -- release of 'a'
+    input.dispatch("\x1b[97;1:3u")  -- release of 'a'
 
     lt.assertEquals(mw_saw_release,         true)   -- middleware saw it
     lt.assertEquals(subscriber_saw_release, false)  -- subscriber did NOT
 end
 
-function suite:test_windows_fixture_dispatches_normalized_text()
+function suite:test_dispatch_cjk_chars()
     local got = {}
     input.subscribe(function(str, key)
         got[#got + 1] = { str = str, name = key.name }
     end)
 
-    input.dispatch(input_helpers.windows {
-        { vk = 0xE5, char = "" },
-        { vk = 0, char = "中" },
-        { vk = 0, char = "午" },
-        { vk = 0x20, char = " " },
-    })
+    input.dispatch("中午")
 
     lt.assertEquals(#got, 2)
     lt.assertEquals(got[1].str, "中")
     lt.assertEquals(got[2].str, "午")
 end
 
-function suite:test_windows_fixture_shift_enter_dispatches_as_enter()
+function suite:test_dispatch_shift_enter()
     local got = {}
     input.subscribe(function(str, key)
         got[#got + 1] = key
     end)
 
-    input.dispatch(input_helpers.windows {
-        { vk = 0, char = "\r", shift = true },
-    })
+    -- Shift+Enter via Kitty Keyboard Protocol CSI u sequence
+    input.dispatch("\x1b[13;2u")
 
     lt.assertEquals(#got, 1)
     lt.assertEquals(got[1].name, "enter")

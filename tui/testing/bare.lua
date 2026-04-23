@@ -6,7 +6,8 @@
 local reconciler = require "tui.internal.reconciler"
 local scheduler  = require "tui.internal.scheduler"
 local hooks      = require "tui.internal.hooks"
-local tui_input  = require "tui.input"
+local input_mod    = require "tui.internal.input"
+local testing_input = require "tui.testing.input"
 local app_base   = require "tui.internal.app_base"
 local log_bar    = require "tui.internal.log_bar"
 local capture    = require "tui.testing.capture"
@@ -34,15 +35,25 @@ function Bare:expect_renders(expected, msg)
 end
 
 function Bare:dispatch(bytes)
-    tui_input.dispatch(bytes)
+    if not bytes or #bytes == 0 then return end
+    input_mod.dispatch(bytes)
 end
 
 function Bare:type(str)
-    tui_input.type(str)
+    if type(str) ~= "string" then error("type: expected string", 2) end
+    local i = 1
+    while i <= #str do
+        local b = str:byte(i)
+        local n = b < 0x80 and 1 or b < 0xC0 and 1 or b < 0xE0 and 2 or b < 0xF0 and 3 or 4
+        self:dispatch(str:sub(i, i + n - 1))
+        i = i + n
+    end
 end
 
 function Bare:press(name)
-    tui_input.press(name)
+    local raw = testing_input.resolve_key(name)
+    if raw == nil then self:type(name); return end
+    self:dispatch(raw)
 end
 
 function Bare:advance(ms)

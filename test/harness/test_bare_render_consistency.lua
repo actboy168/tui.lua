@@ -247,13 +247,13 @@ function suite:test_dispatch_same_bytes()
 
     -- Use raw dispatch with up arrow (not intercepted by focus)
     local b = testing.mount_bare(make_app(bare_keys))
-    b:dispatch(input_helpers.posix("\x1b[A"))  -- CSI A = up arrow
+    b:dispatch("\x1b[A")  -- CSI A = up arrow
     lt.assertEquals(#bare_keys, 1, "bare: should receive 1 key")
     lt.assertEquals(bare_keys[1], "up")
     b:unmount()
 
     local h = testing.render(make_app(harness_keys))
-    h:dispatch(input_helpers.posix("\x1b[A"))
+    h:dispatch("\x1b[A")
     h:rerender()
     lt.assertEquals(#harness_keys, 1, "harness: should receive 1 key")
     lt.assertEquals(harness_keys[1], "up")

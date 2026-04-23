@@ -269,7 +269,7 @@ function suite:test_chat_scroll_in_textarea()
         for i = 1, 5 do
             h:type("L" .. i)
             h:rerender()
-            h:dispatch(input_helpers.raw("\x1b[13;2u")) -- Shift+Enter → newline
+            h:dispatch("\x1b[13;2u") -- Shift+Enter → newline
         end
         h:type("L6")
 

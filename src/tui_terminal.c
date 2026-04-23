@@ -202,125 +202,6 @@ append_key_records(const tui_keyrec_t *recs, size_t nread, char *buf, int cap) {
     return len;
 }
 
-static int
-l_test_normalize_input(lua_State *L) {
-    const char *platform;
-
-    if (lua_type(L, 1) == LUA_TSTRING) {
-        lua_settop(L, 1);
-        return 1;
-    }
-
-    luaL_checktype(L, 1, LUA_TTABLE);
-    lua_getfield(L, 1, "platform");
-    platform = luaL_optstring(L, -1, "raw");
-    lua_pop(L, 1);
-
-    if (strcmp(platform, "raw") == 0 || strcmp(platform, "posix") == 0) {
-        lua_getfield(L, 1, "bytes");
-        if (lua_isnil(L, -1))
-            lua_pushliteral(L, "");
-        return 1;
-    }
-
-    if (strcmp(platform, "windows") == 0) {
-        char buf[512];
-        int len;
-        tui_keyrec_t *recs = NULL;
-
-        lua_getfield(L, 1, "events");
-        int n = (int)luaL_len(L, -1);
-        if (n < 0) n = 0;
-        if (n > 0) {
-            recs = (tui_keyrec_t *)calloc((size_t)n, sizeof(tui_keyrec_t));
-            if (!recs) return luaL_error(L, "terminal._test_normalize_input: out of memory");
-        }
-
-        for (int i = 0; i < n; i++) {
-            tui_keyrec_t *r = &recs[i];
-            r->down = 1;
-
-            lua_rawgeti(L, -1, i + 1);
-            luaL_checktype(L, -1, LUA_TTABLE);
-
-            lua_getfield(L, -1, "down");
-            if (!lua_isnil(L, -1))
-                r->down = (uint8_t)(lua_toboolean(L, -1) ? 1 : 0);
-            lua_pop(L, 1);
-
-            lua_getfield(L, -1, "vk");
-            if (!lua_isnil(L, -1))
-                r->vk = (uint16_t)luaL_checkinteger(L, -1);
-            lua_pop(L, 1);
-
-            lua_getfield(L, -1, "control");
-            if (!lua_isnil(L, -1))
-                r->control = (uint32_t)luaL_checkinteger(L, -1);
-            lua_pop(L, 1);
-
-            lua_getfield(L, -1, "shift");
-            if (lua_toboolean(L, -1))
-                r->control |= TUI_CTRL_SHIFT;
-            lua_pop(L, 1);
-
-            lua_getfield(L, -1, "ctrl");
-            if (lua_toboolean(L, -1))
-                r->control |= TUI_CTRL_CTRL_LEFT;
-            lua_pop(L, 1);
-
-            lua_getfield(L, -1, "alt");
-            if (lua_toboolean(L, -1))
-                r->control |= TUI_CTRL_ALT_LEFT;
-            lua_pop(L, 1);
-
-            lua_getfield(L, -1, "char");
-            if (!lua_isnil(L, -1)) {
-                size_t slen;
-                const char *s = luaL_checklstring(L, -1, &slen);
-                if (slen > 0) {
-#if defined(_WIN32)
-                    WCHAR wbuf[2];
-                    int wn = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
-                                                 s, (int)slen, wbuf, 2);
-                    if (wn != 1) {
-                        free(recs);
-                        return luaL_error(L,
-                            "terminal._test_normalize_input: char must be exactly one UTF-16 code unit");
-                    }
-                    r->wch = (uint16_t)wbuf[0];
-#else
-                    unsigned char b0 = (unsigned char)s[0];
-                    if (slen == 1) {
-                        r->wch = b0;
-                    } else if (slen == 2 && (b0 & 0xE0) == 0xC0) {
-                        r->wch = (uint16_t)(((b0 & 0x1F) << 6)
-                                 | ((unsigned char)s[1] & 0x3F));
-                    } else if (slen == 3 && (b0 & 0xF0) == 0xE0) {
-                        r->wch = (uint16_t)(((b0 & 0x0F) << 12)
-                                 | (((unsigned char)s[1] & 0x3F) << 6)
-                                 | ((unsigned char)s[2] & 0x3F));
-                    } else {
-                        free(recs);
-                        return luaL_error(L,
-                            "terminal._test_normalize_input: char must fit in one UTF-16 code unit");
-                    }
-#endif
-                }
-            }
-            lua_pop(L, 1);
-            lua_pop(L, 1);
-        }
-
-        len = append_key_records(recs, (size_t)n, buf, (int)sizeof(buf));
-        free(recs);
-        lua_pop(L, 1);
-        lua_pushlstring(L, buf, (size_t)len);
-        return 1;
-    }
-
-    return luaL_error(L, "terminal._test_normalize_input: unknown platform '%s'", platform);
-}
-
 /* ── raw mode ─────────────────────────────────────────────────── */
 
 #if defined(_WIN32)
@@ -553,7 +434,6 @@ tui_open_terminal(lua_State *L) {
         { "windows_vt_enable", l_windows_vt_enable },
         { "read",              l_read              },
         { "write",             l_write             },
-        { "_test_normalize_input", l_test_normalize_input },
         { NULL, NULL },
     };
     luaL_newlib(L, l);

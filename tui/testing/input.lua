@@ -1,5 +1,3 @@
-local tui_core = require "tui.core"
-
 local M = {}
 
 -- Raw terminal bytes for named keys accepted by Harness:press()/Bare:press().
@@ -45,37 +43,6 @@ local MODIFIED_KEYS = {
         enter = "\27[13;2u",
     },
 }
-
---- Normalize a test input spec through tui_core.terminal's test hook.
--- Supported specs:
---   { platform = "raw",    bytes = <string> }
---   { platform = "posix",  bytes = <string> }
---   { platform = "windows", events = { { vk, char, ctrl?, meta?, shift? }, ... } }
--- Use this when a test needs terminal-origin bytes but should stay independent
--- of the platform-specific production read path.
-local function normalize(spec)
-    return tui_core.terminal._test_normalize_input(spec)
-end
-
---- Pass raw bytes through the shared normalization hook unchanged.
-function M.raw(bytes)
-    return normalize { platform = "raw", bytes = bytes }
-end
-
---- Alias of raw() for tests that want to document a POSIX-origin sequence.
-function M.posix(bytes)
-    return normalize { platform = "posix", bytes = bytes }
-end
-
---- Normalize a Windows-style key-event fixture into terminal bytes.
-function M.windows(events)
-    return normalize { platform = "windows", events = events }
-end
-
---- Parse a normalized input spec into semantic key events.
-function M.parse(spec)
-    return tui_core.keys.parse(normalize(spec))
-end
 
 --- Wrap text with bracketed-paste markers for dispatch()/Harness:dispatch().
 function M.paste(text)

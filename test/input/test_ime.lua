@@ -78,7 +78,7 @@ function test_ime:test_composing_then_confirm()
     h:unmount()
 end
 
-function test_ime:test_windows_fixture_commit_without_confirm_space()
+function test_ime:test_ime_commit_bytes_direct()
     local lastValue = ""
     local function App()
         local v, setV = tui.useState("")
@@ -87,12 +87,9 @@ function test_ime:test_windows_fixture_commit_without_confirm_space()
     end
     local h = testing.render(App)
 
-    h:dispatch(input_helpers.windows {
-        { vk = 0xE5, char = "" },  -- VK_PROCESSKEY
-        { vk = 0,    char = "中" },
-        { vk = 0,    char = "午" },
-        { vk = 0x20, char = " " }, -- swallowed confirmation space
-    })
+    -- Dispatch normalized bytes directly (cross-platform; Windows normalization
+    -- is covered in test_terminal_normalize.lua).
+    h:dispatch("中午")
     h:rerender()
 
     lt.assertEquals(lastValue, "中午")
