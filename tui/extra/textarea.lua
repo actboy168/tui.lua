@@ -15,7 +15,7 @@
 --   keymap      : optional shortcut overrides, e.g. { ["ctrl+s"] = "submit" }.
 --
 -- Cursor:
---   Uses useDeclaredCursor() — the framework places the real terminal cursor
+--   Uses useCursor() — the framework places the real terminal cursor
 --   at the computed position inside the visible viewport.
 --
 -- Key bindings:
@@ -675,12 +675,12 @@ local function textarea_impl(props)
         end
         local row_el = tui.Text { key = tostring(r + 1), width = width, wrap = "nowrap", table.unpack(row_children) }
         if r == cursor_row then
-            local declareCursor = tui.useDeclaredCursor {
+            local cursor = tui.useCursor {
                 x      = cursor_col,
                 y      = 0,
                 active = focus_flag and not disabled,
             }
-            declareCursor(row_el)
+            cursor(row_el)
         end
         row_elements[r + 1] = row_el
     end

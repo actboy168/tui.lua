@@ -18,7 +18,7 @@
 --   features    : optional feature flags table, e.g. { undoRedo = false }.
 --   keymap      : optional shortcut overrides, e.g. { ["ctrl+s"] = "submit" }.
 --
--- Cursor rendering: TextInput uses useDeclaredCursor() to declare its
+-- Cursor rendering: TextInput uses useCursor() to declare its
 -- cursor position (Ink-compatible API). The framework converts this to
 -- absolute coordinates via find_cursor() after layout. IME candidate
 -- window placement follows the physical cursor position.
@@ -438,7 +438,7 @@ local function text_input_impl(props)
     local text_el = tui.Text { width = render_width, wrap = "nowrap", table.unpack(text_children) }
 
     -- Single-writer cursor model: only the focused TextInput declares its
-    -- cursor position via useDeclaredCursor(). The tagger writes _cursor_offset
+    -- cursor position via useCursor(). The tagger writes _cursor_offset
     -- and _cursor_focused metadata onto the element; init.lua's find_cursor
     -- resolves these to absolute screen coordinates after layout.
     --
@@ -446,12 +446,12 @@ local function text_input_impl(props)
     -- stale cursor rendering when focus transitions between components.
     -- The useFocus isFocused state updates asynchronously via effect, which
     -- can cause one frame of incorrect cursor display after focus changes.
-    local declareCursor = tui.useDeclaredCursor {
+    local cursor = tui.useCursor {
         x = caret_col,
         y = 0,
         active = focus_flag and not disabled,
     }
-    declareCursor(text_el)
+    cursor(text_el)
 
     -- Mouse support: wrap the Text element in a Box so the framework's
     -- hit-test can dispatch onClick events to this component.

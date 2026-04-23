@@ -327,10 +327,10 @@ tui.useAnimation(render: function(t: number): element, options: {
 
 ### 光标
 
-#### useDeclaredCursor
+#### useCursor
 
 ```lua
-tui.useDeclaredCursor(col, row)
+tui.useCursor(col, row)
 -- 声明光标位置（在渲染函数中调用）
 ```
 
