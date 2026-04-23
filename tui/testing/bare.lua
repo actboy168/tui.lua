@@ -5,7 +5,7 @@
 
 local reconciler = require "tui.internal.reconciler"
 local scheduler  = require "tui.internal.scheduler"
-local hooks      = require "tui.internal.hooks"
+local hooks      = require "tui.hook.core"
 local input_mod    = require "tui.internal.input"
 local testing_input = require "tui.testing.input"
 local app_base   = require "tui.internal.app_base"

@@ -1,6 +1,6 @@
 local layout        = require "tui.internal.layout"
 local screen_mod    = require "tui.internal.screen"
-local hooks         = require "tui.internal.hooks"
+local hooks         = require "tui.hook.core"
 local app_base      = require "tui.internal.app_base"
 local input_mod     = require "tui.internal.input"
 local capture       = require "tui.testing.capture"

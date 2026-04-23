@@ -411,8 +411,8 @@ function M.mount(terminal, screen_state, opts)
 
     setup_hit_test()
 
-    require("tui.internal.hooks")._set_terminal_write(terminal.write)
-    require("tui.internal.hooks")._set_terminal_caps(opts.capabilities)
+    require("tui.hook.terminal")._set_terminal_write(terminal.write)
+    require("tui.hook.terminal")._set_terminal_caps(opts.capabilities)
 
     -- Initial paint.
     paint_fn()
@@ -439,8 +439,8 @@ function M.unmount(inst)
     end
     inst._mouse_auto_release = nil
     teardown_interactive(inst)
-    require("tui.internal.hooks")._set_terminal_write(nil)
-    require("tui.internal.hooks")._set_terminal_caps(nil)
+    require("tui.hook.terminal")._set_terminal_write(nil)
+    require("tui.hook.terminal")._set_terminal_caps(nil)
     if inst._extension and inst._extension.reset then
         inst._extension.reset()
     end

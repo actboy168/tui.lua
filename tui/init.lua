@@ -13,13 +13,21 @@
 --   tui.configureScheduler{ now=fn, sleep=fn }  -- swap scheduler backend
 --                                                  (call before tui.render)
 
-local element    = require "tui.internal.element"
-local layout     = require "tui.internal.layout"
-local scheduler  = require "tui.internal.scheduler"
-local hooks      = require "tui.internal.hooks"
-local cursor_mod = require "tui.internal.cursor"
-local text_mod   = require "tui.internal.text"
-local log_mod    = require "tui.internal.log"
+local element     = require "tui.internal.element"
+local layout      = require "tui.internal.layout"
+local scheduler   = require "tui.internal.scheduler"
+local hook_core    = require "tui.hook.core"
+local hook_state   = require "tui.hook.state"
+local hook_effect  = require "tui.hook.effect"
+local hook_context = require "tui.hook.context"
+local hook_timer   = require "tui.hook.timer"
+local hook_input   = require "tui.hook.input"
+local hook_focus   = require "tui.hook.focus"
+local hook_terminal = require "tui.hook.terminal"
+local hook_measure = require "tui.hook.measure"
+local hook_cursor  = require "tui.hook.cursor"
+local text_mod     = require "tui.internal.text"
+local log_mod      = require "tui.internal.log"
 
 local M = {}
 -- Pre-register in package.loaded so that circular requires from tui.extra.*
@@ -36,7 +44,7 @@ M._dev_mode = false
 
 function M.setDevMode(on)
     M._dev_mode = on and true or false
-    hooks._set_dev_mode(M._dev_mode)
+    hook_core._set_dev_mode(M._dev_mode)
 end
 
 -- Expose scheduler configuration for production integrators.
@@ -72,33 +80,33 @@ function M.component(fn, props)
 end
 
 -- Hooks
-M.useState       = hooks.useState
-M.useEffect      = hooks.useEffect
-M.useMemo        = hooks.useMemo
-M.useCallback    = hooks.useCallback
-M.useRef         = hooks.useRef
-M.useLatestRef   = hooks.useLatestRef
-M.useReducer     = hooks.useReducer
-M.useContext     = hooks.useContext
-M.createContext  = hooks.createContext
-M.useInterval    = hooks.useInterval
-M.useTimeout     = hooks.useTimeout
-M.useAnimation   = hooks.useAnimation
-M.useInput       = hooks.useInput
-M.useWindowSize  = hooks.useWindowSize
-M.useApp         = hooks.useApp
-M.useStdout      = hooks.useStdout
-M.useStderr      = hooks.useStderr
-M.usePaste       = hooks.usePaste
-M.useFocus        = hooks.useFocus
-M.useFocusManager = hooks.useFocusManager
-M.useCursor = cursor_mod.useCursor
-M.useMeasure     = hooks.useMeasure
-M.useErrorBoundary = hooks.useErrorBoundary
-M.useTerminalFocus = hooks.useTerminalFocus
-M.useTerminalTitle = hooks.useTerminalTitle
-M.useMouse         = hooks.useMouse
-M.useClipboard     = hooks.useClipboard
+M.useState         = hook_state.useState
+M.useEffect        = hook_effect.useEffect
+M.useMemo          = hook_state.useMemo
+M.useCallback      = hook_state.useCallback
+M.useRef           = hook_state.useRef
+M.useLatestRef     = hook_state.useLatestRef
+M.useReducer       = hook_state.useReducer
+M.useContext       = hook_context.useContext
+M.createContext    = hook_context.createContext
+M.useInterval      = hook_timer.useInterval
+M.useTimeout       = hook_timer.useTimeout
+M.useAnimation     = hook_timer.useAnimation
+M.useInput         = hook_input.useInput
+M.useWindowSize    = hook_measure.useWindowSize
+M.useApp           = hook_measure.useApp
+M.useStdout        = hook_terminal.useStdout
+M.useStderr        = hook_terminal.useStderr
+M.usePaste         = hook_input.usePaste
+M.useFocus         = hook_focus.useFocus
+M.useFocusManager  = hook_focus.useFocusManager
+M.useCursor        = hook_cursor.useCursor
+M.useMeasure       = hook_measure.useMeasure
+M.useErrorBoundary = hook_measure.useErrorBoundary
+M.useTerminalFocus = hook_terminal.useTerminalFocus
+M.useTerminalTitle = hook_terminal.useTerminalTitle
+M.useMouse         = hook_input.useMouse
+M.useClipboard     = hook_measure.useClipboard
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
 M.setInterval = scheduler.setInterval

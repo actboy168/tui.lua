@@ -14,7 +14,8 @@
 --   * a host element tree to tui.render(Box{...})
 -- A function is wrapped as a 0-prop component instance.
 
-local hooks = require "tui.internal.hooks"
+local hook_core   = require "tui.hook.core"
+local hook_effect = require "tui.hook.effect"
 
 local M = {}
 
@@ -109,7 +110,7 @@ end
 -- The warning is deduped per parent path within a single render pass via
 -- state._key_warned (cleared at the top of M.render).
 local function dev_check_keys(state, parent_path, children)
-    if not hooks._is_dev_mode() then return end
+    if not hook_core._is_dev_mode() then return end
     if state._key_warned[parent_path] then return end
     if type(children) ~= "table" or #children < 3 then return end
     local elem_count = 0
@@ -122,7 +123,7 @@ local function dev_check_keys(state, parent_path, children)
     end
     if elem_count < 3 or not missing then return end
     state._key_warned[parent_path] = true
-    hooks._warn("children of '" .. parent_path ..
+    hook_core._warn("children of '" .. parent_path ..
         "' should each have a unique `key` prop; missing keys can cause " ..
         "incorrect reuse across renders")
 end
@@ -176,7 +177,7 @@ local function expand(state, element, path)
         if not inst or inst.fn ~= fn then
             -- New instance or component identity changed (Stage 2: we just
             -- replace — S2.9 will make this cleaner later).
-            if inst then hooks._unmount(inst) end
+            if inst then hook_effect._unmount(inst) end
             inst = { fn = fn, hooks = {}, dirty = true, app = state.app }
             state.instances[path] = inst
         else
@@ -193,14 +194,14 @@ local function expand(state, element, path)
         -- a component" (see detect_plain_function_hook in tui/hooks.lua).
         inst._component_fn = fn
 
-        hooks._begin_render(inst)
+        hook_core._begin_render(inst)
         -- Clear dirty BEFORE calling fn. If fn (or a mount effect queued
         -- below) calls a setter, inst.dirty flips back to true and the
         -- outer driver (main loop / harness stabilization) can detect
         -- that another render pass is needed.
         inst.dirty = false
         local ok, rendered = pcall(fn, props)
-        hooks._end_render()
+        hook_core._end_render()
         if not ok then
             error(rendered, 0)
         end
@@ -221,7 +222,7 @@ local function expand(state, element, path)
         -- the boundary keeps showing fallback across frames until the
         -- caller resets it (Ink/React semantics). Post-commit errors
         -- (useEffect body/cleanup, useInput handler) route through
-        -- `hooks._flush_effects` which sets caught_error directly on the
+        -- `hook_effect._flush_effects` which sets caught_error directly on the
         -- nearest_boundary inst and requests a redraw.
         state.seen[path] = true
         local inst = state.instances[path]
@@ -468,7 +469,7 @@ function M.render(state, root, app_handle)
         -- Unmount stale instances.
         for path, inst in pairs(state.instances) do
             if not state.seen[path] then
-                hooks._unmount(inst)
+                hook_effect._unmount(inst)
                 state.instances[path] = nil
             end
         end
@@ -493,7 +494,7 @@ function M.render(state, root, app_handle)
     -- NOT consumed inside this render call; it becomes visible on the next
     -- frame (via scheduler.requestRedraw or the harness's next _paint).
     for _, inst in ipairs(state._effects_to_flush) do
-        hooks._flush_effects(inst)
+        hook_effect._flush_effects(inst)
     end
     -- (keep _effects_to_flush allocated; cleared at top of next render)
 
@@ -528,7 +529,7 @@ end
 --- shutdown(state): run cleanups on everything.
 function M.shutdown(state)
     for path, inst in pairs(state.instances) do
-        hooks._unmount(inst)
+        hook_effect._unmount(inst)
         state.instances[path] = nil
     end
 end

@@ -1,4 +1,4 @@
--- tui/builtin/cursor.lua — Cursor declaration API (Ink-compatible single-writer model)
+-- tui/hook/cursor.lua — Cursor declaration API (Ink-compatible single-writer model)
 --
 -- Components declare cursor position via useCursor({x, y, active}),
 -- which returns a tagger function. Apply the tagger to your Text element
