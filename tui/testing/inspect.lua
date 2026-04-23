@@ -24,10 +24,10 @@ function M.install(testing, Harness)
         return focus_mod._entries()
     end
 
-    function testing.find_text_with_cursor(tree)
+    function testing.find_cursor_host(tree)
         local function walk(e)
             if not e then return nil end
-            if e.kind == "text" and e._cursor_offset ~= nil then return e end
+            if e._cursor_position ~= nil then return e end
             for _, c in ipairs(e.children or {}) do
                 local r = walk(c)
                 if r then return r end

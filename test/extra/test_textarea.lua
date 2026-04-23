@@ -156,6 +156,27 @@ function suite:test_newline_cursor_on_last_line()
     lt.assertEquals(h:row(2), "                    ")
     h:unmount()
 end
+
+function suite:test_cursor_column_on_second_line()
+    local value = ""
+    local function App()
+        return tui.Box {
+            width = 20, height = 10,
+            Textarea { value = value, onChange = function(v) value = v end },
+        }
+    end
+    local h = testing.render(App, { cols = 20, rows = 10 })
+    h:type("ab")
+    h:rerender()
+    h:dispatch("\x1b[13;2u")
+    h:rerender()
+    h:type("cd")
+    h:rerender()
+    local col, row = h:cursor()
+    lt.assertEquals(row, 2, "cursor should remain on the second line")
+    lt.assertEquals(col, 3, "cursor column should track the second-line caret")
+    h:unmount()
+end
 -- When content grows beyond the terminal height, the textarea should cap its
 -- height at terminal rows and scroll so the cursor remains visible.
 -- Previously vis_height was unbounded (= nlines), causing the terminal to clip

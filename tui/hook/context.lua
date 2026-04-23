@@ -6,6 +6,9 @@ local core = require "tui.hook.core"
 
 local M = {}
 
+local element_mod
+local reconciler_mod
+
 -- ---------------------------------------------------------------------------
 -- useContext(ctx) -> value
 -- Consumes the nearest ancestor <ctx.Provider value=...> in the element
@@ -23,8 +26,8 @@ function M.useContext(ctx)
     if type(ctx) ~= "table" or ctx._kind ~= "tui_context" then
         error("useContext: expected a context created by tui.createContext", 2)
     end
-    local rec = reconciler_mod or require "tui.internal.reconciler"
-    return rec._lookup_context(ctx)
+    reconciler_mod = reconciler_mod or require "tui.internal.reconciler"
+    return reconciler_mod._lookup_context(ctx)
 end
 
 -- ---------------------------------------------------------------------------
@@ -32,8 +35,6 @@ end
 -- The returned table carries a `Provider` factory: `MyCtx.Provider { value=X, ... }`
 -- produces an element of kind "provider" that the reconciler splices into
 -- the render tree without creating a component instance.
-local element_mod   -- lazy require to avoid init cycle with element.lua
-local reconciler_mod
 
 function M.createContext(default_value)
     element_mod = element_mod or require "tui.internal.element"

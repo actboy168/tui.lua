@@ -314,10 +314,6 @@ local function expand(state, element, path)
             for i, c in ipairs(element.children or {}) do out.children[i] = c end
             out.text = element.text
             out.runs = element.runs
-            -- Propagate cursor metadata fields used by builtin components.
-            -- TextInput sets these during render based on focus state.
-            out._cursor_offset = element._cursor_offset
-            out._cursor_focused = element._cursor_focused
         else
             dev_check_keys(state, path, element.children)
             local seen_keys = {}

@@ -2,7 +2,7 @@
 --
 -- Property: for any TextInput value / terminal size / border / padding
 -- configuration, the cursor position reported by h:cursor() is a valid
--- screen coordinate and consistent with the text element's position.
+-- screen coordinate and consistent with the cursor host's position.
 --
 -- Known bug: when TextInput has no explicit `width` prop and the text is
 -- wider than the container, the pre-layout caret_col can exceed the
@@ -21,14 +21,14 @@ local suite = lt.test "textinput_cursor"
 -- Cursor validity check.
 -- h:cursor() returns (col, row) 1-based.
 --
--- The cursor is a vertical bar between cells.  When the caret is at the end
--- of the text (insert position), cursor col can be one past the text element's
--- right edge — i.e. rect.x + rect.w + 1.  This is valid terminal behavior.
+-- The cursor is a vertical bar between cells. When the caret is at the end
+-- of the text (insert position), cursor col can be one past the cursor host's
+-- right edge — i.e. rect.x + rect.w + 1. This is valid terminal behavior.
 --
 -- Invariant:
 --   1 ≤ row ≤ screen_height
 --   1 ≤ col ≤ screen_width
---   row is on the text element's row
+--   row is on the cursor host's row
 --   col is within [rect.x + 1, rect.x + rect.w + 1]
 
 local function assert_cursor_valid(h)
@@ -50,21 +50,21 @@ local function assert_cursor_valid(h)
         error(("cursor row %d > screen height %d"):format(row, sh), 0)
     end
 
-    local te = testing.find_text_with_cursor(h:tree())
-    if te and te.rect then
-        local r = te.rect
-        -- Row must be on the text element.
+    local host = testing.find_cursor_host(h:tree())
+    if host and host.rect then
+        local r = host.rect
+        -- Row must be on the cursor declaration host.
         if row < r.y + 1 or row > r.y + r.h then
-            error(("cursor row %d outside text element rows [%d, %d]"):format(
+            error(("cursor row %d outside cursor host rows [%d, %d]"):format(
                 row, r.y + 1, r.y + r.h), 0)
         end
-        -- Col must be within text element + 1 (insert position at end).
+        -- Col must be within host width + 1 (insert position at end).
         if col < r.x + 1 then
-            error(("cursor col %d before text element start %d"):format(
+            error(("cursor col %d before cursor host start %d"):format(
                 col, r.x + 1), 0)
         end
         if col > r.x + r.w + 1 then
-            error(("cursor col %d past text element end+1 %d"):format(
+            error(("cursor col %d past cursor host end+1 %d"):format(
                 col, r.x + r.w + 1), 0)
         end
     end
@@ -204,9 +204,9 @@ end
 
 -- ---------------------------------------------------------------------------
 -- Test 4: auto-width (no explicit width prop)
--- SKIP: triggers "TextInput 无 width prop 光标越界" bug — when the text
--- is wider than the container, caret_col exceeds the actual layout width.
--- Will be enabled once useMeasure is implemented.
+-- Regression coverage for the historical "TextInput 无 width prop 光标越界"
+-- bug: the cursor must stay within the rendered host bounds even when the
+-- content is wider than the container.
 
 function suite:test_cursor_within_bounds_auto_width()
     pbt.check {

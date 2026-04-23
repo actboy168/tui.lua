@@ -680,8 +680,6 @@ local function textarea_impl(props)
                 x = cursor_col,
                 y = cursor_row,
             }
-            row_el._cursor_offset = cursor_col
-            row_el._cursor_focused = true
         end
         row_elements[r + 1] = row_el
     end

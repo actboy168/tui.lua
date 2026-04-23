@@ -47,7 +47,7 @@ function suite:test_initial_empty_with_placeholder()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- focus=false → no cursor tag.
     lt.assertEquals(te, nil)
     h:unmount()
@@ -168,7 +168,7 @@ function suite:test_unfocused_ignores_input()
     h:unmount()
 end
 
-function suite:test_cursor_offset_tracks_caret_column()
+function suite:test_cursor_x_tracks_caret_column()
     local value = "\228\184\173a"  -- "中a": 2 cols + 1 col = caret at end = col 3
     local function App()
         return tui.Box {
@@ -181,9 +181,9 @@ function suite:test_cursor_offset_tracks_caret_column()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     lt.assertEquals(te ~= nil, true)
-    lt.assertEquals(te._cursor_offset, 3)
+    lt.assertEquals(te._cursor_position.x, 3)
     h:unmount()
 end
 
@@ -269,9 +269,10 @@ function suite:test_mask_hides_chars_but_preserves_width()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te.text, "****")
-    lt.assertEquals(te._cursor_offset, 4)
+    local te = testing.find_cursor_host(h:tree())
+    local text = testing.find_by_kind(h:tree(), "text")
+    lt.assertEquals(text.text, "****")
+    lt.assertEquals(te._cursor_position.x, 4)
     h:unmount()
 end
 
@@ -310,10 +311,10 @@ function suite:test_flag_is_single_cluster()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     lt.assertEquals(te ~= nil, true)
     -- Caret sits after the single flag cluster (width 2).
-    lt.assertEquals(te._cursor_offset, 2)
+    lt.assertEquals(te._cursor_position.x, 2)
     -- One backspace should remove the whole flag.
     h:press("backspace")
     h:rerender()
@@ -384,21 +385,21 @@ function suite:test_left_arrow_over_wide_char_moves_one_cluster()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- Initial caret at end: col = 1 + 2 + 1 = 4.
-    lt.assertEquals(te._cursor_offset, 4)
+    lt.assertEquals(te._cursor_position.x, 4)
     h:press("left")  -- past "b" → col 3
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 3)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 3)
     h:press("left")  -- past "中" (wide) → col 1
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 1)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 1)
     h:press("left")  -- past "a" → col 0
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0)
     h:unmount()
 end
 
@@ -439,16 +440,16 @@ function suite:test_right_arrow_moves_caret()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0)
     h:press("right")
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 1)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 1)
     h:press("right")
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2)
     h:unmount()
 end
 
@@ -467,16 +468,16 @@ function suite:test_right_arrow_over_wide_char()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0)
     h:press("right")  -- past "a" → col 1
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 1)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 1)
     h:press("right")  -- past "中" (wide) → col 3
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 3)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 3)
     h:unmount()
 end
 
@@ -500,8 +501,8 @@ function suite:test_right_arrow_at_end_noop()
     h:rerender()
     lt.assertEquals(fired, 0, "right at end must not fire onChange")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2)
     h:unmount()
 end
 
@@ -520,12 +521,12 @@ function suite:test_home_and_end()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0)
     h:press("end")
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 3)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 3)
     h:unmount()
 end
 
@@ -577,8 +578,8 @@ function suite:test_ctrl_u_deletes_to_line_start()
     h:rerender()
     lt.assertEquals(value, "world")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0)
     h:unmount()
 end
 
@@ -600,8 +601,8 @@ function suite:test_ctrl_k_deletes_to_line_end()
     h:rerender()
     lt.assertEquals(value, "hello ")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 6)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 6)
     h:unmount()
 end
 
@@ -640,16 +641,16 @@ function suite:test_ctrl_left_and_ctrl_right_move_by_word()
     local h = testing.render(App, { cols = 30, rows = 1 })
     h:press("ctrl+left")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 12)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 12)
     h:press("ctrl+left")
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 6)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 6)
     h:press("ctrl+right")
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 12)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 12)
     h:unmount()
 end
 
@@ -876,12 +877,12 @@ function suite:test_can_disable_selection_copy_word_kill_features()
     h:dispatch_event(key_event("char", "x", true))
     lt.assertEquals(value, "hello worl!?d")
     lt.assertEquals(#copied, 0)
-    local te = testing.find_text_with_cursor(h:tree())
-    local before = te._cursor_offset
+    local te = testing.find_cursor_host(h:tree())
+    local before = te._cursor_position.x
     h:press("ctrl+left")
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, before)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, before)
     h:press("ctrl+k")
     h:rerender()
     lt.assertEquals(value, "hello worl!?d")
@@ -1069,13 +1070,13 @@ function suite:test_caret_clamped_on_value_shrink()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- caret starts at end (col 5)
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 5)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 5)
     -- Shrink value externally; caret was at 5 but only 2 chars now.
     v = "ab"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2, "caret clamped to #chars after shrink")
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2, "caret clamped to #chars after shrink")
     h:unmount()
 end
 
@@ -1096,9 +1097,10 @@ function suite:test_placeholder_hidden_when_focused()
     -- autoFocus=true by default, so placeholder should NOT be shown,
     -- but isFocused state takes effect on the next paint.
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
+    local text = testing.find_by_kind(h:tree(), "text")
     lt.assertEquals(te ~= nil, true, "focused input should have cursor")
-    lt.assertEquals(te.text, "", "placeholder should be hidden when focused")
+    lt.assertEquals(text.text, "", "placeholder should be hidden when focused")
     h:unmount()
 end
 
@@ -1117,7 +1119,7 @@ function suite:test_placeholder_shown_when_unfocused()
         }
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     lt.assertEquals(te, nil, "unfocused input should have no cursor")
     -- The row should show the placeholder text
     lt.assertEquals(h:row(1):match("type here") ~= nil, true)
@@ -1140,10 +1142,10 @@ function suite:test_horizontal_scroll_keeps_caret_visible()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- Caret sits at end; with width=5 the window scrolls so the caret
     -- column is within the visible window.
-    lt.assertEquals(te._cursor_offset <= 5, true,
+    lt.assertEquals(te._cursor_position.x <= 5, true,
         "caret col within visible window")
     h:unmount()
 end
@@ -1160,8 +1162,8 @@ function suite:test_typing_past_width_scrolls()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:type("abcdef")  -- 6 chars in a 5-col window
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset <= 5, true,
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x <= 5, true,
         "caret stays within window after overflow typing")
     h:unmount()
 end
@@ -1181,9 +1183,10 @@ function suite:test_mask_with_cjk_chars()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
+    local text = testing.find_by_kind(h:tree(), "text")
     -- Each grapheme cluster is replaced by one mask char
-    lt.assertEquals(te.text, "**")
+    lt.assertEquals(text.text, "**")
     h:unmount()
 end
 
@@ -1223,9 +1226,10 @@ function suite:test_width_prop_constrains_render()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
+    local text = testing.find_by_kind(h:tree(), "text")
     -- With width=5, only 5 cells of text should be visible
-    lt.assertEquals(#te.text <= 5, true,
+    lt.assertEquals(#text.text <= 5, true,
         "rendered text should be at most width columns")
     h:unmount()
 end
@@ -1249,8 +1253,8 @@ function suite:test_left_at_start_noop()
     h:press("left")  -- no-op at start
     h:rerender()
     lt.assertEquals(fired, 0, "left at start must not fire onChange")
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0)
     h:unmount()
 end
 
@@ -1539,9 +1543,9 @@ function suite:test_ime_single_cjk_dispatch_cursor()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中"
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- "中" is width 2; caret at end → offset 2
-    lt.assertEquals(te._cursor_offset, 2)
+    lt.assertEquals(te._cursor_position.x, 2)
     h:unmount()
 end
 
@@ -1561,9 +1565,9 @@ function suite:test_ime_mixed_ascii_cjk_via_type()
     h:type("a\228\184\173b")  -- "a" + "中" + "b"
     h:rerender()
     lt.assertEquals(value, "a\228\184\173b")
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- a(1) + 中(2) + b(1) = 4 display cols; caret at end = offset 4
-    lt.assertEquals(te._cursor_offset, 4)
+    lt.assertEquals(te._cursor_position.x, 4)
     h:unmount()
 end
 
@@ -1624,8 +1628,8 @@ function suite:test_ime_mixed_ascii_cjk_via_dispatch()
     h:dispatch("a\228\184\173b")
     h:rerender()
     lt.assertEquals(value, "a\228\184\173b")
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 4)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 4)
     h:unmount()
 end
 
@@ -1643,7 +1647,7 @@ end
 --   2. Cursor operations immediately after IME commit (backspace/left/right)
 --   3. Scroll behavior when IME commit overflows a narrow window
 --   4. Second commit after a previous one (state persistence)
---   5. Correct cursor offset after IME commit of wide characters
+--   5. Correct cursor column after IME commit of wide characters
 
 -- Two consecutive IME commits: simulate CJK user typing "你好".
 function suite:test_ime_consecutive_commits()
@@ -1664,9 +1668,9 @@ function suite:test_ime_consecutive_commits()
     h:dispatch("\229\165\189")  -- "好"
     h:rerender()
     lt.assertEquals(value, "\228\189\160\229\165\189")
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- "你好" width = 2 + 2 = 4; caret at end → offset 4
-    lt.assertEquals(te._cursor_offset, 4)
+    lt.assertEquals(te._cursor_position.x, 4)
     h:unmount()
 end
 
@@ -1733,9 +1737,9 @@ function suite:test_ime_commit_in_narrow_window_scrolls()
     h:dispatch("\228\184\173\230\150\135\228\186\186")  -- "中文人"
     h:rerender()
     lt.assertEquals(value, "\228\184\173\230\150\135\228\186\186")
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- Caret should be within the visible window (≤ width=5)
-    lt.assertEquals(te._cursor_offset <= 5, true,
+    lt.assertEquals(te._cursor_position.x <= 5, true,
         "caret must stay within narrow window after IME commit overflow")
     h:unmount()
 end
@@ -1757,14 +1761,14 @@ function suite:test_ime_two_phase_commit()
     h:dispatch("\228\189\160")
     h:rerender()
     lt.assertEquals(value, "\228\189\160")
-    local te1 = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te1._cursor_offset, 2, "after first commit caret at col 2")
+    local te1 = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te1._cursor_position.x, 2, "after first commit caret at col 2")
     -- Phase 2: commit "好" at end
     h:dispatch("\229\165\189")
     h:rerender()
     lt.assertEquals(value, "\228\189\160\229\165\189")
-    local te2 = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te2._cursor_offset, 4, "after second commit caret at col 4")
+    local te2 = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te2._cursor_position.x, 4, "after second commit caret at col 4")
     h:unmount()
 end
 
@@ -1791,8 +1795,8 @@ function suite:test_ime_commit_in_middle_with_wide_chars()
     lt.assertEquals(value, "a\229\165\189\228\184\173b")
     -- Cursor offset: a(1) + 好(2) = 3; but caret index is now 2 (after "a","好")
     -- Display: a(1) + 好(2) = offset 3
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 3)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 3)
     h:unmount()
 end
 
@@ -1821,11 +1825,11 @@ function suite:test_ime_commit_flag_in_middle()
     h:dispatch("\240\159\135\175\240\159\135\181")  -- 🇯🇵 (two RI codepoints)
     h:rerender()
     lt.assertEquals(value, "x\240\159\135\175\240\159\135\181y")
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- Caret must be valid (non-nil, non-negative) and within the
     -- visible window. The exact offset depends on per-RI display width.
     lt.assertEquals(te ~= nil, true, "cursor must exist after IME flag commit")
-    lt.assertEquals(te._cursor_offset >= 0, true,
+    lt.assertEquals(te._cursor_position.x >= 0, true,
         "cursor offset must be non-negative after IME flag commit")
     h:unmount()
 end
@@ -1873,9 +1877,9 @@ function suite:test_ime_after_backspace_replace()
     h:dispatch("\228\184\173")  -- commit "中" → "ab中"
     h:rerender()
     lt.assertEquals(value, "ab\228\184\173")
-    local te = testing.find_text_with_cursor(h:tree())
+    local te = testing.find_cursor_host(h:tree())
     -- a(1) + b(1) + 中(2) = 4
-    lt.assertEquals(te._cursor_offset, 4)
+    lt.assertEquals(te._cursor_position.x, 4)
     h:unmount()
 end
 
@@ -1902,13 +1906,13 @@ function suite:test_caret_clamped_to_zero_on_empty_value()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret starts at end of "hello" = col 5
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 5)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 5)
     -- Shrink value to empty
     v = ""
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0, "caret clamped to 0 when value becomes empty")
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0, "caret clamped to 0 when value becomes empty")
     h:unmount()
 end
 
@@ -1927,12 +1931,12 @@ function suite:test_caret_clamped_on_shrink_to_one_char()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end = col 5
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 5)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 5)
     v = "a"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 1, "caret clamped to #chars after shrink to 1 char")
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 1, "caret clamped to #chars after shrink to 1 char")
     h:unmount()
 end
 
@@ -1951,12 +1955,12 @@ function suite:test_caret_clamped_on_shrink_with_wide_chars()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end: 中(2)+文(2)+a(1)+b(1)+c(1) = 7
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 7)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 7)
     v = "\228\184\173\230\150\135"  -- "中文"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 4,
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 4,
         "caret clamped to end of wide-char string (2+2=4)")
     h:unmount()
 end
@@ -1975,20 +1979,20 @@ function suite:test_caret_clamped_on_progressive_shrink()
     end
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 5)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 5)
     v = "abcd"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 4)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 4)
     v = "ab"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2)
     v = ""
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0, "caret reaches 0 after shrink to empty")
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0, "caret reaches 0 after shrink to empty")
     h:unmount()
 end
 
@@ -2014,13 +2018,13 @@ function suite:test_caret_in_middle_clamped_when_value_shrinks_below()
     h:rerender()
     h:press("right")  -- caret at index 3
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 3)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 3)
     -- Shrink value to "ab" (2 chars); caret 3 > #chars 2 → clamp to 2
     v = "ab"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2,
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2,
         "caret in middle clamped when value shrinks below caret position")
     h:unmount()
 end
@@ -2040,19 +2044,19 @@ function suite:test_caret_after_select_all_delete()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 11)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 11)
     -- Simulate select-all delete by externally setting value to ""
     v = ""
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0, "caret at 0 after select-all delete")
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0, "caret at 0 after select-all delete")
     -- Can type again after select-all delete
     h:type("x")
     h:rerender()
     lt.assertEquals(v, "x")
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 1)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 1)
     h:unmount()
 end
 
@@ -2072,14 +2076,14 @@ function suite:test_type_after_caret_clamp_from_shrink()
     -- Shrink value to "a"; caret clamps to 1
     v = "a"
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 1)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 1)
     -- Type "x" at clamped position → "ax"
     h:type("x")
     h:rerender()
     lt.assertEquals(v, "ax")
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2)
     h:unmount()
 end
 
@@ -2098,20 +2102,20 @@ function suite:test_backspace_wide_char_caret_offset()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Initial caret at end: a(1)+中(2)+b(1) = offset 4
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 4)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 4)
     -- Backspace removes "b": value = "a中", offset = a(1)+中(2) = 3
     h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "a\228\184\173")
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 3)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 3)
     -- Backspace removes "中" (wide): value = "a", offset = 1
     h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "a")
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 1)
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 1)
     h:unmount()
 end
 
@@ -2133,15 +2137,15 @@ function suite:test_delete_wide_char_caret_offset_unchanged()
     h:rerender()
     h:press("right")  -- past "中"
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2)
     -- Delete removes "文" (wide char ahead): value = "中b"
     h:press("delete")
     h:rerender()
     lt.assertEquals(value, "\228\184\173b")
-    te = testing.find_text_with_cursor(h:tree())
+    te = testing.find_cursor_host(h:tree())
     -- Caret still at index 1 (after "中"), display offset still 2
-    lt.assertEquals(te._cursor_offset, 2,
+    lt.assertEquals(te._cursor_position.x, 2,
         "delete of wide char ahead does not move caret offset")
     h:unmount()
 end
@@ -2288,13 +2292,13 @@ function suite:test_caret_stays_when_value_grows_externally()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end = offset 2
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2)
     -- Value grows externally; caret stays at 2 (valid index within new value)
     v = "abcdefgh"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2,
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2,
         "caret stays at previous position when value grows externally")
     h:unmount()
 end
@@ -2316,8 +2320,8 @@ function suite:test_caret_valid_after_external_wide_char_replacement()
     -- Replace with "中" (1 grapheme); caret 3 > #chars 1 → clamp to 1
     v = "\228\184\173"
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 2,
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 2,
         "caret clamped to end of single wide char")
     h:unmount()
 end
@@ -2337,12 +2341,12 @@ function suite:test_caret_at_home_unaffected_by_shrink()
     local h = testing.render(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
-    local te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0)
+    local te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0)
     v = "ab"
     h:rerender()
-    te = testing.find_text_with_cursor(h:tree())
-    lt.assertEquals(te._cursor_offset, 0,
+    te = testing.find_cursor_host(h:tree())
+    lt.assertEquals(te._cursor_position.x, 0,
         "caret at home unaffected by value shrink")
     h:unmount()
 end
@@ -2370,7 +2374,7 @@ end
 
 -- Multi-cursor contention: when multiple TextInputs exist, only the focused
 -- one's cursor should be reported by Harness:cursor(). This tests the
--- single-writer model where _cursor_focused=true wins over other candidates.
+-- single-writer model where the focused component's cursor declaration wins.
 function suite:test_multi_input_focused_cursor_wins()
     local value1, value2 = "hello", "world"
     local function App()

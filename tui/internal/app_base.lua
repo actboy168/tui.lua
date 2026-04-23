@@ -204,13 +204,6 @@ find_cursor = function(tree)
             local row = r.y + y + 1
             if root_h and row > root_h then row = root_h end
             push_candidate(col, row, true)
-        elseif e.kind == "text" and e._cursor_offset ~= nil then
-            local offset = math.min(e._cursor_offset, r.w or e._cursor_offset)
-            local col = r.x + offset + 1
-            if root_w and col > root_w then col = root_w end
-            local row = r.y + 1
-            if root_h and row > root_h then row = root_h end
-            push_candidate(col, row, e._cursor_focused)
         end
 
         if e.children then

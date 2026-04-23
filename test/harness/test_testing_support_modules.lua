@@ -103,7 +103,7 @@ function suite:test_find_helpers_handle_nil_tree()
     lt.assertEquals(testing.find_by_kind(nil, "text"), nil)
     lt.assertEquals(testing.find_all_by_kind(nil, "text"), {})
     lt.assertEquals(testing.text_content(nil), {})
-    lt.assertEquals(testing.find_text_with_cursor(nil), nil)
+    lt.assertEquals(testing.find_cursor_host(nil), nil)
 end
 
 function suite:test_dispatch_event_repaints_and_returns_self()

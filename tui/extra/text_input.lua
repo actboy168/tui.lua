@@ -438,16 +438,13 @@ local function text_input_impl(props)
     local text_el = tui.Text { width = render_width, wrap = "nowrap", table.unpack(text_children) }
 
     -- Ink-style useCursor(): declare the caret relative to this component's
-    -- rendered root box. We still tag the active Text node with caret metadata
-    -- so existing tests and debug helpers can inspect the visible cursor row.
+    -- rendered root box.
     local cursor = tui.useCursor()
     if focus_flag and not disabled then
         cursor.setCursorPosition {
             x = caret_col,
             y = 0,
         }
-        text_el._cursor_offset = caret_col
-        text_el._cursor_focused = true
     end
 
     -- Mouse support: wrap the Text element in a Box so the framework's
