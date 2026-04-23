@@ -19,6 +19,16 @@ local M = {}
 -- layout.compute() and cleared on teardown.
 local _last_tree = nil
 
+-- Row offset between terminal coordinates and content coordinates.
+-- In interactive (main-screen) mode, TUI content may not start at the top
+-- of the terminal — it starts wherever the cursor was when the app
+-- launched (typically the bottom).  SGR mouse events report terminal-
+-- absolute coordinates, but element rects use content-relative (0-based)
+-- coordinates.  This offset bridges the gap:
+--   content_row = terminal_row_0based - _row_offset
+-- In harness mode (vterm), content always starts at row 0, so offset = 0.
+local _row_offset = 0
+
 --- set_tree(tree) — store the current element tree for hit testing.
 -- Call after layout.compute() so every element has a rect.
 function M.set_tree(tree)
@@ -30,15 +40,23 @@ function M.clear_tree()
     _last_tree = nil
 end
 
---- hit_test(col, row) -> path | nil
--- Returns an array of elements from root to the deepest hit element,
--- or nil if the point is outside the tree.
--- col/row are 1-based screen coordinates (matching SGR mouse events).
+--- set_row_offset(n) — set the row offset for coordinate conversion.
+-- n is the 0-based terminal row where content y=0 starts.
+-- In interactive mode this is typically (terminal_height - content_height).
+-- In harness mode this is 0.
+---@param n integer
+function M.set_row_offset(n)
+    _row_offset = n
+end
+
+-- do_hit_test: internal implementation, exposed as M.hit_test below.
 local function do_hit_test(col, row)
     if not _last_tree then return nil end
-    -- Convert 1-based to 0-based for rect comparison (rects are 0-based from layout).
+    -- Convert 1-based terminal coordinates to 0-based content coordinates.
+    -- SGR mouse events are 1-based terminal-absolute; element rects are
+    -- 0-based content-relative.  Subtract _row_offset to bridge the gap.
     local c = col - 1
-    local r = row - 1
+    local r = (row - 1) - _row_offset
     local path = {}
     local function walk(e)
         if not e or not e.rect then return false end
@@ -59,6 +77,13 @@ local function do_hit_test(col, row)
     return #path > 0 and path or nil
 end
 
+--- hit_test(col, row) -> path | nil
+-- Returns an array of elements from root to the deepest hit element,
+-- or nil if the point is outside the tree.
+-- col/row are 1-based terminal-absolute SGR coordinates.
+---@param col integer 1-based terminal column (SGR)
+---@param row integer 1-based terminal row (SGR)
+---@return table|nil path array from root to deepest hit element, or nil
 M.hit_test = do_hit_test
 
 --- dispatch_click(col, row) -> consumed: bool
@@ -78,7 +103,7 @@ function M.dispatch_click(col, row)
                 col      = col,
                 row      = row,
                 localCol = (col - 1) - r.x,
-                localRow = (row - 1) - r.y,
+                localRow = ((row - 1) - _row_offset) - r.y,
                 target   = leaf,
             })
             return true
@@ -102,7 +127,7 @@ function M.dispatch_scroll(col, row, direction)
                 col       = col,
                 row       = row,
                 localCol  = (col - 1) - r.x,
-                localRow  = (row - 1) - r.y,
+                localRow  = ((row - 1) - _row_offset) - r.y,
                 direction = direction,
                 target    = leaf,
             })
@@ -134,5 +159,11 @@ local function has_mouse_props(tree)
 end
 
 M.has_mouse_props = has_mouse_props
+
+--- _reset() — clear all state (called between harness mounts).
+function M._reset()
+    _last_tree = nil
+    _row_offset = 0
+end
 
 return M

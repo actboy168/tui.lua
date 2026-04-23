@@ -39,6 +39,26 @@ function Harness:tree()
     return self._tree
 end
 
+--- Return the current row offset (content y=0 maps to this terminal row, 0-based).
+-- SGR mouse coordinates are terminal-absolute; use sgr() to convert
+-- content-relative coordinates.
+---@return integer row_offset 0-based terminal row where content y=0 starts
+function Harness:row_offset()
+    return self._row_offset or 0
+end
+
+--- Convert content-relative (x, y) to SGR mouse coordinates.
+-- x, y are 0-based content coordinates (matching element rect values).
+-- Returns col, row as 1-based terminal-absolute coordinates suitable for
+-- h:mouse() calls.
+---@param x integer 0-based content column
+---@param y integer 0-based content row
+---@return integer col 1-based terminal column (SGR)
+---@return integer row 1-based terminal row (SGR)
+function Harness:sgr(x, y)
+    return x + 1, y + self:row_offset() + 1
+end
+
 function Harness:cells(row)
     return screen_mod.cells(self._screen, row)
 end

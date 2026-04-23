@@ -72,6 +72,7 @@ function M.reset_framework(extension)
     resize_mod._reset()
     focus_mod._reset()
     scheduler._reset()
+    hit_test._reset()
     if extension and extension.reset then
         extension.reset()
     end
@@ -350,6 +351,18 @@ function M.mount(terminal, screen_state, opts)
 
         local content_h = tree.rect and math.min(tree.rect.h, h) or h
         local new_mouse = update_mouse(tree)
+
+        -- In interactive (main-screen) mode on a real terminal, content may
+        -- not start at the top of the terminal.  Assuming the cursor was at
+        -- the terminal bottom when the app launched, content row 0 maps to
+        -- terminal row (h - content_h).  opts.row_offset overrides this
+        -- when the caller knows the true offset.
+        local row_offset = opts.row_offset
+        if row_offset == nil then
+            row_offset = interactive and (h - content_h) or 0
+        end
+        hit_test.set_row_offset(row_offset)
+        inst._row_offset = row_offset
 
         -- clear + paint + diff
         screen_mod.clear(screen_state)

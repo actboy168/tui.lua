@@ -1140,9 +1140,10 @@ function suite:test_click_focuses_textarea()
         local box = find_clickable_box(h:tree())
         lt.assertNotEquals(box, nil, "should find a clickable Box")
         local r = box.rect
-        h:mouse("down", 1, r.x + 1, r.y + 1)
-    h:rerender()
-        h:mouse("up", 1, r.x + 1, r.y + 1)
+        local cx, cy = h:sgr(r.x, r.y)
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        h:mouse("up", 1, cx, cy)
 
 
         -- Type into the now-focused Textarea.
@@ -1171,11 +1172,10 @@ function suite:test_click_positions_cursor_in_textarea()
         local r = box.rect
 
         -- Click at column offset 2 (3rd cell) within the Box.
-        local click_x = r.x + 1 + 2
-        local click_y = r.y + 1
-        h:mouse("down", 1, click_x, click_y)
-    h:rerender()
-        h:mouse("up", 1, click_x, click_y)
+        local cx, cy = h:sgr(r.x + 2, r.y)
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        h:mouse("up", 1, cx, cy)
 
 
         -- Type at the new cursor position.
@@ -1210,11 +1210,10 @@ function suite:test_click_moves_to_different_line()
 
         -- Cursor is at end of "line2" (row 1). Click on row 0 at col 5
         -- (past the '1' in "line1") to move caret to end of line 1.
-        local click_x = r.x + 1 + 5  -- col 5 within the Box (past "line1")
-        local click_y = r.y + 1       -- first row of the Box (0-based row 0)
-        h:mouse("down", 1, click_x, click_y)
-    h:rerender()
-        h:mouse("up", 1, click_x, click_y)
+        local cx, cy = h:sgr(r.x + 5, r.y)  -- col 5 within the Box (past "line1")
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        h:mouse("up", 1, cx, cy)
 
 
         -- Type to verify we're at end of line 1.
@@ -1264,7 +1263,8 @@ function suite:test_scroll_in_textarea()
 
         -- Scroll down. Cursor is at line 3, scroll_top=0, visible rows 1-4.
         -- After scroll_down, scroll_top=1, visible rows 2-5. Cursor at line 3 is still visible.
-        h:mouse("scroll_down", nil, r.x + 1, r.y + 1)
+        local cx, cy = h:sgr(r.x, r.y)
+        h:mouse("scroll_down", nil, cx, cy)
         h:rerender()
 
         -- After scrolling down, L1 should have moved out of view.

@@ -9,12 +9,12 @@
 -- testing.capture_stderr() to suppress those warnings, then unmounts before
 -- running assertions so the harness is always cleaned up.
 
-local lt       = require "ltest"
-local testing  = require "tui.testing"
-local hit_test = require "tui.internal.hit_test"
+local lt            = require "ltest"
+local testing       = require "tui.testing"
+local hit_test      = require "tui.internal.hit_test"
 local input_helpers = require "tui.testing.input"
 
-local suite = lt.test "examples"
+local suite         = lt.test "examples"
 
 -- Helper: render an example, capture a frame, unmount, then return the frame.
 -- Unmounting before assertions ensures the harness is always torn down even
@@ -24,7 +24,7 @@ local function load_frame(path, opts)
     testing.capture_stderr(function()
         local App = testing.load_app(path)
         local h   = testing.render(App, opts)
-        frame = h:frame()
+        frame     = h:frame()
         h:unmount()
     end)
     return frame
@@ -74,9 +74,9 @@ end
 function suite:test_counter_increment()
     local frame = load_frame_after("examples/counter.lua", { cols = 30, rows = 10 }, function(h)
         h:press("up"); h:rerender()
-    h:rerender()
+        h:rerender()
         h:press("up"); h:rerender()
-    h:rerender()
+        h:rerender()
         h:press("up"); h:rerender()
     end)
     lt.assertNotEquals(frame:find("3", 1, true), nil)
@@ -182,8 +182,8 @@ function suite:test_chat_tree_has_mouse_props()
     -- The chat example's Textarea adds onClick/onScroll, so the tree
     -- should be detected as needing mouse mode by has_mouse_props.
     testing.capture_stderr(function()
-        local App = testing.load_app("examples/chat.lua")
-        local h   = testing.render(App, { cols = 40, rows = 10 })
+        local App  = testing.load_app("examples/chat.lua")
+        local h    = testing.render(App, { cols = 40, rows = 10 })
         local tree = h:tree()
         lt.assertTrue(hit_test.has_mouse_props(tree))
         h:unmount()
@@ -205,12 +205,10 @@ function suite:test_chat_click_focuses_textarea()
         lt.assertNotEquals(r, nil, "clickable Box should have a rect")
 
         -- Click the top-left content cell of the Textarea Box.
-        -- SGR coordinates are 1-based; rect is 0-based, so add 1.
-        local click_x = r.x + 1
-        local click_y = r.y + 1
-        h:mouse("down", 1, click_x, click_y)
-    h:rerender()
-        h:mouse("up", 1, click_x, click_y)
+        local cx, cy = h:sgr(r.x, r.y)
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        h:mouse("up", 1, cx, cy)
 
         -- Now type — should go into the Textarea.
         h:type("hi")
@@ -238,12 +236,11 @@ function suite:test_chat_click_positions_cursor()
         local r = box.rect
 
         -- Click at column offset 2 (3rd cell) within the Box to move cursor
-        -- between 'b' and 'c'.  SGR x = rect.x + 1 (1-based) + 2 (offset).
-        local click_x = r.x + 1 + 2
-        local click_y = r.y + 1
-        h:mouse("down", 1, click_x, click_y)
-    h:rerender()
-        h:mouse("up", 1, click_x, click_y)
+        -- between 'b' and 'c'.
+        local cx, cy = h:sgr(r.x + 2, r.y)
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        h:mouse("up", 1, cx, cy)
 
         -- Type at the new cursor position.
         h:type("X")
@@ -269,8 +266,8 @@ function suite:test_chat_scroll_in_textarea()
         -- Adding 6 lines forces scrolling.
         for i = 1, 5 do
             h:type("L" .. i)
-    h:rerender()
-            h:dispatch(input_helpers.raw("\x1b[13;2u"))  -- Shift+Enter → newline
+            h:rerender()
+            h:dispatch(input_helpers.raw("\x1b[13;2u")) -- Shift+Enter → newline
         end
         h:type("L6")
 

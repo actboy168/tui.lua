@@ -2181,9 +2181,10 @@ function suite:test_click_focuses_textinput()
         -- Click the second TextInput.
         local box2 = boxes[2]
         local r = box2.rect
-        h:mouse("down", 1, r.x + 1, r.y + 1)
-    h:rerender()
-        h:mouse("up", 1, r.x + 1, r.y + 1)
+        local cx, cy = h:sgr(r.x, r.y)
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        h:mouse("up", 1, cx, cy)
 
 
         -- Type into the now-focused second TextInput.
@@ -2214,11 +2215,10 @@ function suite:test_click_positions_cursor_in_textinput()
         local r = box.rect
 
         -- Click at column offset 2 (3rd cell) to move the cursor between 'e' and 'l'.
-        local click_x = r.x + 1 + 2
-        local click_y = r.y + 1
-        h:mouse("down", 1, click_x, click_y)
-    h:rerender()
-        h:mouse("up", 1, click_x, click_y)
+        local cx, cy = h:sgr(r.x + 2, r.y)
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        h:mouse("up", 1, cx, cy)
 
 
         -- Type at the new cursor position → "heXllo"
@@ -2245,9 +2245,10 @@ function suite:test_click_switches_focus_between_textinputs()
         local boxes = find_clickable_boxes(h:tree())
         lt.assertTrue(#boxes >= 2)
         local r2 = boxes[2].rect
-        h:mouse("down", 1, r2.x + 1, r2.y + 1)
+        local cx2, cy2 = h:sgr(r2.x, r2.y)
+        h:mouse("down", 1, cx2, cy2)
     h:rerender()
-        h:mouse("up", 1, r2.x + 1, r2.y + 1)
+        h:mouse("up", 1, cx2, cy2)
 
 
         -- Type into the second field.
@@ -2256,9 +2257,10 @@ function suite:test_click_switches_focus_between_textinputs()
 
         -- Click back on the first TextInput (at the end of "user" = col 4).
         local r1 = boxes[1].rect
-        h:mouse("down", 1, r1.x + 1 + 4, r1.y + 1)
+        local cx1, cy1 = h:sgr(r1.x + 4, r1.y)
+        h:mouse("down", 1, cx1, cy1)
     h:rerender()
-        h:mouse("up", 1, r1.x + 1 + 4, r1.y + 1)
+        h:mouse("up", 1, cx1, cy1)
 
 
         -- Type at end of first field.
