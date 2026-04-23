@@ -871,12 +871,20 @@ end
 -- Returns a handle for writing directly to the terminal's output stream.
 -- Intended for use inside effects or event handlers, not during render.
 
-local tui_core_mod
+local _terminal_write
+
+function M._set_terminal_write(fn)
+    _terminal_write = fn
+end
+
 function M.useStdout()
     assert(current, "useStdout called outside of a component render")
-    if not tui_core_mod then tui_core_mod = require "tui.core" end
     return {
-        write = function(s) tui_core_mod.terminal.write(s) end,
+        write = function(s)
+            if _terminal_write then
+                _terminal_write(s)
+            end
+        end,
     }
 end
 
@@ -962,11 +970,14 @@ function M.useTerminalTitle(title)
     if not _ansi_mod_for_title then
         _ansi_mod_for_title = require "tui.internal.ansi"
     end
-    if not tui_core_mod then tui_core_mod = require "tui.core" end
     M.useEffect(function()
-        tui_core_mod.terminal.write(_ansi_mod_for_title.setTitle(title or ""))
+        if _terminal_write then
+            _terminal_write(_ansi_mod_for_title.setTitle(title or ""))
+        end
         return function()
-            tui_core_mod.terminal.write(_ansi_mod_for_title.setTitle(""))
+            if _terminal_write then
+                _terminal_write(_ansi_mod_for_title.setTitle(""))
+            end
         end
     end, { title })
 end

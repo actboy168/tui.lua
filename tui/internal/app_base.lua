@@ -344,6 +344,8 @@ function M.mount(terminal, screen_state, opts)
 
     setup_hit_test()
 
+    require("tui.internal.hooks")._set_terminal_write(terminal.write)
+
     -- Initial paint.
     paint_fn()
 
@@ -366,6 +368,7 @@ function M.unmount(inst)
     end
     inst._mouse_auto_release = nil
     teardown_interactive(inst)
+    require("tui.internal.hooks")._set_terminal_write(nil)
 end
 
 --- Re-render through the scheduler path.

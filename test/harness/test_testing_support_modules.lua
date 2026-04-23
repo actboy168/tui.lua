@@ -1,7 +1,6 @@
 local lt      = require "ltest"
 local tui     = require "tui"
 local testing = require "tui.testing"
-local tui_core = require "tui.core"
 
 local suite = lt.test "testing_support_modules"
 
@@ -54,35 +53,6 @@ function suite:test_capture_stderr_restores_after_error()
         io.stderr:write("[tui:dev] after boom\n")
     end)
     lt.assertNotEquals(captured:find("after boom", 1, true), nil)
-end
-
-function suite:test_capture_writes_nesting_keeps_buffers_separate()
-    local outer = testing.capture_writes(function()
-        tui_core.terminal.write("outer-one")
-        local inner = testing.capture_writes(function()
-            tui_core.terminal.write("inner-only")
-        end)
-        lt.assertEquals(inner, "inner-only")
-        tui_core.terminal.write("outer-two")
-    end)
-
-    lt.assertEquals(outer, "outer-oneouter-two")
-end
-
-function suite:test_capture_writes_restores_after_error()
-    local ok, err = pcall(function()
-        testing.capture_writes(function()
-            tui_core.terminal.write("before-boom")
-            error("boom")
-        end)
-    end)
-    lt.assertFalse(ok)
-    lt.assertNotEquals(tostring(err):find("boom", 1, true), nil)
-
-    local captured = testing.capture_writes(function()
-        tui_core.terminal.write("after-boom")
-    end)
-    lt.assertEquals(captured, "after-boom")
 end
 
 function suite:test_snapshot_first_write_and_crlf_trim_compare()

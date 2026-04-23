@@ -95,8 +95,7 @@ end
 -- ---------------------------------------------------------------------------
 -- useTerminalTitle
 --
--- Effects call tui_core.terminal.write() directly (outside the harness fake
--- terminal). Use testing.capture_writes() to intercept those sequences.
+-- Effects write through the harness terminal, captured in h:ansi().
 
 local function MountWithTitle(props)
     tui.useTerminalTitle(props.title or "mytitle")
@@ -108,10 +107,9 @@ local function escape_ctrl(s)
 end
 
 function suite:test_title_osc_sequence_format()
-    local raw = testing.capture_writes(function()
-        local h = testing.render(tui.component(MountWithTitle), { cols = 5, rows = 1 })
-        h:unmount()
-    end)
+    local h = testing.render(tui.component(MountWithTitle), { cols = 5, rows = 1 })
+    local raw = h:ansi()
+    h:unmount()
     -- Must contain ESC ] 0 ; mytitle  (BEL or ST terminator follows)
     lt.assertTrue(raw:find("\x1b]0;mytitle", 1, true) ~= nil,
                   "expected OSC 0;mytitle sequence, got: " .. escape_ctrl(raw))
@@ -126,12 +124,11 @@ function suite:test_title_updates_on_prop_change()
         return tui.Text { width = 5, height = 1, title }
     end
 
-    local raw = testing.capture_writes(function()
-        local h = testing.render(DynTitleApp, { cols = 5, rows = 1 })
-        set_title_ref.set("second")
-        h:rerender()
-        h:unmount()
-    end)
+    local h = testing.render(DynTitleApp, { cols = 5, rows = 1 })
+    set_title_ref.set("second")
+    h:rerender()
+    local raw = h:ansi()
+    h:unmount()
     lt.assertTrue(raw:find("\x1b]0;second", 1, true) ~= nil,
                   "title should update to 'second', got: " .. escape_ctrl(raw))
 end
@@ -144,9 +141,9 @@ function suite:test_title_cleared_on_unmount()
 
     -- Capture only the unmount phase so we verify the cleanup effect fires.
     local h = testing.render(DynApp, { cols = 5, rows = 1 })
-    local raw = testing.capture_writes(function()
-        h:unmount()
-    end)
+    h:clear_ansi()
+    h:unmount()
+    local raw = h:ansi()
     -- Cleanup effect should write setTitle("") → ESC ] 0 ; <terminator>
     lt.assertTrue(raw:find("\x1b]0;", 1, true) ~= nil,
                   "cleanup should write a title-clear sequence, got: " .. escape_ctrl(raw))

@@ -1,5 +1,3 @@
-local tui_core = require "tui.core"
-
 local M = {}
 
 local real_stderr           = io.stderr
@@ -43,16 +41,6 @@ function M.capture_stderr(fn)
     capture_buffer = prev
     if not ok then error(err, 2) end
     return s
-end
-
-function M.capture_writes(fn)
-    local buf = {}
-    local orig = tui_core.terminal.write
-    tui_core.terminal.write = function(s) buf[#buf + 1] = s end
-    local ok, err = pcall(fn)
-    tui_core.terminal.write = orig
-    if not ok then error(err, 2) end
-    return table.concat(buf)
 end
 
 install_stderr_hook()

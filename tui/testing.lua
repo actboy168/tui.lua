@@ -16,7 +16,6 @@ local M = {
         return require("tui.testing.bare").mount(App)
     end,
     capture_stderr = capture.capture_stderr,
-    capture_writes = capture.capture_writes,
 }
 
 snapshot.install(harness.Harness)
