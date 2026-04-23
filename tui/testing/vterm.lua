@@ -173,6 +173,7 @@ function M.as_terminal(vt, opts)
     opts = opts or {}
     local ansi_buf     = opts.ansi_buf
     local validate_csi = opts.validate_csi
+    local capabilities = opts.capabilities
 
     return {
         write = function(s)
@@ -206,6 +207,7 @@ function M.as_terminal(vt, opts)
         resize = function(cols, rows)
             vt:resize(cols, rows)
         end,
+        capabilities = capabilities,
     }
 end
 

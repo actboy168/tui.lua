@@ -1,6 +1,7 @@
 -- test/input/test_ansi.lua — tests for terminal detection, CI/TTY, and ansi sequences.
 local lt       = require "ltest"
 local ansi     = require "tui.internal.ansi"
+local terminal = require "tui.internal.terminal"
 
 local test_ansi = lt.test "ansi"
 
@@ -8,23 +9,23 @@ local test_ansi = lt.test "ansi"
 -- 1. Interactive mode
 
 function test_ansi:test_interactive_returns_boolean()
-    lt.assertEquals(type(ansi.interactive()), "boolean")
+    lt.assertEquals(type(terminal.interactive()), "boolean")
 end
 
 function test_ansi:test_interactive_false_when_not_tty()
-    ansi.set_tty(false)
-    lt.assertEquals(ansi.interactive(), false)
-    ansi._reset_tty()
+    terminal.set_tty(false)
+    lt.assertEquals(terminal.interactive(), false)
+    terminal._reset_tty()
 end
 
 function test_ansi:test_set_tty_override()
     -- set_tty should affect interactive() behavior
-    ansi.set_tty(true)
-    local before = ansi.interactive()
-    ansi.set_tty(false)
-    local after = ansi.interactive()
+    terminal.set_tty(true)
+    local before = terminal.interactive()
+    terminal.set_tty(false)
+    local after = terminal.interactive()
     lt.assertEquals(after, false)
-    ansi._reset_tty()
+    terminal._reset_tty()
 end
 
 -- ---------------------------------------------------------------------------

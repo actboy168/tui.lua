@@ -3,11 +3,12 @@
 -- Tests cover:
 --   • tui_core.keys.parse() with CSI u sequences (flags=3: disambiguate + event types)
 --   • ansi.kittyKeyboard constant values
---   • ansi.supports_kitty_keyboard type
+--   • terminal.detect_capabilities().kitty_keyboard type
 
 local lt       = require "ltest"
 local tui_core = require "tui.core"
 local ansi     = require "tui.internal.ansi"
+local terminal = require "tui.internal.terminal"
 local keys     = tui_core.keys
 
 local suite = lt.test "kitty_keyboard"
@@ -154,5 +155,5 @@ function suite:test_kitty_keyboard_pop_sequence()
 end
 
 function suite:test_supports_kitty_keyboard_is_boolean()
-    lt.assertEquals(type(ansi.supports_kitty_keyboard), "boolean")
+    lt.assertEquals(type(terminal.detect_capabilities().kitty_keyboard), "boolean")
 end

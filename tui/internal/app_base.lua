@@ -237,6 +237,7 @@ function M.mount(terminal, screen_state, opts)
         _mouse_auto_release = nil,
         _tree              = nil,
         _render_count      = 0,
+        _capabilities      = opts.capabilities,
     }
 
     local function check_resize()
@@ -277,7 +278,7 @@ function M.mount(terminal, screen_state, opts)
                 cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
                 screen_mod.set_display_cursor(screen_state, ccol - 1, crow - 1)
             elseif not interactive then
-                cursor_seq = ansi.cursorShow() .. ansi.cursorPosition(ccol, crow)
+                cursor_seq = ansi.cursorShow() .. ansi.cursorPosition(ccol, crow, inst._capabilities)
             end
         elseif interactive then
             cursor_seq = ansi.cursorHide()
@@ -288,7 +289,12 @@ function M.mount(terminal, screen_state, opts)
 
     local function write_output(diff, cursor_seq)
         if interactive and (#diff > 0 or #cursor_seq > 0) then
-            terminal.write(ansi.beginSyncUpdate() .. diff .. cursor_seq .. ansi.endSyncUpdate())
+            local caps = inst._capabilities
+            if caps and caps.sync_output then
+                terminal.write(ansi.beginSyncUpdate(caps) .. diff .. cursor_seq .. ansi.endSyncUpdate(caps))
+            else
+                terminal.write(diff .. cursor_seq)
+            end
         elseif #diff > 0 then
             terminal.write(diff)
         elseif not interactive and #cursor_seq > 0 then
@@ -345,6 +351,7 @@ function M.mount(terminal, screen_state, opts)
     setup_hit_test()
 
     require("tui.internal.hooks")._set_terminal_write(terminal.write)
+    require("tui.internal.hooks")._set_terminal_caps(opts.capabilities)
 
     -- Initial paint.
     paint_fn()
@@ -369,6 +376,7 @@ function M.unmount(inst)
     inst._mouse_auto_release = nil
     teardown_interactive(inst)
     require("tui.internal.hooks")._set_terminal_write(nil)
+    require("tui.internal.hooks")._set_terminal_caps(nil)
 end
 
 --- Re-render through the scheduler path.

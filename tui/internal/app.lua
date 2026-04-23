@@ -4,14 +4,14 @@
 -- initialization but differ in terminal (real vs vterm-backed) and scheduler
 -- integration (scheduler.run vs harness loop_once).
 
-local tui_core   = require "tui.core"
-local terminal   = tui_core.terminal
-local screen_mod = require "tui.internal.screen"
-local scheduler  = require "tui.internal.scheduler"
-local ansi       = require "tui.internal.ansi"
-local app_base   = require "tui.internal.app_base"
-local hit_test   = require "tui.internal.hit_test"
-local layout     = require "tui.internal.layout"
+local tui_core     = require "tui.core"
+local terminal     = tui_core.terminal
+local screen_mod   = require "tui.internal.screen"
+local scheduler    = require "tui.internal.scheduler"
+local terminal_mod = require "tui.internal.terminal"
+local app_base     = require "tui.internal.app_base"
+local hit_test     = require "tui.internal.hit_test"
+local layout       = require "tui.internal.layout"
 
 local M = {}
 
@@ -27,13 +27,14 @@ function M.render(root, opts)
     terminal.windows_vt_enable()
     terminal.set_raw(true)
 
-    local interactive = ansi.interactive()
-    local use_kkp = opts.kitty_keyboard ~= nil and opts.kitty_keyboard or ansi.supports_kitty_keyboard
+    local caps = terminal_mod.detect_capabilities()
+    local interactive = terminal_mod.interactive()
+    local use_kkp = opts.kitty_keyboard ~= nil and opts.kitty_keyboard or caps.kitty_keyboard
 
     local w, h = terminal.get_size()
     local screen_state = screen_mod.new(w, h)
 
-    local level = ansi.color_level
+    local level = caps.color_level
     if opts.colorLevel == "16" then level = 0
     elseif opts.colorLevel == "256" then level = 1
     elseif opts.colorLevel == "truecolor" then level = 2 end
@@ -42,6 +43,7 @@ function M.render(root, opts)
     local inst = app_base.mount(terminal, screen_state, {
         root           = root,
         app_handle     = { exit = function() scheduler.stop() end },
+        capabilities   = caps,
         interactive    = interactive,
         use_kkp        = use_kkp,
         throw_on_error = false,

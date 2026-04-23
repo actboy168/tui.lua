@@ -6,6 +6,7 @@ local input_mod     = require "tui.internal.input"
 local capture       = require "tui.testing.capture"
 local vterm         = require "tui.testing.vterm"
 local vclock        = require "tui.testing.vclock"
+local terminal_mod  = require "tui.internal.terminal"
 local tui_core      = require "tui.core"
 
 local M = {}
@@ -163,13 +164,6 @@ function Harness:unmount()
     -- harness-specific cleanup
     layout.reset()
     hooks._set_dev_mode(false)
-    if self._ansi_restore then
-        self._ansi_restore()
-        self._ansi_restore = nil
-    end
-    if self._interactive then
-        require("tui.internal.ansi").set_interactive_fn(nil)
-    end
     capture.drain_and_fatal_if_any()
 end
 
@@ -181,20 +175,9 @@ function M.render(App, opts)
     local now0 = opts.now or 0
     local use_interactive = opts.interactive ~= false
 
-    -- harness-specific: ansi override
-    local ansi_mod = require "tui.internal.ansi"
-    local ansi_restore = nil
-    if opts.term_type ~= nil then
-        ansi_restore = ansi_mod.override(opts.term_type)
-    elseif use_interactive then
-        -- interactive mode without explicit term_type: override with a
-        -- terminal that supports sync_output so interactive tests are
-        -- deterministic regardless of the real terminal environment.
-        ansi_restore = ansi_mod.override("kitty")
-    end
-    if use_interactive then
-        ansi_mod.set_interactive_fn(function() return true end)
-    end
+    local caps = opts.term_type
+        and terminal_mod.detect_capabilities(opts.term_type)
+        or terminal_mod.default_vterm_capabilities
 
     -- harness-specific: pre-cleanup
     layout.reset()
@@ -209,11 +192,12 @@ function M.render(App, opts)
     local term = vterm.as_terminal(vt, {
         ansi_buf = ansi_buf,
         validate_csi = true,
+        capabilities = caps,
     })
 
     -- Create screen
     local screen_state = screen_mod.new(W, H)
-    tui_core.screen.set_color_level(screen_state, 2)
+    tui_core.screen.set_color_level(screen_state, caps.color_level)
 
     -- Mount shared instance (inside pcall for error recovery)
     local h
@@ -221,6 +205,7 @@ function M.render(App, opts)
         local inst = app_base.mount(term, screen_state, {
             root           = App,
             app_handle     = { exit = function() inst._dead = true end },
+            capabilities   = caps,
             interactive    = use_interactive,
             use_kkp        = false,
             throw_on_error = true,
@@ -233,7 +218,6 @@ function M.render(App, opts)
         -- Add harness-specific fields
         inst._vt = vt
         inst._ansi_buf = ansi_buf
-        inst._ansi_restore = ansi_restore
         inst._clock = clock
         inst._dead = false
         inst._composing = ""
@@ -242,7 +226,6 @@ function M.render(App, opts)
     end)
 
     if not ok then
-        if ansi_restore then ansi_restore() end
         app_base.reset_framework()
         error(err, 2)
     end

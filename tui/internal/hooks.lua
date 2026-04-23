@@ -872,9 +872,14 @@ end
 -- Intended for use inside effects or event handlers, not during render.
 
 local _terminal_write
+local _terminal_caps
 
 function M._set_terminal_write(fn)
     _terminal_write = fn
+end
+
+function M._set_terminal_caps(caps)
+    _terminal_caps = caps
 end
 
 function M.useStdout()
@@ -972,11 +977,11 @@ function M.useTerminalTitle(title)
     end
     M.useEffect(function()
         if _terminal_write then
-            _terminal_write(_ansi_mod_for_title.setTitle(title or ""))
+            _terminal_write(_ansi_mod_for_title.setTitle(title or "", _terminal_caps))
         end
         return function()
             if _terminal_write then
-                _terminal_write(_ansi_mod_for_title.setTitle(""))
+                _terminal_write(_ansi_mod_for_title.setTitle("", _terminal_caps))
             end
         end
     end, { title })
