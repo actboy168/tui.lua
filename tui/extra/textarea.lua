@@ -649,6 +649,7 @@ local function textarea_impl(props)
     local cursor_row = cl - st - 1   -- 0-based row within viewport
     local cursor_line, cursor_line_caret = core.with_composing(lines_now[cl], cc, composing)
     local cursor_col = core.prefix_width(cursor_line, cursor_line_caret)
+    local cursor = tui.useCursor()
 
     local row_elements = {}
     for r = 0, vis_height - 1 do
@@ -674,13 +675,13 @@ local function textarea_impl(props)
             row_children = { "" }
         end
         local row_el = tui.Text { key = tostring(r + 1), width = width, wrap = "nowrap", table.unpack(row_children) }
-        if r == cursor_row then
-            local cursor = tui.useCursor {
-                x      = cursor_col,
-                y      = 0,
-                active = focus_flag and not disabled,
+        if r == cursor_row and focus_flag and not disabled then
+            cursor.setCursorPosition {
+                x = cursor_col,
+                y = cursor_row,
             }
-            cursor(row_el)
+            row_el._cursor_offset = cursor_col
+            row_el._cursor_focused = true
         end
         row_elements[r + 1] = row_el
     end

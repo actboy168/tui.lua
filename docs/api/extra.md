@@ -54,13 +54,14 @@ local function MiniInput(props)
         end,
     }
 
-    local cursor = tui.useCursor {
-        x = editing.prefix_width(chars, caret),
-        y = 0,
-        active = f.isFocused,
-    }
+    local cursor = tui.useCursor()
+    if f.isFocused then
+        cursor.setCursorPosition {
+            x = editing.prefix_width(chars, caret),
+            y = 0,
+        }
+    end
     local text = tui.Text { value }
-    cursor(text)
     return text
 end
 ```

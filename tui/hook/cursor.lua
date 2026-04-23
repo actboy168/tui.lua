@@ -1,58 +1,78 @@
--- tui/hook/cursor.lua — Cursor declaration API (Ink-compatible single-writer model)
+-- tui/hook/cursor.lua — Ink-style cursor hook adapted to tui.lua.
 --
--- Components declare cursor position via useCursor({x, y, active}),
--- which returns a tagger function. Apply the tagger to your Text element
--- before returning it:
+-- Ink reference:
+--   https://github.com/vadimdemedes/ink/blob/master/src/hooks/use-cursor.ts
 --
---   local tui = require "tui"
---   function MyInput(props)
---       local isFocused = tui.useFocus()
---       local cursor = tui.useCursor {
---           x = props.caretColumn,
---           y = 0,
---           active = isFocused,
---       }
---       local el = tui.Text { "hello" }
---       cursor(el)
---       return el
---   end
+-- API:
+--   local cursor = tui.useCursor()
+--   cursor.setCursorPosition { x = 3, y = 0 }
+--   cursor.setCursorPosition(nil)  -- hide cursor
 --
--- The tagger writes _cursor_offset and _cursor_focused metadata onto the
--- element. After layout, find_cursor() in init.lua resolves these to
--- absolute screen coordinates using the element's Yoga rect.
---
--- This matches Ink's useCursor:
---   https://github.com/vadimdemedes/ink/blob/master/src/hooks/use-declared-cursor.ts
--- Ink uses a ref callback + CursorDeclarationContext; we use direct
--- element tagging (simpler, no context or nodeCache needed).
+-- In tui.lua the position is relative to the component's rendered host root.
+-- The reconciler hoists the declaration onto that host root after expansion,
+-- and app_base.find_cursor() resolves it to absolute screen coordinates.
+
+local core = require "tui.hook.core"
+local effect_mod = require "tui.hook.effect"
+local state_mod = require "tui.hook.state"
 
 local M = {}
 
---- useCursor({x, y, active}) -> tagger function
--- Declares a cursor position within the component's output element.
---
--- Parameters (table):
---   x      - column offset within the element (0-based, display width)
---   y      - row offset within the element (0-based; single-line inputs use 0)
---   active - whether this declaration is currently active
---
--- Returns a function that tags a Text element with cursor metadata.
--- Only call the tagger when active=true; inactive declarations leave
--- the element untagged so a sibling can claim the cursor.
-function M.useCursor(opts)
-    local x = opts.x or 0
-    local y = opts.y or 0
-    local active = opts.active
+local function is_integer(v)
+    return type(v) == "number" and v == math.floor(v)
+end
 
-    if active then
-        return function(el)
-            el._cursor_offset = x
-            el._cursor_focused = true
-        end
+local function normalize_position(position)
+    if position == nil then return nil end
+    if type(position) ~= "table" then
+        error("useCursor: expected position table or nil", 3)
     end
 
-    -- Inactive: no-op tagger
-    return function() end
+    local x = position.x or 0
+    local y = position.y or 0
+    if not is_integer(x) then
+        error("useCursor: position.x must be an integer", 3)
+    end
+    if not is_integer(y) then
+        error("useCursor: position.y must be an integer", 3)
+    end
+    if x < 0 then x = 0 end
+    if y < 0 then y = 0 end
+    return { x = x, y = y }
+end
+
+---@class tui.CursorPosition
+---@field x integer
+---@field y integer
+
+---@class tui.CursorHandle
+---@field setCursorPosition fun(position: tui.CursorPosition|nil)
+
+---Return an Ink-style cursor handle for the current component.
+---@return tui.CursorHandle
+function M.useCursor()
+    local inst = core._current()
+
+    -- Each render starts with no declared cursor. Callers opt in by invoking
+    -- setCursorPosition() during render; if they stop calling it, the cursor
+    -- disappears on the next frame instead of leaking stale coordinates.
+    inst._cursor_position = nil
+
+    local set_cursor_position = state_mod.useCallback(function(position)
+        inst._cursor_position = normalize_position(position)
+    end, {})
+
+    effect_mod.useEffect(function()
+        return function()
+            inst._cursor_position = nil
+        end
+    end, {})
+
+    return state_mod.useMemo(function()
+        return {
+            setCursorPosition = set_cursor_position,
+        }
+    end, {})
 end
 
 return M

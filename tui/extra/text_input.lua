@@ -437,21 +437,18 @@ local function text_input_impl(props)
     -- Build the Text child; user may apply styling via a wrapper Box.
     local text_el = tui.Text { width = render_width, wrap = "nowrap", table.unpack(text_children) }
 
-    -- Single-writer cursor model: only the focused TextInput declares its
-    -- cursor position via useCursor(). The tagger writes _cursor_offset
-    -- and _cursor_focused metadata onto the element; init.lua's find_cursor
-    -- resolves these to absolute screen coordinates after layout.
-    --
-    -- IMPORTANT: also check `disabled` (props.focus==false) here to avoid
-    -- stale cursor rendering when focus transitions between components.
-    -- The useFocus isFocused state updates asynchronously via effect, which
-    -- can cause one frame of incorrect cursor display after focus changes.
-    local cursor = tui.useCursor {
-        x = caret_col,
-        y = 0,
-        active = focus_flag and not disabled,
-    }
-    cursor(text_el)
+    -- Ink-style useCursor(): declare the caret relative to this component's
+    -- rendered root box. We still tag the active Text node with caret metadata
+    -- so existing tests and debug helpers can inspect the visible cursor row.
+    local cursor = tui.useCursor()
+    if focus_flag and not disabled then
+        cursor.setCursorPosition {
+            x = caret_col,
+            y = 0,
+        }
+        text_el._cursor_offset = caret_col
+        text_el._cursor_focused = true
+    end
 
     -- Mouse support: wrap the Text element in a Box so the framework's
     -- hit-test can dispatch onClick events to this component.

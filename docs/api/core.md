@@ -330,8 +330,9 @@ tui.useAnimation(render: function(t: number): element, options: {
 #### useCursor
 
 ```lua
-tui.useCursor(col, row)
--- 声明光标位置（在渲染函数中调用）
+local cursor = tui.useCursor()
+cursor.setCursorPosition({ x = col, y = row })
+cursor.setCursorPosition(nil) -- 隐藏光标
 ```
 
 ### 错误边界

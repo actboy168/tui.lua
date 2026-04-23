@@ -177,23 +177,42 @@ find_cursor = function(tree)
     local root_w = tree.rect and tree.rect.w
     local root_h = tree.rect and tree.rect.h
 
+    local function push_candidate(col, row, focused)
+        local cand = { col = col, row = row }
+        if not first_candidate then
+            first_candidate = cand
+        end
+        if focused and not focused_candidate then
+            focused_candidate = cand
+        end
+    end
+
     local function walk(e)
         if not e then return end
-        if e.kind == "text" and e._cursor_offset ~= nil then
-            local r = e.rect or { x = 0, y = 0 }
+
+        local r = e.rect or { x = 0, y = 0 }
+        if e._cursor_position ~= nil then
+            local pos = e._cursor_position
+            local x = pos.x or 0
+            local y = pos.y or 0
+            if x < 0 then x = 0 end
+            if y < 0 then y = 0 end
+            if r.w and x > r.w then x = r.w end
+            if r.h and y > math.max(0, r.h - 1) then y = math.max(0, r.h - 1) end
+            local col = r.x + x + 1
+            if root_w and col > root_w then col = root_w end
+            local row = r.y + y + 1
+            if root_h and row > root_h then row = root_h end
+            push_candidate(col, row, true)
+        elseif e.kind == "text" and e._cursor_offset ~= nil then
             local offset = math.min(e._cursor_offset, r.w or e._cursor_offset)
             local col = r.x + offset + 1
             if root_w and col > root_w then col = root_w end
             local row = r.y + 1
             if root_h and row > root_h then row = root_h end
-            local cand = { col = col, row = row }
-            if not first_candidate then
-                first_candidate = cand
-            end
-            if e._cursor_focused and not focused_candidate then
-                focused_candidate = cand
-            end
+            push_candidate(col, row, e._cursor_focused)
         end
+
         if e.children then
             for _, c in ipairs(e.children) do
                 walk(c)

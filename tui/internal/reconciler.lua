@@ -209,6 +209,12 @@ local function expand(state, element, path)
         -- Recurse: the fn's output may itself contain components.
         local expanded = expand(state, rendered, path .. "/fn")
 
+        -- Hoist an Ink-style useCursor() declaration onto the component's
+        -- rendered host root so layout/readback can resolve it later.
+        if type(expanded) == "table" and inst._cursor_position ~= nil then
+            expanded._cursor_position = inst._cursor_position
+        end
+
         -- Queue effects for post-commit.
         state._effects_to_flush[#state._effects_to_flush + 1] = inst
         return expanded
