@@ -507,7 +507,6 @@ function suite:test_error_fallback_banner_with_throw_on_error_false()
     lt.assertNotEquals(text_child.text:find("something went wrong"), nil,
         "fallback should contain the error message")
 
-    layout_mod.free(tree)
     reconciler_mod.shutdown(rec_state)
 end
 
@@ -539,7 +538,6 @@ function suite:test_error_fallback_banner_renders_to_screen()
     lt.assertNotEquals(rows[1]:find("%[tui%] render error:"), nil,
         "screen row 1 should contain error banner")
 
-    layout_mod.free(tree)
     reconciler_mod.shutdown(rec_state)
 end
 
@@ -581,7 +579,6 @@ function suite:test_error_fallback_does_not_fire_with_good_component()
     lt.assertEquals(found_error_banner, false,
         "good component should not produce error banner")
 
-    layout_mod.free(tree)
     reconciler_mod.shutdown(rec_state)
 end
 

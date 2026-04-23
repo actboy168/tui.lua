@@ -3,6 +3,9 @@
 -- Provides named functions instead of raw escape string concatenation.
 -- Functions that depend on terminal-specific support accept an optional
 -- `caps` table so callers can gate sequences per-terminal.
+--
+-- Constant sequences are pre-computed as module-level values to avoid
+-- per-call string concatenation.
 
 local M = {}
 
@@ -13,16 +16,25 @@ local <const> ST  = ESC .. "\\"
 -- ---------------------------------------------------------------------------
 -- Cursor visibility (DECTCEM: DEC mode 25)
 
-function M.cursorShow()
-    return ESC .. "[?25h"
-end
-
-function M.cursorHide()
-    return ESC .. "[?25l"
-end
+M.cursorShow  = ESC .. "[?25h"
+M.cursorHide  = ESC .. "[?25l"
 
 -- ---------------------------------------------------------------------------
 -- Cursor positioning (CSI)
+
+local <const> _CSI_H = ESC .. "[%d;%dH"
+local <const> _CSI_G = ESC .. "[%dG"
+local <const> _CSI_A = ESC .. "[%dA"
+local <const> _CSI_B = ESC .. "[%dB"
+local <const> _CSI_C = ESC .. "[%dC"
+local <const> _CSI_D = ESC .. "[%dD"
+local <const> _CURSOR_HOME   = ESC .. "[H"
+local <const> _CURSOR_LEFT   = ESC .. "[G"
+local <const> _CURSOR_UP1    = ESC .. "[A"
+local <const> _CURSOR_DOWN1  = ESC .. "[B"
+local <const> _CURSOR_FWD1   = ESC .. "[C"
+local <const> _CURSOR_BACK1  = ESC .. "[D"
+local <const> _CURSOR_TO1    = ESC .. "[G"
 
 --- Move cursor to absolute (col, row). Both 1-based.
 function M.cursorPosition(col, row, caps)
@@ -30,45 +42,45 @@ function M.cursorPosition(col, row, caps)
     if caps and caps.ime_osc1337 then
         suffix = ESC .. "]1337;SetMark" .. (caps.osc_st and ST or BEL)
     end
-    return string.format(ESC .. "[%d;%dH", row, col) .. suffix
+    return string.format(_CSI_H, row, col) .. suffix
 end
 
 --- Move cursor to absolute column on the current row (CSI n G). 1-based.
 function M.cursorTo(col)
-    if col == 1 then return ESC .. "[G" end
-    return string.format(ESC .. "[%dG", col)
+    if col == 1 then return _CURSOR_TO1 end
+    return string.format(_CSI_G, col)
 end
 
 --- Move cursor up by n rows (default 1).
 function M.cursorUp(n)
     n = n or 1
     if n == 0 then return "" end
-    if n == 1 then return ESC .. "[A" end
-    return string.format(ESC .. "[%dA", n)
+    if n == 1 then return _CURSOR_UP1 end
+    return string.format(_CSI_A, n)
 end
 
 --- Move cursor down by n rows (default 1).
 function M.cursorDown(n)
     n = n or 1
     if n == 0 then return "" end
-    if n == 1 then return ESC .. "[B" end
-    return string.format(ESC .. "[%dB", n)
+    if n == 1 then return _CURSOR_DOWN1 end
+    return string.format(_CSI_B, n)
 end
 
 --- Move cursor forward by n columns (default 1).
 function M.cursorForward(n)
     n = n or 1
     if n == 0 then return "" end
-    if n == 1 then return ESC .. "[C" end
-    return string.format(ESC .. "[%dC", n)
+    if n == 1 then return _CURSOR_FWD1 end
+    return string.format(_CSI_C, n)
 end
 
 --- Move cursor backward by n columns (default 1).
 function M.cursorBackward(n)
     n = n or 1
     if n == 0 then return "" end
-    if n == 1 then return ESC .. "[D" end
-    return string.format(ESC .. "[%dD", n)
+    if n == 1 then return _CURSOR_BACK1 end
+    return string.format(_CSI_D, n)
 end
 
 --- Move cursor relative: positive x=right, negative x=left,
@@ -89,21 +101,16 @@ function M.cursorMove(x, y)
 end
 
 --- Move cursor to the beginning of the current line (column 1).
-M.cursorLeft = ESC .. "[G"
+M.cursorLeft = _CURSOR_LEFT
 
 --- Move cursor to home position (row 1, column 1).
-M.cursorHome = ESC .. "[H"
+M.cursorHome = _CURSOR_HOME
 
 -- ---------------------------------------------------------------------------
 -- Cursor save / restore
 
-function M.cursorSave()
-    return ESC .. "[s"
-end
-
-function M.cursorRestore()
-    return ESC .. "[u"
-end
+M.cursorSave    = ESC .. "[s"
+M.cursorRestore = ESC .. "[u"
 
 -- ---------------------------------------------------------------------------
 -- Cursor shape (DECSCUSR: CSI n SP q)
@@ -114,12 +121,14 @@ local <const> CURSOR_SHAPE_MAP = {
     bar       = { blinking = 5, steady = 6 },
 }
 
+local <const> _CSI_Q = ESC .. "[%d q"
+
 function M.cursorShape(style, blinking, caps)
     if caps and not caps.cursor_shape then return "" end
     local shapes = CURSOR_SHAPE_MAP[style]
     if not shapes then return "" end
     local n = (blinking ~= false) and shapes.blinking or shapes.steady
-    return string.format(ESC .. "[%d q", n)
+    return string.format(_CSI_Q, n)
 end
 
 -- ---------------------------------------------------------------------------
@@ -147,22 +156,29 @@ end
 -- ---------------------------------------------------------------------------
 -- Scroll
 
+local <const> _CSI_S = ESC .. "[%dS"
+local <const> _CSI_T = ESC .. "[%dT"
+local <const> _SCROLL_UP1   = ESC .. "[S"
+local <const> _SCROLL_DOWN1 = ESC .. "[T"
+
 function M.scrollUp(n)
     n = n or 1
     if n == 0 then return "" end
-    if n == 1 then return ESC .. "[S" end
-    return string.format(ESC .. "[%dS", n)
+    if n == 1 then return _SCROLL_UP1 end
+    return string.format(_CSI_S, n)
 end
 
 function M.scrollDown(n)
     n = n or 1
     if n == 0 then return "" end
-    if n == 1 then return ESC .. "[T" end
-    return string.format(ESC .. "[%dT", n)
+    if n == 1 then return _SCROLL_DOWN1 end
+    return string.format(_CSI_T, n)
 end
 
+local <const> _CSI_R = ESC .. "[%d;%dr"
+
 function M.setScrollRegion(top, bottom)
-    return string.format(ESC .. "[%d;%dr", top, bottom)
+    return string.format(_CSI_R, top, bottom)
 end
 
 M.resetScrollRegion = ESC .. "[r"
@@ -170,24 +186,29 @@ M.resetScrollRegion = ESC .. "[r"
 -- ---------------------------------------------------------------------------
 -- DEC private modes
 
+local <const> _ALT_SCREEN_ON  = ESC .. "[?1049h"
+local <const> _ALT_SCREEN_OFF = ESC .. "[?1049l"
+local <const> _SYNC_ON        = ESC .. "[?2026h"
+local <const> _SYNC_OFF       = ESC .. "[?2026l"
+
 function M.enterAltScreen(caps)
     if caps and not caps.alt_screen then return "" end
-    return ESC .. "[?1049h"
+    return _ALT_SCREEN_ON
 end
 
 function M.exitAltScreen(caps)
     if caps and not caps.alt_screen then return "" end
-    return ESC .. "[?1049l"
+    return _ALT_SCREEN_OFF
 end
 
 function M.beginSyncUpdate(caps)
     if caps and not caps.sync_output then return "" end
-    return ESC .. "[?2026h"
+    return _SYNC_ON
 end
 
 function M.endSyncUpdate(caps)
     if caps and not caps.sync_output then return "" end
-    return ESC .. "[?2026l"
+    return _SYNC_OFF
 end
 
 M.enableBracketedPaste  = ESC .. "[?2004h"
@@ -215,12 +236,14 @@ M.kittyKeyboard = {
 -- ---------------------------------------------------------------------------
 -- Terminal title (OSC 0/2)
 
+local <const> _OSC_0 = ESC .. "]0;"
+
 function M.setTitle(title, caps)
     local term = BEL
     if caps and caps.osc_st then
         term = ST
     end
-    return ESC .. "]0;" .. (title or "") .. term
+    return _OSC_0 .. (title or "") .. term
 end
 
 -- ---------------------------------------------------------------------------
@@ -231,9 +254,11 @@ M.resetSgr = ESC .. "[0m"
 -- ---------------------------------------------------------------------------
 -- iTerm2 extensions
 
+local <const> _ITERM2_SETMARK = ESC .. "]1337;SetMark"
+
 function M.iterm2SetMark(caps)
     if not caps or not caps.ime_osc1337 then return "" end
-    return ESC .. "]1337;SetMark" .. (caps.osc_st and ST or BEL)
+    return _ITERM2_SETMARK .. (caps.osc_st and ST or BEL)
 end
 
 -- ---------------------------------------------------------------------------
@@ -241,11 +266,14 @@ end
 
 M.clearScreen = ESC .. "[H" .. ESC .. "[2J"
 
+local <const> _CLEAR_FULL          = ESC .. "[H" .. ESC .. "[2J" .. ESC .. "[3J"
+local <const> _CLEAR_FULL_LEGACY   = ESC .. "[2J" .. ESC .. "[0f"
+
 function M.clearScreenFull(caps)
     if caps and caps.legacy_windows then
-        return ESC .. "[2J" .. ESC .. "[0f"
+        return _CLEAR_FULL_LEGACY
     end
-    return ESC .. "[H" .. ESC .. "[2J" .. ESC .. "[3J"
+    return _CLEAR_FULL
 end
 
 return M

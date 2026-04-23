@@ -64,7 +64,6 @@ function suite:test_layout_integrates_wrap_into_height()
     layout.compute(root)
     lt.assertEquals(el.rect.w, 10)
     lt.assertEquals(el.rect.h, 3)
-    layout.free(root)
 end
 
 function suite:test_renderer_draws_wrapped_lines()
@@ -80,7 +79,6 @@ function suite:test_renderer_draws_wrapped_lines()
     local rows = screen.rows(s)
     lt.assertEquals(rows[1]:sub(1, 5), "hello")
     lt.assertEquals(rows[2]:sub(1, 9), "world how")
-    layout.free(root)
 end
 
 function suite:test_renderer_handles_wide_char_cells()
@@ -97,7 +95,6 @@ function suite:test_renderer_handles_wide_char_cells()
     local rows = screen.rows(s)
     -- Row string should render as "中a  " (2-col + 1-col + 2 padding spaces).
     lt.assertEquals(rows[1], "中a  ")
-    layout.free(root)
 end
 
 -- ---------------------------------------------------------------------------
@@ -218,7 +215,6 @@ function suite:test_layout_hard_wrap()
     lt.assertEquals(el.rect.h, 2)
     lt.assertEquals(el.lines[1], "abcd")
     lt.assertEquals(el.lines[2], "efgh")
-    layout.free(root)
 end
 
 -- ---------------------------------------------------------------------------
@@ -230,7 +226,6 @@ function suite:test_layout_truncate_end()
     layout.compute(root)
     lt.assertEquals(el.rect.h, 1)
     lt.assertEquals(el.lines[1], "hello w\xe2\x80\xa6")
-    layout.free(root)
 end
 
 function suite:test_layout_truncate_end_alias()
@@ -238,7 +233,6 @@ function suite:test_layout_truncate_end_alias()
     local root = tui.Box { width = 20, height = 5, el }
     layout.compute(root)
     lt.assertEquals(el.lines[1], "hello w\xe2\x80\xa6")
-    layout.free(root)
 end
 
 function suite:test_layout_truncate_start()
@@ -247,7 +241,6 @@ function suite:test_layout_truncate_start()
     layout.compute(root)
     lt.assertEquals(el.rect.h, 1)
     lt.assertEquals(el.lines[1], "\xe2\x80\xa6o world")
-    layout.free(root)
 end
 
 function suite:test_layout_truncate_middle()
@@ -256,5 +249,4 @@ function suite:test_layout_truncate_middle()
     layout.compute(root)
     lt.assertEquals(el.rect.h, 1)
     lt.assertEquals(el.lines[1], "hel\xe2\x80\xa6rld")
-    layout.free(root)
 end

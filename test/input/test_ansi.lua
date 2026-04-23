@@ -12,28 +12,12 @@ function test_ansi:test_interactive_returns_boolean()
     lt.assertEquals(type(terminal.interactive()), "boolean")
 end
 
-function test_ansi:test_interactive_false_when_not_tty()
-    terminal.set_tty(false)
-    lt.assertEquals(terminal.interactive(), false)
-    terminal._reset_tty()
-end
-
-function test_ansi:test_set_tty_override()
-    -- set_tty should affect interactive() behavior
-    terminal.set_tty(true)
-    local before = terminal.interactive()
-    terminal.set_tty(false)
-    local after = terminal.interactive()
-    lt.assertEquals(after, false)
-    terminal._reset_tty()
-end
-
 -- ---------------------------------------------------------------------------
 -- 6. ansi.lua sequence generation
 
 function test_ansi:test_cursor_show_hide()
-    lt.assertEquals(ansi.cursorShow(), "\x1b[?25h")
-    lt.assertEquals(ansi.cursorHide(), "\x1b[?25l")
+    lt.assertEquals(ansi.cursorShow, "\x1b[?25h")
+    lt.assertEquals(ansi.cursorHide, "\x1b[?25l")
 end
 
 function test_ansi:test_cursor_position()
@@ -72,8 +56,8 @@ function test_ansi:test_cursor_home()
 end
 
 function test_ansi:test_cursor_save_restore()
-    lt.assertEquals(ansi.cursorSave(), "\x1b[s")
-    lt.assertEquals(ansi.cursorRestore(), "\x1b[u")
+    lt.assertEquals(ansi.cursorSave, "\x1b[s")
+    lt.assertEquals(ansi.cursorRestore, "\x1b[u")
 end
 
 function test_ansi:test_cursor_shape_returns_string_or_empty()

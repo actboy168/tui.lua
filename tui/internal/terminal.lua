@@ -162,44 +162,15 @@ local function is_ci()
     return false
 end
 
-local is_tty_cache = nil
-
 local function is_tty()
-    if is_tty_cache ~= nil then return is_tty_cache end
-    is_tty_cache = (os.getenv("TERM") ~= nil) or IS_WINDOWS
-    return is_tty_cache
-end
-
-function M.set_tty(value)
-    is_tty_cache = value and true or false
-end
-
-function M.is_ci()
-    return is_ci()
-end
-
-function M.is_tty()
-    return is_tty()
+    return (os.getenv("TERM") ~= nil) or IS_WINDOWS
 end
 
 -- ---------------------------------------------------------------------------
 -- Interactive mode
 
-local _interactive_override = nil
-
 function M.interactive()
-    if _interactive_override ~= nil then
-        return _interactive_override()
-    end
     return is_tty() and not is_ci()
-end
-
-function M.set_interactive_fn(fn)
-    _interactive_override = fn
-end
-
-function M._reset_tty()
-    is_tty_cache = nil
 end
 
 -- ---------------------------------------------------------------------------

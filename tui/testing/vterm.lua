@@ -211,8 +211,4 @@ function M.as_terminal(vt, opts)
     }
 end
 
--- Internal scroll helpers (kept for compatibility)
-M._scroll_up   = function() end
-M._scroll_down = function() end
-
 return M

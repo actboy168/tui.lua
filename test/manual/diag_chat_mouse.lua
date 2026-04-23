@@ -35,8 +35,6 @@ open_log()
 -- ── 0. 环境诊断 ────────────────────────────────────────────────────────────
 dbg("=== Environment ===")
 dbg("interactive = " .. tostring(terminal_mod.interactive()))
-dbg("is_tty      = " .. tostring(terminal_mod.is_tty()))
-dbg("is_ci       = " .. tostring(terminal_mod.is_ci()))
 local caps = terminal_mod.detect_capabilities()
 for k, v in pairs(caps) do
     dbg("cap." .. k .. " = " .. tostring(v))

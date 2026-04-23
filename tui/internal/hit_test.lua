@@ -7,7 +7,7 @@
 -- an onClick handler.
 --
 -- This mirrors Ink's hit-test + dispatch architecture:
---   * Box supports onClick / onScroll / onMouseEnter / onMouseLeave props
+--   * Box supports onClick / onScroll props
 --   * Text does NOT support mouse event props (clicks on text bubble to
 --     the nearest ancestor Box with a handler)
 --   * hit_test walks children in reverse order (later siblings overlay
@@ -140,7 +140,7 @@ end
 --- has_mouse_props(tree) -> bool
 -- Scan the tree for any element with mouse-related props.
 -- Used to auto-enable terminal mouse mode.
-local _MOUSE_PROPS = { onClick = true, onScroll = true, onMouseEnter = true, onMouseLeave = true }
+local _MOUSE_PROPS = { onClick = true, onScroll = true }
 
 local function has_mouse_props(tree)
     if not tree then return false end

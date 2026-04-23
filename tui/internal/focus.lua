@@ -233,10 +233,6 @@ function M.get_focused_id()
     return focused_id
 end
 
-function M.get_focused_entry()
-    return focused_id and by_id[focused_id] or nil
-end
-
 --- dispatch_focused(input, key): deliver a key event to the focused entry's
 -- on_input handler. Returns true if a handler was invoked, false otherwise.
 function M.dispatch_focused(input, key)

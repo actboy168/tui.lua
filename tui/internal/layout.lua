@@ -422,13 +422,6 @@ function M.compute(element, term_h)
     return root
 end
 
-function M.free(element)
-    -- Nodes are now pooled and reused across frames; layout.lua manages their
-    -- lifetime via _prev_element.  This function is kept for API compatibility
-    -- (init.lua still calls it) but does nothing.
-    _ = element
-end
-
 -- Compute the minimum intrinsic size (cols, rows) the element tree needs.
 -- This is the smallest terminal size at which the layout can render without
 -- content being clipped or overlapping. Apps can compare this against
@@ -449,8 +442,7 @@ function M.intrinsic_size(element)
 end
 
 -- Reset all cross-frame state. Call this at session end (e.g., unmount) to
--- ensure the next compute() starts from a clean slate.  M.free() is kept as
--- a no-op so the between-frame calling convention in testing.lua is harmless.
+-- ensure the next compute() starts from a clean slate.
 function M.reset()
     if _prev_element then
         release_subtree(_prev_element)

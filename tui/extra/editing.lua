@@ -290,14 +290,14 @@ function M.chars_to_string(chars)
     return table.concat(chars)
 end
 
-function M.char_width(ch)
+local function char_width(ch)
     return tui.displayWidth(ch)
 end
 
 function M.prefix_width(chars, i)
     local w = 0
     for k = 1, i do
-        w = w + M.char_width(chars[k])
+        w = w + char_width(chars[k])
     end
     return w
 end
@@ -310,7 +310,7 @@ function M.col_to_char_index(chars, col, mask)
     if col <= 0 then return 0 end
     local w = 0
     for i = 1, #chars do
-        local cw = mask and 1 or M.char_width(chars[i])
+        local cw = mask and 1 or char_width(chars[i])
         if w + cw > col then
             -- The click falls within this character; snap to the closer edge.
             if col - w < (w + cw) - col then
@@ -324,7 +324,7 @@ function M.col_to_char_index(chars, col, mask)
     return #chars
 end
 
-function M.copy_chars(chars)
+local function copy_chars(chars)
     local out = {}
     for i = 1, #chars do
         out[i] = chars[i]
@@ -332,7 +332,7 @@ function M.copy_chars(chars)
     return out
 end
 
-function M.copy_list(list)
+local function copy_list(list)
     local out = {}
     for i = 1, #list do
         out[i] = list[i]
@@ -341,7 +341,7 @@ function M.copy_list(list)
 end
 
 function M.append_item(list, item)
-    local out = M.copy_list(list)
+    local out = copy_list(list)
     out[#out + 1] = item
     return out
 end
@@ -384,7 +384,7 @@ function M.make_window(chars, caret, width, mask)
     local visible = {}
     local used = 0
     for i = start, #masked do
-        local cw = M.char_width(masked[i])
+        local cw = char_width(masked[i])
         if used + cw > width then break end
         visible[#visible + 1] = masked[i]
         used = used + cw
@@ -450,7 +450,7 @@ function M.normalize_selection(anchor, caret)
     return caret, anchor
 end
 
-function M.insert_chars(chars, caret, ins_chars)
+local function insert_chars(chars, caret, ins_chars)
     if not ins_chars or #ins_chars == 0 then return nil end
     local out = {}
     for i = 1, caret do out[i] = chars[i] end
@@ -461,7 +461,7 @@ end
 
 function M.insert_text(chars, caret, text)
     if not text or text == "" then return nil end
-    return M.insert_chars(chars, caret, M.to_chars(text))
+    return insert_chars(chars, caret, M.to_chars(text))
 end
 
 function M.delete_backward(chars, caret)
@@ -629,10 +629,10 @@ function M.serialize_lines(lines)
     return table.concat(parts, "\n")
 end
 
-function M.copy_lines(lines)
+local function copy_lines(lines)
     local out = {}
     for li = 1, #lines do
-        out[li] = M.copy_chars(lines[li])
+        out[li] = copy_chars(lines[li])
     end
     return out
 end
@@ -671,7 +671,7 @@ end
 function M.col_for_x(line, target_x)
     local x = 0
     for i = 1, #line do
-        local w = M.char_width(line[i])
+        local w = char_width(line[i])
         if x + w > target_x then
             return (target_x - x < x + w - target_x) and (i - 1) or i
         end
@@ -695,7 +695,7 @@ end
 function M.insert_text_lines(lines, cl, cc, text)
     if not text or text == "" then return nil end
 
-    local new_lines = M.copy_lines(lines)
+    local new_lines = copy_lines(lines)
     local line = new_lines[cl]
     local tail = {}
     for i = cc + 1, #line do
@@ -734,11 +734,11 @@ end
 
 function M.delete_backward_lines(lines, cl, cc)
     if cc > 0 then
-        local new_lines = M.copy_lines(lines)
+        local new_lines = copy_lines(lines)
         table.remove(new_lines[cl], cc)
         return new_lines, cl, cc - 1
     elseif cl > 1 then
-        local new_lines = M.copy_lines(lines)
+        local new_lines = copy_lines(lines)
         local prev = new_lines[cl - 1]
         local new_cc = #prev
         for _, ch in ipairs(new_lines[cl]) do
@@ -753,11 +753,11 @@ end
 function M.delete_forward_lines(lines, cl, cc)
     local line = lines[cl]
     if cc < #line then
-        local new_lines = M.copy_lines(lines)
+        local new_lines = copy_lines(lines)
         table.remove(new_lines[cl], cc + 1)
         return new_lines, cl, cc
     elseif cl < #lines then
-        local new_lines = M.copy_lines(lines)
+        local new_lines = copy_lines(lines)
         local cur = new_lines[cl]
         for _, ch in ipairs(new_lines[cl + 1]) do
             cur[#cur + 1] = ch
@@ -770,7 +770,7 @@ end
 
 function M.delete_to_line_start_lines(lines, cl, cc)
     if cc <= 0 then return nil end
-    local new_lines = M.copy_lines(lines)
+    local new_lines = copy_lines(lines)
     local line = new_lines[cl]
     for i = cc, 1, -1 do
         table.remove(line, i)
@@ -781,7 +781,7 @@ end
 function M.delete_to_line_end_lines(lines, cl, cc)
     local line = lines[cl]
     if cc >= #line then return nil end
-    local new_lines = M.copy_lines(lines)
+    local new_lines = copy_lines(lines)
     local new_line = new_lines[cl]
     for i = #new_line, cc + 1, -1 do
         new_line[i] = nil
@@ -794,7 +794,7 @@ function M.delete_word_backward_lines(lines, cl, cc)
     local line = lines[cl]
     local new_cc = M.find_word_left(line, cc)
     if new_cc == cc then return nil end
-    local new_lines = M.copy_lines(lines)
+    local new_lines = copy_lines(lines)
     local new_line = new_lines[cl]
     for i = cc, new_cc + 1, -1 do
         table.remove(new_line, i)
@@ -807,7 +807,7 @@ function M.delete_word_forward_lines(lines, cl, cc)
     if cc >= #line then return nil end
     local new_cc = M.find_word_right(line, cc)
     if new_cc == cc then return nil end
-    local new_lines = M.copy_lines(lines)
+    local new_lines = copy_lines(lines)
     local new_line = new_lines[cl]
     for i = new_cc, cc + 1, -1 do
         table.remove(new_line, i)
@@ -818,7 +818,7 @@ end
 function M.delete_selection_lines(lines, anchor, caret)
     if not M.has_selection_pos(anchor, caret) then return nil end
     local start_pos, end_pos = M.normalize_selection_pos(anchor, caret)
-    local new_lines = M.copy_lines(lines)
+    local new_lines = copy_lines(lines)
 
     if start_pos.line == end_pos.line then
         local line = new_lines[start_pos.line]
@@ -1053,17 +1053,17 @@ function M.restore_redo(redo_stack, set_undo_stack, set_redo_stack, snapshot_cur
     return true
 end
 
-function M.set_composing(state, value)
+local function set_composing(state, value)
     value = value or ""
     state.set_composing(value)
     state.composing = value
 end
 
-function M.clear_composing(state)
+local function clear_composing(state)
     if not state.composing or state.composing == "" then
         return false
     end
-    M.set_composing(state, "")
+    set_composing(state, "")
     return true
 end
 
@@ -1079,7 +1079,7 @@ function M.handle_shared_editor_input(state)
         if not state.features.ime_composing then
             return true
         end
-        M.set_composing(state, state.input)
+        set_composing(state, state.input)
         return true
     end
     if state.name == "composing_confirm" then
@@ -1088,14 +1088,14 @@ function M.handle_shared_editor_input(state)
                 state.insert_text(state.input)
             end
         end
-        M.set_composing(state, "")
+        set_composing(state, "")
         return true
     end
     if state.name == "escape" then
         if state.clear_history_group then
             state.clear_history_group()
         end
-        if M.clear_composing(state) then
+        if clear_composing(state) then
             return true
         end
         return state.clear_selection()
@@ -1158,14 +1158,14 @@ function M.clear_composing_on_blur(state, is_focused)
     if is_focused then
         return false
     end
-    return M.clear_composing(state)
+    return clear_composing(state)
 end
 
 function M.sync_composing_feature(enabled, state)
     if enabled then
         return false
     end
-    return M.clear_composing(state)
+    return clear_composing(state)
 end
 
 return M

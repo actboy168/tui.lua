@@ -27,7 +27,7 @@ local setup_hit_test
 function setup_interactive(terminal, interactive, use_kkp)
     if not interactive then return end
     local write = terminal.write
-    write(ansi.cursorHide() .. ansi.enableBracketedPaste .. ansi.enableFocusEvents)
+    write(ansi.cursorHide .. ansi.enableBracketedPaste .. ansi.enableFocusEvents)
     if use_kkp then
         write(ansi.kittyKeyboard.push)
     end
@@ -53,7 +53,7 @@ function teardown_interactive(inst)
             end
         end
         local write = inst._terminal.write
-        write(ansi.disableBracketedPaste .. ansi.disableFocusEvents .. move_seq .. ansi.cursorShow() .. "\n")
+        write(ansi.disableBracketedPaste .. ansi.disableFocusEvents .. move_seq .. ansi.cursorShow .. "\n")
         if inst._use_kkp then
             write(ansi.kittyKeyboard.pop)
         end
@@ -162,7 +162,6 @@ stabilize = function(rec_state, root, app_handle, w, h, is_main, throw_on_error,
 
     for _ = 1, 8 do
         if not reconciler.has_dirty(rec_state) then break end
-        layout.free(tree)
         tree = render_once()
         passes = passes + 1
     end
@@ -315,14 +314,14 @@ function M.mount(terminal, screen_state, opts)
                 local cx, cy = screen_mod.cursor_pos(screen_state)
                 local dx = (ccol - 1) - cx
                 local dy = br - cy
-                cursor_seq = ansi.cursorShow() .. ansi.cursorMove(dx, dy)
+                cursor_seq = ansi.cursorShow .. ansi.cursorMove(dx, dy)
                 screen_mod.set_display_cursor(screen_state, ccol - 1, br)
                 buf_row = br
             elseif not interactive then
-                cursor_seq = ansi.cursorShow() .. ansi.cursorPosition(ccol, crow, inst._capabilities)
+                cursor_seq = ansi.cursorShow .. ansi.cursorPosition(ccol, crow, inst._capabilities)
             end
         elseif interactive then
-            cursor_seq = ansi.cursorHide()
+            cursor_seq = ansi.cursorHide
             screen_mod.set_display_cursor(screen_state, -1, -1)
         end
         return cursor_seq, ccol, crow, buf_row
@@ -347,10 +346,9 @@ function M.mount(terminal, screen_state, opts)
         local w, h, resized = check_resize()
         local throw_on_error = opts.throw_on_error or false
 
-        -- Free the previous tree.
+        -- Discard previous tree reference.
         if inst._tree then
             hit_test.clear_tree()
-            layout.free(inst._tree)
         end
 
         local tree, passes = stabilize(rec_state, opts.root, opts.app_handle, w, h, interactive, throw_on_error, opts.extension)
@@ -433,7 +431,6 @@ function M.unmount(inst)
     reconciler.shutdown(inst._rec_state)
     if inst._tree then
         hit_test.clear_tree()
-        layout.free(inst._tree)
         inst._tree = nil
     end
     if inst._extension_unsubscribe then
