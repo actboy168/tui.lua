@@ -303,7 +303,7 @@ function suite:test_form_with_validation()
                 onSubmit = submit,
                 width = 30,
             },
-            errorMsg and tui.Text { key = "error", color = "red", errorMsg } or nil,
+            errorMsg ~= nil and tui.Text { key = "error", color = "red", errorMsg },
         }
     end
 

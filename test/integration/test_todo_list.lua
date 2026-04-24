@@ -41,7 +41,7 @@ local function TodoApp()
         extra.Newline { key = "nl2" },
         #todos == 0
             and tui.Text { key = "empty", dim = true, "No tasks" }
-            or nil,
+            ,
         extra.Static {
             key = "list",
             items = todos,

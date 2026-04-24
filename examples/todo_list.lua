@@ -57,7 +57,7 @@ local function TodoApp()
 
         tui.Newline {},
 
-        #todos == 0 and tui.Text { dim = true, "暂无任务" } or nil,
+        #todos == 0 and tui.Text { dim = true, "暂无任务" },
 
         tui.Static {
             items = todos,

@@ -92,10 +92,10 @@ local function App()
             render = function(m) return formatMsg(m) end,
         },
         -- Streaming partial reply (dynamic).
-        streaming and tui.Text {
+        streaming ~= nil and tui.Text {
             color = "cyan", dim = true,
             ("[bot] %s▍"):format(streaming.target:sub(1, streaming.shown))
-        } or nil,
+        },
         -- Multi-line input area.
         tui.Box {
             flexDirection = "column",

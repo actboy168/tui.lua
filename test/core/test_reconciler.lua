@@ -107,7 +107,7 @@ function suite:test_effect_cleanup_on_unmount()
 
     local show = true
     local function Root()
-        return tui.Box { show and Child or nil }
+        return tui.Box { show and Child }
     end
 
     local b = testing.bare(Root)
@@ -236,7 +236,7 @@ function suite:test_use_input_subscribes_and_unsubscribes()
         return tui.Text { "child" }
     end
     local function Root()
-        return tui.Box { mounted and Child or nil }
+        return tui.Box { mounted and Child }
     end
 
     local b = testing.bare(Root)

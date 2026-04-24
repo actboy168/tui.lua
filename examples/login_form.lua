@@ -44,7 +44,7 @@ local function LoginForm()
             borderColor = "red",
             padding = { left = 1, right = 1 },
             tui.Text { color = "red", error }
-        } or nil,
+        },
 
         tui.Text { "用户名" },
         tui.TextInput {

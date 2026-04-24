@@ -137,7 +137,10 @@ end
 -- `seen_keys` is a per-parent table tracking keys already used in this loop;
 -- duplicate keys raise a render-time error with the parent path for context.
 local function child_path_for(parent_path, i, child, seen_keys)
-    local ck = type(child) == "table" and child.key
+    if type(child) ~= "table" then
+        return parent_path .. num_suffix(i)
+    end
+    local ck = child.key
     if ck ~= nil then
         local ks = tostring(ck)
         if seen_keys[ks] then

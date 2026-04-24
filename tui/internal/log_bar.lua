@@ -39,7 +39,7 @@ function M.decorate(tree, ctx)
                 color = "white",
                 backgroundColor = "brightBlack",
                 message,
-            } or nil
+            },
         },
     }
 end

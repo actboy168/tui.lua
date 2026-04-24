@@ -8,25 +8,20 @@ local M = {}
 
 -- Internal helper: given a table that may mix hash-style props and
 -- array-style children, split them into a props table and a children list.
--- Children are compacted to a contiguous array (nil slots are dropped) so
--- that downstream `ipairs(children)` works even when users write conditional
--- expressions like `cond and X or nil` inside the constructor.
+-- Children are copied via ipairs, so nil holes are NOT tolerated: a nil
+-- in the array part stops the copy and silently drops trailing children.
+-- This is intentional — nil holes in children arrays are a bug (see
+-- docs/decisions/code_style.md).  False values are kept (they come from
+-- `cond and Element{}` and are skipped by the reconciler).
 local function split_props_children(t)
     local props = {}
-    local sparse = {}
-    local max_idx = 0
-    for k, v in pairs(t) do
-        if type(k) == "number" then
-            sparse[k] = v
-            if k > max_idx then max_idx = k end
-        else
-            props[k] = v
-        end
-    end
     local children = {}
-    for i = 1, max_idx do
-        if sparse[i] ~= nil then
-            children[#children + 1] = sparse[i]
+    for k, v in ipairs(t) do
+        children[k] = v
+    end
+    for k, v in pairs(t) do
+        if type(k) ~= "number" then
+            props[k] = v
         end
     end
     return props, children

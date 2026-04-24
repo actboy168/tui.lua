@@ -120,7 +120,7 @@ function suite:test_conditional_mount_clears_timer()
     local function App()
         return tui.Box {
             width = 10, height = 1,
-            show and Spinner { type = "line" } or nil,
+            show and Spinner { type = "line" },
         }
     end
     local h = testing.harness(App, { cols = 10, rows = 1 })

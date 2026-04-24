@@ -551,7 +551,7 @@ function suite:test_focus_stack_restores_on_unmount()
         return tui.Box {
             flexDirection = "column",
             AComp {},
-            show and BComp {} or nil,
+            show and BComp {},
         }
     end
 
@@ -601,8 +601,8 @@ function suite:test_focus_stack_multiple_layers()
         return tui.Box {
             flexDirection = "column",
             AComp { key = "a" },
-            showB and BComp { key = "b" } or nil,
-            showC and CComp { key = "c" } or nil,
+            showB and BComp { key = "b" },
+            showC and CComp { key = "c" },
         }
     end
 
@@ -663,8 +663,8 @@ function suite:test_focus_stack_skips_removed_entries()
         return tui.Box {
             flexDirection = "column",
             AComp { key = "a" },
-            showB and BComp { key = "b" } or nil,
-            showC and CComp { key = "c" } or nil,
+            showB and BComp { key = "b" },
+            showC and CComp { key = "c" },
         }
     end
 
@@ -721,7 +721,7 @@ function suite:test_focus_stack_skips_inactive_entries()
         return tui.Box {
             flexDirection = "column",
             AComp { key = "a" },
-            showB and BComp { key = "b" } or nil,
+            showB and BComp { key = "b" },
         }
     end
 
@@ -775,7 +775,7 @@ function suite:test_tab_does_not_push_focus_stack()
             flexDirection = "column",
             AComp { key = "a" },
             BComp { key = "b" },
-            showC and CComp { key = "c" } or nil,
+            showC and CComp { key = "c" },
         }
     end
 
@@ -958,7 +958,7 @@ function suite:test_onblur_fires_on_unmount()
         set_show = setShow
         return tui.Box {
             flexDirection = "column",
-            show and AComp { key = "a" } or nil,
+            show and AComp { key = "a" },
             BComp { key = "b" },
         }
     end

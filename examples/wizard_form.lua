@@ -63,7 +63,7 @@ local function Wizard()
                 placeholder = "用户名",
                 width = 30
             }
-        } or nil,
+        },
 
         step == 2 and tui.Box {
             tui.Text { "步骤 2: 设置邮箱" },
@@ -74,7 +74,7 @@ local function Wizard()
                 placeholder = "邮箱",
                 width = 30
             }
-        } or nil,
+        },
 
         step == 3 and tui.Box {
             tui.Text { "步骤 3: 确认信息" },
@@ -82,7 +82,7 @@ local function Wizard()
             tui.Text { ("邮箱: %s"):format(form.email) },
             tui.Newline {},
             tui.Text { "按 Enter 确认注册" }
-        } or nil,
+        },
 
         tui.Newline {},
         tui.Text { dim = true, "Enter 继续  Esc 退出" }

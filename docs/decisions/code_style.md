@@ -35,3 +35,16 @@ Lua 代码中不使用 `;` 分隔语句，用换行代替。
 **Why:** `luamake test` 自动发现并运行所有测试套件。单个文件里的 `lt.run()` 会干扰，导致重复执行或聚合问题。
 
 **How to apply:** 测试文件只定义 suite 和其函数，不调用 `lt.run()`。
+
+## 组件 children 中的条件渲染
+
+在组件构造器（`Box`、`Text` 等）的 children 列表中，用 `cond and Element{}` 即可，**不要**写成 `cond and Element{} or nil`。
+
+**Why:**
+- Lua 的 array table 中间插入 `nil` 会产生空洞，破坏 `#` 运算符和 `ipairs` 的连续性。虽然框架的 `split_props_children` 会通过 `pairs` + 压缩来容错，但依赖这种容错不是好做法。
+- `cond and Element{}` 在 `cond` 为 `false` 时会在 array 中留下 `false`（不是 `nil`），这是合法值。reconciler 的 `expand` 已显式处理 `false`（视为无内容跳过），所以完全不需要 `or nil`。
+
+**How to apply:**
+- 推荐：`step == 2 and tui.Box { ... }`
+- 避免：`step == 2 and tui.Box { ... } or nil`
+- 此规则仅适用于 **children array** 中的条件表达式；普通表达式（如局部变量赋值、prop 默认值）中的 `or nil` 不受限制。
