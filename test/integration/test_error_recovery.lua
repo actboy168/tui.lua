@@ -21,7 +21,7 @@ function suite:test_error_in_event_handler()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 8 })
+    local h = testing.harness(App, { cols = 35, rows = 8 })
 
     -- Normal operations
     h:match_snapshot("error_handler_initial_35x8")
@@ -48,7 +48,7 @@ function suite:test_graceful_degradation()
         }
     end
 
-    local h = testing.render(App, { cols = 45, rows = 10 })
+    local h = testing.harness(App, { cols = 45, rows = 10 })
     h:match_snapshot("graceful_normal_45x10")
 
     h:unmount()

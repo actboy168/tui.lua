@@ -24,7 +24,7 @@ local function LinesApp(lines)
 end
 
 function suite:test_log_bar_hidden_by_default()
-    local h = testing.render(LinesApp { "A", "B" }, {
+    local h = testing.harness(LinesApp { "A", "B" }, {
         cols = 12,
         rows = 4,
     })
@@ -35,7 +35,7 @@ function suite:test_log_bar_hidden_by_default()
 end
 
 function suite:test_log_bar_appears_after_content()
-    local h = testing.render(LinesApp { "A", "B" }, {
+    local h = testing.harness(LinesApp { "A", "B" }, {
         cols = 12,
         rows = 4,
     })
@@ -49,7 +49,7 @@ function suite:test_log_bar_appears_after_content()
 end
 
 function suite:test_log_bar_uses_badge_style()
-    local h = testing.render(LinesApp { "A", "B" }, {
+    local h = testing.harness(LinesApp { "A", "B" }, {
         cols = 12,
         rows = 4,
     })
@@ -69,7 +69,7 @@ function suite:test_log_bar_uses_badge_style()
 end
 
 function suite:test_log_bar_shows_only_latest()
-    local h = testing.render(LinesApp { "A", "B" }, {
+    local h = testing.harness(LinesApp { "A", "B" }, {
         cols = 12,
         rows = 4,
     })
@@ -82,7 +82,7 @@ function suite:test_log_bar_shows_only_latest()
 end
 
 function suite:test_log_bar_stays_below_full_content()
-    local h = testing.render(LinesApp { "A", "B", "C", "D" }, {
+    local h = testing.harness(LinesApp { "A", "B", "C", "D" }, {
         cols = 12,
         rows = 4,
     })
@@ -96,7 +96,7 @@ function suite:test_log_bar_stays_below_full_content()
 end
 
 function suite:test_log_bar_resets_between_mounts()
-    local h1 = testing.render(LinesApp { "body" }, {
+    local h1 = testing.harness(LinesApp { "body" }, {
         cols = 12,
         rows = 3,
     })
@@ -105,7 +105,7 @@ function suite:test_log_bar_resets_between_mounts()
     lt.assertEquals(h1:row(2):sub(1, #" LOG persist"), " LOG persist")
     h1:unmount()
 
-    local h2 = testing.render(LinesApp { "body" }, {
+    local h2 = testing.harness(LinesApp { "body" }, {
         cols = 12,
         rows = 3,
     })
@@ -114,7 +114,7 @@ function suite:test_log_bar_resets_between_mounts()
 end
 
 function suite:test_log_bar_truncates_long_message()
-    local h = testing.render(LinesApp { "body" }, {
+    local h = testing.harness(LinesApp { "body" }, {
         cols = 8,
         rows = 3,
     })
@@ -141,7 +141,7 @@ function suite:test_tui_log_works_without_component_state()
         }
     end
 
-    local h = testing.render(App, {
+    local h = testing.harness(App, {
         cols = 12,
         rows = 3,
     })

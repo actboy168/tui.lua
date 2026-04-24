@@ -188,7 +188,7 @@ function Harness:unmount()
 end
 
 --- Mount a full render/layout harness for component and integration tests.
-function M.render(App, opts)
+function M.harness(App, opts)
     opts = opts or {}
     local W    = opts.cols or 80
     local H    = opts.rows or 24

@@ -14,7 +14,7 @@ function suite:test_callback_identity_stable_on_unchanged_deps()
         seen[#seen + 1] = cb
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:rerender()
     b:rerender()
     lt.assertEquals(rawequal(seen[1], seen[2]), true)
@@ -33,7 +33,7 @@ function suite:test_callback_new_identity_on_dep_change()
         seen[#seen + 1] = cb
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     dep = "b"
     b:rerender()
     lt.assertEquals(#seen, 2)
@@ -52,7 +52,7 @@ function suite:test_callback_sees_latest_fn_body_via_wrapper()
         if not first_cb then first_cb = cb end
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(first_cb(), 1)
     iter = 2
     b:rerender()
@@ -72,7 +72,7 @@ function suite:test_callback_nil_deps_wrapper_stable_body_refreshes()
         seen[#seen + 1] = cb
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     iter = 2
     b:rerender()
     iter = 3

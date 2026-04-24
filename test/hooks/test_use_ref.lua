@@ -14,7 +14,7 @@ function suite:test_ref_initial_value_on_mount()
         ref_seen = r
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(type(ref_seen), "table")
     lt.assertEquals(ref_seen.current, 42)
     b:unmount()
@@ -28,7 +28,7 @@ function suite:test_ref_identity_stable_across_renders()
         seen[#seen + 1] = r
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:rerender()
     b:rerender()
     lt.assertEquals(rawequal(seen[1], seen[2]), true)
@@ -44,7 +44,7 @@ function suite:test_ref_mutation_does_not_trigger_rerender()
         captured_ref = r
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:expect_renders(1)
     captured_ref.current = 999
     -- No rerender should be forced; calling rerender() explicitly still
@@ -64,7 +64,7 @@ function suite:test_ref_current_persists_across_rerenders()
         captured = r
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(captured.current, "first")
     captured.current = "mutated"
     seed = "second"

@@ -168,7 +168,7 @@ end
 --                                   -- receives the terminal object so callers can
 --                                   -- pass a real or fake terminal without global
 --                                   -- replacement (eliminates the tui_core.terminal
---                                   -- singleton hijack that testing.render used to need)
+--                                   -- singleton hijack that testing.harness used to need)
 --   terminal = <terminal object>  -- passed as first arg to paint
 -- }
 
@@ -206,47 +206,47 @@ function M.loop_once(opts, terminal, now, immediate)
 end
 
 function M.run(opts)
-	assert(opts and opts.paint and opts.read, "scheduler.run requires paint+read")
-	local terminal = opts.terminal
-	running = true
-	last_frame = 0
+    assert(opts and opts.paint and opts.read, "scheduler.run requires paint+read")
+    local terminal = opts.terminal
+    running = true
+    last_frame = 0
 
-	-- Initial paint so the screen isn't blank before first event.
-	if not opts.skip_initial_paint then
-		dirty = false
-		opts.paint(terminal)
-		last_frame = now_ms()
-	end
+    -- Initial paint so the screen isn't blank before first event.
+    if not opts.skip_initial_paint then
+        dirty = false
+        opts.paint(terminal)
+        last_frame = now_ms()
+    end
 
-	while running do
+    while running do
         local now = now_ms()
 
-		-- Input: forward raw bytes; handler can stop loop by returning true.
-		if opts.read then
-			local s = opts.read()
-			if s and #s > 0 and opts.onInput then
-				if opts.onInput(s) then
-					running = false
-					break
-				end
-			end
-		end
+        -- Input: forward raw bytes; handler can stop loop by returning true.
+        if opts.read then
+            local s = opts.read()
+            if s and #s > 0 and opts.onInput then
+                if opts.onInput(s) then
+                    running = false
+                    break
+                end
+            end
+        end
 
-		-- Timers.
-		if tick_timers(now) then
-			-- Timer callbacks may have flipped dirty via requestRedraw.
-		end
+        -- Timers.
+        if tick_timers(now) then
+            -- Timer callbacks may have flipped dirty via requestRedraw.
+        end
 
-		-- Repaint if dirty and a frame worth of time has elapsed (or immediately).
-		local elapsed = now - last_frame
-		if dirty and (opts.immediate or elapsed >= frame_ms) then
-			dirty = false
-			opts.paint(terminal)
-			last_frame = now
-		end
+        -- Repaint if dirty and a frame worth of time has elapsed (or immediately).
+        local elapsed = now - last_frame
+        if dirty and (opts.immediate or elapsed >= frame_ms) then
+            dirty = false
+            opts.paint(terminal)
+            last_frame = now
+        end
 
-		sleep_ms(input_poll_ms)
-	end
+        sleep_ms(input_poll_ms)
+    end
 end
 
 -- Expose for tests / introspection.

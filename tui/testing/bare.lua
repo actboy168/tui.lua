@@ -25,7 +25,7 @@ function Bare:rerender()
 end
 
 function Bare:render_count() return self._render_count or 0 end
-function Bare:reset_render_count() self._render_count = 0; end
+function Bare:reset_render_count() self._render_count = 0 end
 
 function Bare:expect_renders(expected, msg)
     local actual = self._render_count or 0
@@ -94,6 +94,8 @@ function M.mount(App)
     b._tree = reconciler.render(b._state, App, b._app_handle)
     return b
 end
+
+M.bare = M.mount
 
 M.Bare = Bare
 return M

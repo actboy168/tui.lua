@@ -88,7 +88,7 @@ function suite:test_no_crash_on_random_sizes()
             local cols    = rng.int(1, 200)
             local rows    = rng.int(1, 100)
             local ok, err = pcall(function()
-                local h = testing.render(App, { cols = cols, rows = rows })
+                local h = testing.harness(App, { cols = cols, rows = rows })
                 h:unmount()
             end)
             if not ok then

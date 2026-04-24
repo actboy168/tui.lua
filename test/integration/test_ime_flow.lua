@@ -30,7 +30,7 @@ end
 -- ============================================================================
 
 function suite:test_composing_appears()
-    local h = testing.render(IMEApp, { cols = 35, rows = 5 })
+    local h = testing.harness(IMEApp, { cols = 35, rows = 5 })
 
     h:type_composing("ni")
     h:rerender()
@@ -67,7 +67,7 @@ function suite:test_confirm_commits_text()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 5 })
+    local h = testing.harness(App, { cols = 35, rows = 5 })
 
     h:type_composing("你好")
     h:type_composing_confirm("你好")
@@ -82,7 +82,7 @@ end
 -- ============================================================================
 
 function suite:test_cursor_past_double_width()
-    local h = testing.render(IMEApp, { cols = 35, rows = 5 })
+    local h = testing.harness(IMEApp, { cols = 35, rows = 5 })
     h:rerender()
 
     -- Record cursor at empty state
@@ -110,7 +110,7 @@ end
 -- ============================================================================
 
 function suite:test_cursor_after_composing()
-    local h = testing.render(IMEApp, { cols = 35, rows = 5 })
+    local h = testing.harness(IMEApp, { cols = 35, rows = 5 })
     h:rerender()
 
     h:type_composing("a")
@@ -129,7 +129,7 @@ end
 -- ============================================================================
 
 function suite:test_snapshot_composing()
-    local h = testing.render(IMEApp, { cols = 35, rows = 5 })
+    local h = testing.harness(IMEApp, { cols = 35, rows = 5 })
     h:type_composing("abc")
     h:rerender()
     h:match_snapshot("ime_composing_35x5")
@@ -137,7 +137,7 @@ function suite:test_snapshot_composing()
 end
 
 function suite:test_snapshot_confirmed()
-    local h = testing.render(IMEApp, { cols = 35, rows = 5 })
+    local h = testing.harness(IMEApp, { cols = 35, rows = 5 })
     h:type_composing_confirm("Hello")
     h:rerender()
     h:match_snapshot("ime_confirmed_35x5")

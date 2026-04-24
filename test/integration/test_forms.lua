@@ -57,7 +57,7 @@ function suite:test_login_form_submit()
         }
     end
 
-    local h = testing.render(App, { cols = 45, rows = 15 })
+    local h = testing.harness(App, { cols = 45, rows = 15 })
 
     -- Initial state: focus should be on username field (autoFocus default)
     h:rerender()
@@ -131,7 +131,7 @@ function suite:test_login_form_full_flow()
         }
     end
 
-    local h = testing.render(App, { cols = 45, rows = 15 })
+    local h = testing.harness(App, { cols = 45, rows = 15 })
 
     -- Focus starts on username
     h:rerender()
@@ -245,7 +245,7 @@ function suite:test_wizard_form_navigation()
         end
     end
 
-    local h = testing.render(App, { cols = 45, rows = 12 })
+    local h = testing.harness(App, { cols = 45, rows = 12 })
 
     -- Step 1: Fill name, then Enter to next step
     h:type("John Doe")
@@ -307,7 +307,7 @@ function suite:test_form_with_validation()
         }
     end
 
-    local h = testing.render(App, { cols = 45, rows = 10 })
+    local h = testing.harness(App, { cols = 45, rows = 10 })
 
     -- Submit invalid email
     h:type("invalid")
@@ -357,7 +357,7 @@ function suite:test_form_with_select()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 12 })
+    local h = testing.harness(App, { cols = 35, rows = 12 })
 
     -- Select an item
     h:press("down")
@@ -410,7 +410,7 @@ function suite:test_snapshot_login_initial()
         }
     end
 
-    local h = testing.render(App, { cols = 45, rows = 15 })
+    local h = testing.harness(App, { cols = 45, rows = 15 })
     h:match_snapshot("forms_login_initial_45x15")
     h:unmount()
 end

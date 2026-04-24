@@ -17,7 +17,7 @@ function suite:test_mouse_click_fires_onclick()
         }
     end
 
-    local h = testing.render(App, { cols = 12, rows = 3 })
+    local h = testing.harness(App, { cols = 12, rows = 3 })
     local cx, cy = h:sgr(1, 1)
     h:mouse("down", 1, cx, cy)
     h:rerender()
@@ -41,7 +41,7 @@ function suite:test_enter_fires_onclick()
         }
     end
 
-    local h = testing.render(App, { cols = 12, rows = 3 })
+    local h = testing.harness(App, { cols = 12, rows = 3 })
     h:press("enter")
     h:rerender()
 
@@ -63,7 +63,7 @@ function suite:test_disabled_button_suppresses_callback()
         }
     end
 
-    local h = testing.render(App, { cols = 12, rows = 3 })
+    local h = testing.harness(App, { cols = 12, rows = 3 })
     local cx, cy = h:sgr(1, 1)
     h:mouse("down", 1, cx, cy)
     h:press("enter")
@@ -80,7 +80,7 @@ function suite:test_label_renders()
         }
     end
 
-    local h = testing.render(App, { cols = 12, rows = 3 })
+    local h = testing.harness(App, { cols = 12, rows = 3 })
     local frame = h:frame()
     lt.assertNotEquals(frame:find("Save", 1, true), nil)
     h:unmount()
@@ -99,7 +99,7 @@ function suite:test_rich_children_render_and_click()
         }
     end
 
-    local h = testing.render(App, { cols = 16, rows = 3 })
+    local h = testing.harness(App, { cols = 16, rows = 3 })
     local frame = h:frame()
     lt.assertNotEquals(frame:find("Go Now", 1, true), nil)
 
@@ -126,7 +126,7 @@ function suite:test_rich_children_enter_fires_onclick()
         }
     end
 
-    local h = testing.render(App, { cols = 16, rows = 3 })
+    local h = testing.harness(App, { cols = 16, rows = 3 })
     h:press("enter")
     h:rerender()
 
@@ -146,7 +146,7 @@ function suite:test_button_rejects_label_and_children_together()
     end
 
     lt.assertError(function()
-        local h = testing.render(App, { cols = 12, rows = 3 })
+        local h = testing.harness(App, { cols = 12, rows = 3 })
         h:unmount()
     end)
 end

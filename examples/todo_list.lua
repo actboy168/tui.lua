@@ -11,7 +11,10 @@ local function TodoApp()
 
     local function addTodo()
         if #input > 0 then
-            setTodos({ ...todos, { text = input, done = false } })
+            local new = {}
+            for i, t in ipairs(todos) do new[i] = t end
+            new[#new + 1] = { text = input, done = false }
+            setTodos(new)
             setInput("")
         end
     end
@@ -60,7 +63,7 @@ local function TodoApp()
             items = todos,
             render = function(todo, i)
                 return tui.Text {
-                    todo.done and color = "green" or nil,
+                    color = todo.done and "green" or nil,
                     (todo.done and "[x] " or "[ ] ") .. todo.text
                 }
             end

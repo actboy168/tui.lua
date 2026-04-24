@@ -15,7 +15,7 @@ function suite:test_default_first_frame()
             Spinner {},
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     -- First frame of the dots set.
     lt.assertEquals(h:row(1):sub(1, #"⠋"), "⠋")
     h:unmount()
@@ -29,7 +29,7 @@ function suite:test_frame_advances_on_interval()
             Spinner { type = "line" },
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     lt.assertEquals(h:row(1):sub(1, 1), "-")
     h:advance(80)
     lt.assertEquals(h:row(1):sub(1, 1), "\\")
@@ -46,7 +46,7 @@ function suite:test_frame_wraps_around()
             Spinner { type = "line" },
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     -- line has 4 frames; advance 4 * 80 = 320ms should return to the first.
     h:advance(320)
     lt.assertEquals(h:row(1):sub(1, 1), "-")
@@ -61,7 +61,7 @@ function suite:test_label_appended()
             Spinner { type = "line", label = "loading" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     lt.assertEquals(h:row(1):sub(1, #"- loading"), "- loading")
     h:unmount()
 end
@@ -74,7 +74,7 @@ function suite:test_custom_frames()
             Spinner { frames = { "A", "B", "C" }, interval = 50 },
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     lt.assertEquals(h:row(1):sub(1, 1), "A")
     h:advance(50)
     lt.assertEquals(h:row(1):sub(1, 1), "B")
@@ -93,7 +93,7 @@ function suite:test_type_and_frames_conflict()
                 Spinner { type = "dots", frames = { "X" } },
             }
         end
-        testing.render(App, { cols = 10, rows = 1 }):unmount()
+        testing.harness(App, { cols = 10, rows = 1 }):unmount()
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err), "string")
@@ -108,7 +108,7 @@ function suite:test_unknown_type_errors()
                 Spinner { type = "no-such-thing" },
             }
         end
-        testing.render(App, { cols = 10, rows = 1 }):unmount()
+        testing.harness(App, { cols = 10, rows = 1 }):unmount()
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(err:find("unknown type", 1, true) ~= nil, true)
@@ -123,7 +123,7 @@ function suite:test_conditional_mount_clears_timer()
             show and Spinner { type = "line" } or nil,
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     lt.assertEquals(testing.timer_count(), 1)
     show = false
     h:rerender()

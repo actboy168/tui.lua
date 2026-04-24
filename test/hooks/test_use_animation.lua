@@ -13,7 +13,7 @@ function suite:test_initial_snapshot()
         seen = tui.useAnimation { interval = 100 }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     lt.assertEquals(seen.frame, 0)
     lt.assertEquals(seen.time, 0)
     lt.assertEquals(seen.delta, 0)
@@ -28,7 +28,7 @@ function suite:test_tick_advances_frame_and_time()
         snaps[#snaps + 1] = tui.useAnimation { interval = 100 }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:advance(100)
     local last = snaps[#snaps]
     lt.assertEquals(last.frame, 1)
@@ -49,7 +49,7 @@ function suite:test_batch_advance_accumulates_deltas()
         seen = tui.useAnimation { interval = 50 }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:advance(250)
     -- 5 ticks should have fired at t=50,100,150,200,250.
     lt.assertEquals(seen.frame, 5)
@@ -64,7 +64,7 @@ function suite:test_inactive_freezes()
         seen = tui.useAnimation { interval = 100, isActive = false }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     lt.assertEquals(testing.timer_count(), 0)
     h:advance(500)
     lt.assertEquals(seen.frame, 0)
@@ -80,7 +80,7 @@ function suite:test_toggle_active_preserves_counters()
         seen = tui.useAnimation { interval = 100, isActive = active }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:advance(200)
     lt.assertEquals(seen.frame, 2)
     lt.assertEquals(seen.time, 200)
@@ -111,7 +111,7 @@ function suite:test_reset_clears_counters()
         seen = tui.useAnimation { interval = 100 }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:advance(300)
     lt.assertEquals(seen.frame, 3)
 
@@ -134,7 +134,7 @@ function suite:test_reset_identity_stable()
         resets[#resets + 1] = a.reset
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:rerender()
     h:rerender()
     lt.assertEquals(rawequal(resets[1], resets[2]), true)
@@ -150,7 +150,7 @@ function suite:test_interval_change_restarts_timer()
         seen = tui.useAnimation { interval = interval_v }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:advance(100)
     lt.assertEquals(seen.frame, 1)
 
@@ -170,7 +170,7 @@ function suite:test_unmount_clears_timer()
         tui.useAnimation { interval = 100 }
         return tui.Text { "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     lt.assertEquals(testing.timer_count(), 1)
     h:unmount()
     lt.assertEquals(testing.timer_count(), 0)

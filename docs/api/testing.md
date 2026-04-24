@@ -10,12 +10,12 @@ local testing = require "tui.testing"
 
 ## 两种渲染模式
 
-### 完整渲染模式 `testing.render`
+### 完整渲染模式 `testing.harness`
 
 用于测试组件的视觉输出、布局、交互效果。运行完整的 reconciler + layout + renderer + screen 管线。
 
 ```lua
-local h = testing.render(App, { cols = 40, rows = 10 })
+local h = testing.harness(App, { cols = 40, rows = 10 })
 ```
 
 **适用场景**：
@@ -24,12 +24,12 @@ local h = testing.render(App, { cols = 40, rows = 10 })
 - 测试用户输入的视觉反馈
 - 快照测试
 
-### 裸渲染模式 `testing.mount_bare`
+### 裸渲染模式 `testing.bare`
 
 仅运行 reconciler + hooks，跳过 layout/renderer/screen。
 
 ```lua
-local b = testing.mount_bare(App)
+local b = testing.bare(App)
 ```
 
 **适用场景**：
@@ -45,7 +45,7 @@ local b = testing.mount_bare(App)
 
 ```lua
 -- 创建离屏渲染实例
-local h = testing.render(App, { cols = 80, rows = 24 })
+local h = testing.harness(App, { cols = 80, rows = 24 })
 
 -- 测试结束后必须清理
 h:unmount()
@@ -235,7 +235,7 @@ h:match_snapshot("chat_after_submit")
 裸渲染模式不自动触发重渲染，输入/时间操作后需手动调用 `rerender()`。
 
 ```lua
-local b = testing.mount_bare(App)
+local b = testing.bare(App)
 ```
 
 ### 可用方法
@@ -296,7 +296,7 @@ local sgr = testing.mouse.sgr {
 ```lua
 local warnings = testing.capture_stderr(function()
     -- 这里执行会产生警告的操作
-    local h = testing.render(BadComponent)
+    local h = testing.harness(BadComponent)
     h:unmount()
 end)
 lt.assertTrue(warnings:find("expected warning") ~= nil)
@@ -348,7 +348,7 @@ function suite:test_renders_hello()
     local function App()
         return tui.Text { "Hello World" }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     lt.assertTrue(h:row(1):find("Hello World") ~= nil)
     h:unmount()
 end
@@ -365,7 +365,7 @@ function suite:test_typing_updates_value()
             onChange = function(v) value = v end,
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     h:type("hello")
     lt.assertEquals(value, "hello")
     h:unmount()
@@ -382,7 +382,7 @@ function suite:test_tab_navigation()
             extra.TextInput { focusId = "b" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     lt.assertEquals(h:focus_id(), "a")
     h:press("tab")
     lt.assertEquals(h:focus_id(), "b")
@@ -401,7 +401,7 @@ function suite:test_interval_fires()
         end, 100)
         return tui.Text { "test" }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     lt.assertEquals(count, 0)
     h:advance(100)
     lt.assertEquals(count, 1)
@@ -419,7 +419,7 @@ function suite:test_responsive_layout()
         local size = tui.useWindowSize()
         return tui.Text { tostring(size.cols) .. "x" .. tostring(size.rows) }
     end
-    local h = testing.render(App, { cols = 40, rows = 10 })
+    local h = testing.harness(App, { cols = 40, rows = 10 })
     lt.assertTrue(h:row(1):find("40x10") ~= nil)
     h:resize(60, 20)
     lt.assertTrue(h:row(1):find("60x20") ~= nil)
@@ -439,7 +439,7 @@ function suite:test_use_state()
         setter = setN
         return tui.Text { tostring(n) }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(captured, 42)
 
     setter(100)
@@ -455,7 +455,7 @@ end
 ```lua
 function suite:test_dev_warning()
     local warnings = testing.capture_stderr(function()
-        local h = testing.render(BadComponent)
+        local h = testing.harness(BadComponent)
         h:unmount()
     end)
     lt.assertTrue(warnings:find("expected warning") ~= nil)
@@ -478,7 +478,7 @@ function suite:test_basic_render()
     local function App()
         return tui.Text { "Hello" }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     lt.assertTrue(h:row(1):find("Hello") ~= nil)
     h:unmount()
 end

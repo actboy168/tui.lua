@@ -17,7 +17,7 @@ function test_ime:test_cursor_after_paint()
         value, setValue = v, setV
         return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     -- After initial render with focused TextInput, IME pos should be set.
     -- autoFocus sets isFocused state on the next paint.
@@ -38,7 +38,7 @@ function test_ime:test_cursor_updates_after_typing()
         setValue = setV
         return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     h:type("abc")
     h:rerender()
@@ -61,7 +61,7 @@ function test_ime:test_composing_then_confirm()
         lastValue = v
         return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     -- Simulate IME composing: user types pinyin "ni".
     h:type_composing("ni")
@@ -85,7 +85,7 @@ function test_ime:test_ime_commit_bytes_direct()
         lastValue = v
         return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     -- Dispatch normalized bytes directly (cross-platform; Windows normalization
     -- is covered in test_terminal_normalize.lua).
@@ -103,7 +103,7 @@ function test_ime:test_composing_cancel_by_escape()
         lastValue = v
         return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     -- Start composing.
     h:type_composing("hao")
@@ -121,7 +121,7 @@ function test_ime:test_composing_shown_at_caret()
         local v, setV = tui.useState("ab")
         return extra.TextInput { value = v, onChange = setV, width = 20 }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     -- Move caret to position 1 (between 'a' and 'b').
     h:press("left")
@@ -152,7 +152,7 @@ function test_ime:test_composing_cleared_on_focus_loss()
             extra.TextInput { value = v2, onChange = setV2, width = 20, focusId = "second" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     -- Start composing in the first TextInput.
     h:type_composing("test")
@@ -173,7 +173,7 @@ function test_ime:test_no_cursor_without_focused_input()
     local function App()
         return tui.Text { "no input here" }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
 
     -- No focused TextInput → no IME position.
     local col, row = h:cursor()
@@ -191,7 +191,7 @@ function test_ime:test_cursor_tracks_typing()
         local v, setV = tui.useState("")
         return extra.TextInput { value = v, onChange = setV, width = 20, autoFocus = true }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- autoFocus sets isFocused state on the next paint; the first
     -- character's _paint() also consumes this dirty flag.
     h:type("abc")
@@ -215,7 +215,7 @@ function test_ime:test_cursor_inside_bordered_box()
             extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
 
@@ -238,7 +238,7 @@ function test_ime:test_cursor_with_cjk_chars()
             extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
 
@@ -261,7 +261,7 @@ function test_ime:test_cursor_integer_coords_only()
             extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
 

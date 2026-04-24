@@ -23,7 +23,7 @@ local function load_frame(path, opts)
     local frame
     testing.capture_stderr(function()
         local App = testing.load_app(path)
-        local h   = testing.render(App, opts)
+        local h   = testing.harness(App, opts)
         frame     = h:frame()
         h:unmount()
     end)
@@ -35,7 +35,7 @@ local function load_frame_after(path, opts, drive_fn)
     local frame
     testing.capture_stderr(function()
         local App = testing.load_app(path)
-        local h   = testing.render(App, opts)
+        local h   = testing.harness(App, opts)
         drive_fn(h)
         h:rerender()
         frame = h:frame()
@@ -67,7 +67,7 @@ end
 function suite:test_hello_snapshot()
     testing.capture_stderr(function()
         local App = testing.load_app("examples/hello.lua")
-        local h = testing.render(App, { cols = 40, rows = 10 })
+        local h = testing.harness(App, { cols = 40, rows = 10 })
         h:match_snapshot("example_hello_40x10")
         h:unmount()
     end)
@@ -131,6 +131,55 @@ function suite:test_select_menu_shows_items()
 end
 
 -- ---------------------------------------------------------------------------
+-- todo_list.lua
+-- ---------------------------------------------------------------------------
+
+function suite:test_todo_list_shows_empty_placeholder()
+    local frame = load_frame("examples/todo_list.lua", { cols = 45, rows = 17 })
+    lt.assertNotEquals(frame:find("暂无任务", 1, true), nil)
+    lt.assertNotEquals(frame:find("添加新任务...", 1, true), nil)
+end
+
+function suite:test_todo_list_adds_task_on_submit()
+    local frame = load_frame_after("examples/todo_list.lua", { cols = 45, rows = 17 }, function(h)
+        h:type("Buy milk")
+        h:rerender()
+        h:press("enter")
+        h:rerender()
+    end)
+    lt.assertNotEquals(frame:find("Buy milk", 1, true), nil)
+    lt.assertNotEquals(frame:find("[ ]", 1, true), nil)
+    lt.assertEquals(frame:find("暂无任务", 1, true), nil)
+end
+
+function suite:test_todo_list_clears_input_after_submit()
+    local h = testing.load_app("examples/todo_list.lua")
+    testing.capture_stderr(function()
+        h = testing.harness(h, { cols = 45, rows = 17 })
+        h:type("Do something")
+        h:rerender()
+        h:press("enter")
+        h:rerender()
+
+        lt.assertNotEquals(h:frame():find("Do something", 1, true), nil)
+
+        -- Input row should be cleared after submit.
+        local input_row = h:row(4)
+        lt.assertEquals(input_row:find("Do something", 1, true), nil,
+            "input row should be cleared after submit")
+
+        h:unmount()
+    end)
+end
+
+function suite:test_todo_list_empty_submit_noop()
+    local frame = load_frame_after("examples/todo_list.lua", { cols = 45, rows = 17 }, function(h)
+        h:press("enter")
+    end)
+    lt.assertNotEquals(frame:find("暂无任务", 1, true), nil)
+end
+
+-- ---------------------------------------------------------------------------
 -- hyperlink examples
 -- ---------------------------------------------------------------------------
 
@@ -157,7 +206,7 @@ end
 function suite:test_raw_ansi_example_exposes_hyperlink_metadata()
     testing.capture_stderr(function()
         local App = testing.load_app("examples/raw_ansi.lua")
-        local h   = testing.render(App, { cols = 70, rows = 10 })
+        local h   = testing.harness(App, { cols = 70, rows = 10 })
         lt.assertTrue(has_hyperlink(h, 10, "https://example.com/raw"))
         h:unmount()
     end)
@@ -227,7 +276,7 @@ end
 function suite:test_link_example_mouse_click_updates_status()
     testing.capture_stderr(function()
         local App = testing.load_app("examples/link.lua")
-        local h   = testing.render(App, { cols = 70, rows = 12 })
+        local h   = testing.harness(App, { cols = 70, rows = 12 })
         local box = find_clickable_box(h:tree())
         lt.assertNotEquals(box, nil, "should find a clickable Link box")
         local r = box.rect
@@ -246,7 +295,7 @@ function suite:test_chat_tree_has_mouse_props()
     -- should be detected as needing mouse mode by has_mouse_props.
     testing.capture_stderr(function()
         local App  = testing.load_app("examples/chat.lua")
-        local h    = testing.render(App, { cols = 40, rows = 10 })
+        local h    = testing.harness(App, { cols = 40, rows = 10 })
         local tree = h:tree()
         lt.assertTrue(hit_test.has_mouse_props(tree))
         h:unmount()
@@ -259,7 +308,7 @@ function suite:test_chat_click_focuses_textarea()
     local value = nil
     testing.capture_stderr(function()
         local App = testing.load_app("examples/chat.lua")
-        local h   = testing.render(App, { cols = 40, rows = 10 })
+        local h   = testing.harness(App, { cols = 40, rows = 10 })
 
         -- Find the Textarea's clickable Box and click its first cell.
         local box = find_clickable_box(h:tree())
@@ -287,7 +336,7 @@ function suite:test_chat_click_positions_cursor()
     -- and verify subsequent typing goes at the clicked position.
     testing.capture_stderr(function()
         local App = testing.load_app("examples/chat.lua")
-        local h   = testing.render(App, { cols = 40, rows = 10 })
+        local h   = testing.harness(App, { cols = 40, rows = 10 })
 
         -- First focus by typing (autoFocus should handle this).
         h:type("abcde")
@@ -322,7 +371,7 @@ function suite:test_chat_scroll_in_textarea()
     -- so the content overflows.
     testing.capture_stderr(function()
         local App = testing.load_app("examples/chat.lua")
-        local h   = testing.render(App, { cols = 40, rows = 6 })
+        local h   = testing.harness(App, { cols = 40, rows = 6 })
 
         -- Focus and fill the Textarea with many lines.
         -- A 6-row terminal has room for border (2 rows) + ~4 content rows.

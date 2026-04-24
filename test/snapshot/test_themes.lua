@@ -44,7 +44,7 @@ function suite:test_border_styles_comparison()
             },
         }
     end
-    local h = testing.render(App, { cols = 55, rows = 8 })
+    local h = testing.harness(App, { cols = 55, rows = 8 })
     h:match_snapshot("border_styles_compare_55x8")
     h:unmount()
 end
@@ -84,7 +84,7 @@ function suite:test_border_with_padding()
             },
         }
     end
-    local h = testing.render(App, { cols = 45, rows = 14 })
+    local h = testing.harness(App, { cols = 45, rows = 14 })
     h:match_snapshot("border_padding_45x14")
     h:unmount()
 end
@@ -106,7 +106,7 @@ function suite:test_nested_borders()
             }
         }
     end
-    local h = testing.render(App, { cols = 35, rows = 12 })
+    local h = testing.harness(App, { cols = 35, rows = 12 })
     h:match_snapshot("nested_borders_35x12")
     h:unmount()
 end
@@ -132,7 +132,7 @@ function suite:test_text_colors()
             table.unpack(children)
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 12 })
+    local h = testing.harness(App, { cols = 25, rows = 12 })
     h:match_snapshot("text_colors_25x12")
     h:unmount()
 end
@@ -172,7 +172,7 @@ function suite:test_colored_borders()
             },
         }
     end
-    local h = testing.render(App, { cols = 65, rows = 8 })
+    local h = testing.harness(App, { cols = 65, rows = 8 })
     h:match_snapshot("colored_borders_65x8")
     h:unmount()
 end
@@ -195,7 +195,7 @@ function suite:test_background_colors()
             table.unpack(children)
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 12 })
+    local h = testing.harness(App, { cols = 25, rows = 12 })
     h:match_snapshot("background_colors_25x12")
     h:unmount()
 end
@@ -217,7 +217,7 @@ function suite:test_progress_bar_colors()
             extra.ProgressBar { key = "magenta", value = 0.5, width = 20, color = "magenta" },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 12 })
+    local h = testing.harness(App, { cols = 30, rows = 12 })
     h:match_snapshot("progress_colors_30x12")
     h:unmount()
 end
@@ -233,7 +233,7 @@ function suite:test_spinner_colors()
             extra.Spinner { key = "yellow", type = "dots", color = "yellow", label = "Yellow" },
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 12 })
+    local h = testing.harness(App, { cols = 25, rows = 12 })
     h:match_snapshot("spinner_colors_25x12")
     h:unmount()
 end
@@ -270,7 +270,7 @@ function suite:test_input_styling()
             },
         }
     end
-    local h = testing.render(App, { cols = 35, rows = 10 })
+    local h = testing.harness(App, { cols = 35, rows = 10 })
     h:match_snapshot("input_styling_35x10")
     h:unmount()
 end
@@ -328,7 +328,7 @@ function suite:test_full_panel_theme()
             },
         }
     end
-    local h = testing.render(App, { cols = 65, rows = 17 })
+    local h = testing.harness(App, { cols = 65, rows = 17 })
     h:match_snapshot("full_panel_theme_65x17")
     h:unmount()
 end
@@ -367,7 +367,7 @@ function suite:test_alert_styles()
             },
         }
     end
-    local h = testing.render(App, { cols = 55, rows = 16 })
+    local h = testing.harness(App, { cols = 55, rows = 16 })
     h:match_snapshot("alert_styles_55x16")
     h:unmount()
 end

@@ -47,7 +47,7 @@
 
 ## Dev-mode
 
-**`tui.setDevMode(bool)`，默认关，无环境变量。** `tui.testing.render` / `mount_bare` 进入时强开，unmount 时复位。生产零开销（每个检查就是一次早退分支），测试路径全覆盖。
+**`tui.setDevMode(bool)`，默认关，无环境变量。** `tui.testing.harness` / `mount_bare` 进入时强开，unmount 时复位。生产零开销（每个检查就是一次早退分支），测试路径全覆盖。
 
 **Key 告警阈值 3+ 而非 2+。** `#children >= 3` AND `elem_count >= 3` AND 任一 element 无 key 才告警。对齐 Ink / React DevTools 先例 — 手写的静态 2 孩子 `Box { A, B }` 几乎从不是 keying bug 的现场；真正出问题的是迭代生成的 3+ 列表。
 

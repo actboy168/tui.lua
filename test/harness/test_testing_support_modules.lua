@@ -60,7 +60,7 @@ function suite:test_snapshot_first_write_and_crlf_trim_compare()
     local path = snapshot_path(name)
     remove_if_exists(path)
 
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Text { "x" }
     end, { cols = 3, rows = 1 })
 
@@ -82,7 +82,7 @@ function suite:test_snapshot_mismatch_reports_context()
     remove_if_exists(path)
     write_file(path, "old\n")
 
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Text { "new" }
     end, { cols = 3, rows = 1 })
 
@@ -116,7 +116,7 @@ function suite:test_dispatch_event_repaints_and_returns_self()
         end)
         return tui.Text { value }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     local same = h:dispatch_event {
         name = "char",
         input = "x",
@@ -149,7 +149,7 @@ function suite:test_load_app_runtime_error_path_and_restore()
 
     local App = testing.load_app(good)
     remove_if_exists(good)
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     lt.assertNotEquals(h:row(1):find("ok", 1, true), nil)
     h:unmount()
 end

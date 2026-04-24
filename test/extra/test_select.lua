@@ -28,7 +28,7 @@ function suite:test_initial_highlight_and_default_indicator()
             Select { items = { "alpha", "beta", "gamma" } },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     row_starts_with(h, 1, "❯ alpha")
     row_starts_with(h, 2, "  beta")
     row_starts_with(h, 3, "  gamma")
@@ -48,7 +48,7 @@ function suite:test_down_moves_highlight_and_fires_onchange()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     h:press("down")
     h:rerender()
     lt.assertEquals(#changes, 1)
@@ -67,7 +67,7 @@ function suite:test_up_wraps_to_last()
             Select { items = { "a", "b", "c" } },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     h:press("up")
     h:rerender()
     row_starts_with(h, 3, "❯ c")
@@ -82,7 +82,7 @@ function suite:test_down_wraps_to_first()
             Select { items = { "a", "b", "c" }, initialIndex = 3 },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     h:press("down")
     h:rerender()
     row_starts_with(h, 1, "❯ a")
@@ -97,7 +97,7 @@ function suite:test_home_end_jump()
             Select { items = { "a", "b", "c" }, initialIndex = 2 },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     h:press("end")
     h:rerender()
     row_starts_with(h, 3, "❯ c")
@@ -119,7 +119,7 @@ function suite:test_enter_fires_onselect()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     h:press("down")
     h:rerender()
     h:press("enter")
@@ -142,7 +142,7 @@ function suite:test_disabled_ignores_keys()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     h:press("down")
     h:rerender()
     lt.assertEquals(changes, 0)
@@ -159,7 +159,7 @@ function suite:test_empty_items_no_error()
             Select { items = {} },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     lt.assertEquals(strip_ansi(h:row(1)):match("%S"), nil)  -- no non-space
     -- Enter / arrows are no-ops and must not raise.
     h:press("down")
@@ -183,7 +183,7 @@ function suite:test_table_items_value_distinct_from_label()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     h:press("down")
     h:rerender()
     h:press("enter")
@@ -205,7 +205,7 @@ function suite:test_limit_window_scrolls()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     -- Initial window: first 3.
     row_starts_with(h, 1, "❯ a")
     row_starts_with(h, 2, "  b")
@@ -242,7 +242,7 @@ function suite:test_render_item_override()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 2 })
+    local h = testing.harness(App, { cols = 30, rows = 2 })
     row_starts_with(h, 1, "[*] a")
     row_starts_with(h, 2, "[ ] b")
     h:press("down")
@@ -261,7 +261,7 @@ function suite:test_items_shrink_clamps_highlight()
             Select { items = items, initialIndex = 4 },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 4 })
+    local h = testing.harness(App, { cols = 30, rows = 4 })
     row_starts_with(h, 4, "❯ d")
     items = { "a", "b" }
     h:rerender()
@@ -285,7 +285,7 @@ function suite:test_unknown_key_is_noop()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 2 })
+    local h = testing.harness(App, { cols = 30, rows = 2 })
     h:type("x")
     h:rerender()
     lt.assertEquals(changes, 0)
@@ -305,7 +305,7 @@ function suite:test_bulk_dispatch_two_downs()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     -- Two down-arrow CSI sequences in one dispatch.
     h:dispatch("\27[B\27[B")
     h:rerender()
@@ -329,7 +329,7 @@ function suite:test_bulk_dispatch_home_then_down()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
     -- Home (CSI 1~) then down in one dispatch.
     h:dispatch("\27[1~\27[B")
     h:rerender()

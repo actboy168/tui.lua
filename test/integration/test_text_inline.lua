@@ -28,7 +28,7 @@ local function cells_for(text_args, opts)
             tui.Text(text_args),
         }
     end
-    local h = testing.render(App, { cols = cols, rows = rows })
+    local h = testing.harness(App, { cols = cols, rows = rows })
     local cells = h:cells(1)
     h:unmount()
     return cells
@@ -137,7 +137,7 @@ function suite:test_span_inherits_parent_color()
             tui.Text { "A", {text="B", bold=true}, "C" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     local cells = h:cells(1)
     h:unmount()
     -- All three cells should have fg = green (index 2)
@@ -157,7 +157,7 @@ function suite:test_span_overrides_parent_color()
             tui.Text { "A", {text="B", color="red"}, "C" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     local cells = h:cells(1)
     h:unmount()
     lt.assertEquals(cells[1].fg, 2, "A: inherited green")
@@ -209,7 +209,7 @@ function suite:test_span_wrap_across_lines()
             tui.Text { width = 8, "Hello ", {text="world", color="red"} },
         }
     end
-    local h = testing.render(App, { cols = 8, rows = 4 })
+    local h = testing.harness(App, { cols = 8, rows = 4 })
     local row1 = h:cells(1)
     local row2 = h:cells(2)
     h:unmount()
@@ -262,7 +262,7 @@ function suite:test_frame_text_correct()
             tui.Text { "foo", {text="bar", color="magenta"}, "baz" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     local frame = h:frame()
     h:unmount()
     lt.assertNotEquals(frame:find("foobarbaz", 1, true), nil,
@@ -281,7 +281,7 @@ function suite:test_rerender_stable()
             tui.Text { "key=", {text="value", color="cyan"} },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 2 })
+    local h = testing.harness(App, { cols = 20, rows = 2 })
     local vt = h:vterm()
     -- Capture screen before rerender
     local before = vterm.screen_string(vt)

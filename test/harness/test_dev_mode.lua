@@ -19,7 +19,7 @@ function suite.test_missing_key_warns()
                 tui.Text { "c" },
             }
         end
-        local b = testing.mount_bare(App)
+        local b = testing.bare(App)
         b:unmount()
     end)
     lt.assertEquals(stderr:find("[tui:dev]", 1, true) ~= nil, true,
@@ -36,7 +36,7 @@ function suite.test_all_keyed_no_warn()
                 { kind = "text", children = { "b" }, props = {}, key = "b" },
             }
         end
-        local b = testing.mount_bare(App)
+        local b = testing.bare(App)
         b:unmount()
     end)
     lt.assertEquals(stderr:find("unique `key` prop", 1, true), nil,
@@ -48,7 +48,7 @@ function suite.test_single_child_no_warn()
         local function App()
             return tui.Box { tui.Text { "only" } }
         end
-        local b = testing.mount_bare(App)
+        local b = testing.bare(App)
         b:unmount()
     end)
     lt.assertEquals(stderr:find("unique `key` prop", 1, true), nil,
@@ -63,7 +63,7 @@ function suite.test_two_children_no_warn()
                 tui.Text { "b" },
             }
         end
-        local b = testing.mount_bare(App)
+        local b = testing.bare(App)
         b:unmount()
     end)
     lt.assertEquals(stderr:find("unique `key` prop", 1, true), nil,
@@ -85,7 +85,7 @@ function suite.test_setstate_in_render_warns()
             end
             return tui.Text { tostring(n) }
         end
-        local b = testing.mount_bare(Comp)
+        local b = testing.bare(Comp)
         b:unmount()
     end)
     lt.assertEquals(stderr:find("[tui:dev]", 1, true) ~= nil, true,
@@ -103,7 +103,7 @@ function suite.test_setstate_in_effect_no_warn()
             end, { n })
             return tui.Text { tostring(n) }
         end
-        local b = testing.mount_bare(Comp)
+        local b = testing.bare(Comp)
         b:unmount()
     end)
     lt.assertEquals(stderr:find("setState called synchronously", 1, true), nil,
@@ -122,7 +122,7 @@ function suite.test_dispatch_in_render_warns()
             end
             return tui.Text { tostring(s) }
         end
-        local b = testing.mount_bare(Comp)
+        local b = testing.bare(Comp)
         b:unmount()
     end)
     lt.assertEquals(stderr:find("dispatch called synchronously", 1, true) ~= nil, true,
@@ -142,7 +142,7 @@ function suite.test_hook_count_added_on_rerender_errors()
     end
 
     include_second = false
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
 
     include_second = true
     local ok, err = pcall(function() b:rerender() end)
@@ -165,7 +165,7 @@ function suite.test_hook_kind_swapped_errors()
     end
 
     use_effect_here = false
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
 
     use_effect_here = true
     local ok, err = pcall(function() b:rerender() end)
@@ -183,7 +183,7 @@ function suite.test_same_kinds_no_error()
         return tui.Text { "x" }
     end
 
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:rerender()
     b:rerender()
     b:unmount()
@@ -203,7 +203,7 @@ function suite.test_hook_in_plain_function_is_fatal()
         return tui.Box { PlainHelper() }
     end
     local ok, err = pcall(function()
-        local h = testing.render(App, { cols = 20, rows = 3 })
+        local h = testing.harness(App, { cols = 20, rows = 3 })
         h:unmount()
     end)
     lt.assertEquals(ok, false, "plain-function hook call should fail")
@@ -221,6 +221,6 @@ function suite.test_component_factory_passes()
         return tui.Box { Wrapped() }
     end
 
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     h:unmount()
 end

@@ -15,7 +15,7 @@ local make_chat_app = helpers.make_chat_app
 function suite:test_type_submit_stream_resize_flow()
     local App = make_chat_app("hello")
 
-    local h = testing.render(App, { cols = 40, rows = 10 })
+    local h = testing.harness(App, { cols = 40, rows = 10 })
 
     -- Type "hi" and press Enter. :type walks UTF-8 boundaries and rerenders
     -- between each keystroke; :press rerenders once after.

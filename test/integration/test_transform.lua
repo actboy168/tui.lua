@@ -25,7 +25,7 @@ function suite:test_transform_can_apply_hyperlink_to_subtree()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     local cells = h:cells(1)
     lt.assertEquals(cells[1].hyperlink, "https://example.com/transform")
     lt.assertEquals(cells[2].hyperlink, "https://example.com/transform")
@@ -46,7 +46,7 @@ function suite:test_transform_only_affects_wrapped_subtree()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     local cells = h:cells(1)
     lt.assertEquals(cells[1].hyperlink, "https://example.com/left")
     lt.assertEquals(cells[2].hyperlink, "https://example.com/left")
@@ -68,7 +68,7 @@ function suite:test_transform_clear_hyperlink_with_nil()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     local cells = h:cells(1)
     lt.assertEquals(cells[1].hyperlink, nil)
     h:unmount()

@@ -16,7 +16,7 @@ function suite:test_empty_lines_render_nothing()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:row(1), "    ")
     h:unmount()
 end
@@ -34,7 +34,7 @@ function suite:test_raw_ansi_does_not_inherit_box_color()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     local cells = h:cells(1)
     lt.assertEquals(cells[1].fg, nil)
     lt.assertEquals(cells[2].fg, nil)
@@ -55,7 +55,7 @@ function suite:test_sgr_reset_does_not_leak_to_sibling_text()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     local cells = h:cells(1)
     lt.assertEquals(cells[1].fg, 1)
     lt.assertEquals(cells[2].fg, 1)
@@ -79,7 +79,7 @@ function suite:test_multiline_layout_inside_border_and_padding()
         }
     end
 
-    local h = testing.render(App, { cols = 7, rows = 4 })
+    local h = testing.harness(App, { cols = 7, rows = 4 })
     local row2 = h:cells(2)
     local row3 = h:cells(3)
     lt.assertEquals(row2[3].char, "A")
@@ -99,7 +99,7 @@ function suite:test_bold_and_background_sgr()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     local cells = h:cells(1)
     lt.assertEquals(cells[1].bold, true)
     lt.assertEquals(cells[1].bg, 4)
@@ -119,7 +119,7 @@ function suite:test_osc8_hyperlink_is_recorded_in_cells()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     local cells = h:cells(1)
     lt.assertEquals(cells[1].char, "X")
     lt.assertEquals(cells[1].hyperlink, "https://example.com")
@@ -140,7 +140,7 @@ function suite:test_unsupported_ansi_control_sequence_errors()
         }
     end
 
-    local ok, err = pcall(testing.render, App, { cols = 2, rows = 1 })
+    local ok, err = pcall(testing.harness, App, { cols = 2, rows = 1 })
     lt.assertEquals(ok, false)
     lt.assertNotEquals(tostring(err):find("unsupported ANSI control sequence", 1, true), nil)
 end
@@ -157,7 +157,7 @@ function suite:test_unsupported_osc_sequence_errors()
         }
     end
 
-    local ok, err = pcall(testing.render, App, { cols = 1, rows = 1 })
+    local ok, err = pcall(testing.harness, App, { cols = 1, rows = 1 })
     lt.assertEquals(ok, false)
     lt.assertNotEquals(tostring(err):find("unsupported OSC sequence", 1, true), nil)
 end

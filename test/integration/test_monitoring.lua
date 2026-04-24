@@ -76,7 +76,7 @@ function suite:test_metrics_dashboard()
         }
     end
 
-    local h = testing.render(App, { cols = 55, rows = 17 })
+    local h = testing.harness(App, { cols = 55, rows = 17 })
 
     -- Initial state snapshot
     h:match_snapshot("metrics_initial_55x17")
@@ -150,7 +150,7 @@ function suite:test_log_stream_viewer()
         }
     end
 
-    local h = testing.render(App, { cols = 65, rows = 14 })
+    local h = testing.harness(App, { cols = 65, rows = 14 })
 
     -- Let some logs accumulate
     h:advance(50)
@@ -220,7 +220,7 @@ function suite:test_multi_panel_dashboard()
         }
     end
 
-    local h = testing.render(App, { cols = 60, rows = 15 })
+    local h = testing.harness(App, { cols = 60, rows = 15 })
 
     h:match_snapshot("dashboard_panel_1_60x15")
 
@@ -274,7 +274,7 @@ function suite:test_status_indicators()
         }
     end
 
-    local h = testing.render(App, { cols = 45, rows = 12 })
+    local h = testing.harness(App, { cols = 45, rows = 12 })
     h:match_snapshot("service_status_45x12")
     h:unmount()
 end

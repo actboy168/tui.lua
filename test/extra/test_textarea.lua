@@ -62,7 +62,7 @@ function suite:test_initial_value_shown()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Value should not change without any input.
     lt.assertEquals(value, "hello")
     h:unmount()
@@ -76,7 +76,7 @@ function suite:test_char_insertion()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:type("hi")
     h:rerender()
     lt.assertEquals(value, "hi")
@@ -102,7 +102,7 @@ function suite:test_enter_submits()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("enter")
     h:rerender()
     lt.assertEquals(#submitted, 1)
@@ -118,7 +118,7 @@ function suite:test_shift_enter_inserts_newline()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:type("a")
     h:rerender()
     h:dispatch("\x1b[13;2u")  -- Shift+Enter → insert newline
@@ -142,7 +142,7 @@ function suite:test_newline_cursor_on_last_line()
             Textarea { value = value, onChange = function(v) value = v end },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 10 })
+    local h = testing.harness(App, { cols = 20, rows = 10 })
     h:type("hello")
     h:rerender()
     h:dispatch("\x1b[13;2u")  -- Shift+Enter → insert newline
@@ -165,7 +165,7 @@ function suite:test_cursor_column_on_second_line()
             Textarea { value = value, onChange = function(v) value = v end },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 10 })
+    local h = testing.harness(App, { cols = 20, rows = 10 })
     h:type("ab")
     h:rerender()
     h:dispatch("\x1b[13;2u")
@@ -190,7 +190,7 @@ function suite:test_scroll_when_taller_than_terminal()
         }
     end
     -- Terminal is only 5 rows; type 7 lines.
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     for i = 1, 6 do
         h:type("line" .. i)
     h:rerender()
@@ -230,7 +230,7 @@ function suite:test_scroll_taller_than_terminal_with_border()
         }
     end
     -- Terminal is only 7 rows; type 8 lines so textarea overflows.
-    local h = testing.render(App, { cols = 20, rows = 7 })
+    local h = testing.harness(App, { cols = 20, rows = 7 })
     for i = 1, 7 do
         h:type("L" .. i)
     h:rerender()
@@ -266,7 +266,7 @@ function suite:test_backspace_merges_lines()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Caret starts at end of last line (line 2, col 1 = after "b").
     -- Move to beginning of "b" line then backspace to merge.
     h:press("home")
@@ -294,7 +294,7 @@ function suite:test_up_down_navigation()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Caret is at end of "xyz" (line 2, col 3).
     -- Press Up → should move to line 1, col min(3, 3) = 3 (end of "abc").
     -- Then type to confirm we're on line 1.
@@ -318,7 +318,7 @@ function suite:test_paste_singleline()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 4 })
+    local h = testing.harness(App, { cols = 40, rows = 4 })
     h:dispatch(input_helpers.paste("hello world"))
     h:rerender()
     lt.assertEquals(value, "hello world")
@@ -333,7 +333,7 @@ function suite:test_paste_multiline()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 4 })
+    local h = testing.harness(App, { cols = 40, rows = 4 })
     h:dispatch(input_helpers.paste("line1\nline2\nline3"))
     h:rerender()
     lt.assertEquals(value, "line1\nline2\nline3")
@@ -348,7 +348,7 @@ function suite:test_paste_into_existing_text()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 4 })
+    local h = testing.harness(App, { cols = 40, rows = 4 })
     -- Caret at end of "ac"; press Left to get before 'c', then paste "b".
     h:press("left")
     h:rerender()
@@ -366,7 +366,7 @@ function suite:test_paste_multiline_into_existing_text()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 4 })
+    local h = testing.harness(App, { cols = 40, rows = 4 })
     -- Move to end of "start " (position 6), paste "mid1\nmid2\n".
     h:press("home")
     for _ = 1, 6 do h:press("right") end
@@ -388,7 +388,7 @@ function suite:test_delete_merges_next_line()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Caret at end of "b" (line 2). Move up to end of "a" (line 1).
     h:press("up")
     h:rerender()
@@ -418,7 +418,7 @@ function suite:test_ctrl_enter_submit()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Ctrl+Enter should call onSubmit and NOT change the value.
     -- The testing harness cannot inject ctrl+enter via :press, so we use
     -- h:dispatch_event() which bypasses key parsing.
@@ -448,7 +448,7 @@ function suite:test_shift_enter_inserts_newline_via_csi_u()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- ESC [ 1 3 ; 2 u  (Shift+Enter in kitty keyboard protocol) → insert newline
     h:dispatch("\x1b[13;2u")
     h:rerender()
@@ -473,7 +473,7 @@ function suite:test_ctrl_enter_submit_via_csi_u()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- ESC [ 1 3 ; 5 u  (Ctrl+Enter in kitty keyboard protocol)
     h:dispatch("\x1b[13;5u")
     h:rerender()
@@ -492,7 +492,7 @@ function suite:test_ctrl_home_and_ctrl_end_move_across_document()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("ctrl+a")
     h:rerender()
     h:type("X")
@@ -524,7 +524,7 @@ function suite:test_ctrl_u_ctrl_k_and_ctrl_w_are_line_local()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("ctrl+w")
     h:rerender()
     lt.assertEquals(value, "hello\nwide words ")
@@ -558,7 +558,7 @@ function suite:test_ctrl_left_right_and_delete_are_word_aware()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 4 })
+    local h = testing.harness(App, { cols = 30, rows = 4 })
     h:press("ctrl+left")
     h:rerender()
     h:press("ctrl+left")
@@ -587,7 +587,7 @@ function suite:test_enter_behavior_newline()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("enter")
     h:rerender()
     lt.assertEquals(value, "hello\n")
@@ -607,7 +607,7 @@ function suite:test_shift_left_type_replaces_textarea_selection()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("shift+left")
     h:rerender()
     h:type("X")
@@ -624,7 +624,7 @@ function suite:test_shift_up_paste_replaces_multiline_selection()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("shift+up")
     h:rerender()
     h:paste("Z")
@@ -641,7 +641,7 @@ function suite:test_textarea_ime_confirm_replaces_selection()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("home")
     h:rerender()
     h:press("shift+end")
@@ -660,7 +660,7 @@ function suite:test_ctrl_a_highlights_multiline_selection()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:dispatch_event(key_event("char", "a", true))
     local row1 = h:cells(1)
     local row2 = h:cells(2)
@@ -686,7 +686,7 @@ function suite:test_copy_cut_undo_redo()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:dispatch_event(key_event("char", "a", true))
     h:dispatch_event(key_event("char", "c", true, true))
     lt.assertEquals(copied[1], "ab\ncd")
@@ -709,7 +709,7 @@ function suite:test_textarea_typing_undo_coalesces()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:type("ab")
     h:rerender()
     h:dispatch_event(key_event("char", "z", true))
@@ -732,7 +732,7 @@ function suite:test_can_disable_undo_and_redo_feature()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:type("c")
     h:rerender()
     lt.assertEquals(value, "abc")
@@ -769,7 +769,7 @@ function suite:test_can_disable_selection_copy_word_kill_features()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("shift+up")
     h:rerender()
     h:type("!")
@@ -809,7 +809,7 @@ function suite:test_can_disable_paste_submit_and_ime_preview_features()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:paste("ZZ")
     h:rerender()
     lt.assertEquals(value, "ab")
@@ -845,7 +845,7 @@ function suite:test_can_customize_textarea_keymap()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("enter")
     h:rerender()
     lt.assertEquals(value, "ab")
@@ -878,7 +878,7 @@ function suite:test_can_customize_textarea_core_keymap()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("left")
     h:rerender()
     h:type("x")
@@ -905,7 +905,7 @@ function suite:test_composing_preview_and_confirm_on_textarea()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:type_composing("中")
     h:rerender()
     lt.assertEquals(value, "ab")
@@ -923,7 +923,7 @@ function suite:test_escape_clears_textarea_composing_preview()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:type_composing("中")
     h:rerender()
     lt.assertEquals(h:row(1):match("^ab中") ~= nil, true)
@@ -954,7 +954,7 @@ function suite:test_vscode_shift_enter_inserts_newline()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- VS Code sendSequence { text = "\\\r\n" } → 0x5C 0x0D 0x0A → ESC[13;2u → newline
     h:dispatch("\x5c\x0d\x0a")
     h:rerender()
@@ -984,7 +984,7 @@ function suite:test_up_snaps_to_display_column()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Caret starts at end of "xyz" (line 2, col 3, x=3).
     h:press("up")    -- → line 1, col 3 (after 中, x=4 or x=3 clamped)
     h:rerender()
@@ -1012,7 +1012,7 @@ function suite:test_split_esc_right_arrow()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:press("home")            -- cursor at col 0
     h:rerender()
     h:dispatch("\x1b")         -- ESC alone (should be buffered, not "escape")
@@ -1032,7 +1032,7 @@ function suite:test_split_esc_up_arrow()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:dispatch("\x1b")
     h:rerender()
     h:dispatch("[A")           -- up arrow split
@@ -1052,7 +1052,7 @@ function suite:test_split_esc_bracket_then_final()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     h:dispatch("\x1b")
     h:rerender()
     h:dispatch("[")
@@ -1078,7 +1078,7 @@ function suite:test_sticky_x_through_short_line()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Caret at end of "fghij" (line 3, col 5). Press Up twice to reach line 1.
     h:press("up")   -- line 3→2, sticky x=5, col clamped to 1
     h:rerender()
@@ -1098,7 +1098,7 @@ function suite:test_cjk_text_input()
             Textarea { value = value, onChange = function(v) value = v end, height = 4 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
     -- Dispatch normalized bytes directly (cross-platform).
     h:dispatch("中午中午")
     h:rerender()
@@ -1145,7 +1145,7 @@ end
 function suite:test_click_focuses_textarea()
     testing.capture_stderr(function()
         local App = testing.load_app("test/apps/textarea_app.lua")
-        local h   = testing.render(App, { cols = 30, rows = 6 })
+        local h   = testing.harness(App, { cols = 30, rows = 6 })
 
         -- Find the Textarea's clickable Box and click it.
         local box = find_clickable_box(h:tree())
@@ -1171,7 +1171,7 @@ end
 function suite:test_click_positions_cursor_in_textarea()
     testing.capture_stderr(function()
         local App = testing.load_app("test/apps/textarea_app.lua")
-        local h   = testing.render(App, { cols = 30, rows = 6 })
+        local h   = testing.harness(App, { cols = 30, rows = 6 })
 
         -- Type some text first (autoFocus).
         h:type("abcde")
@@ -1204,7 +1204,7 @@ end
 function suite:test_click_moves_to_different_line()
     testing.capture_stderr(function()
         local App = testing.load_app("test/apps/textarea_app.lua")
-        local h   = testing.render(App, { cols = 30, rows = 6 })
+        local h   = testing.harness(App, { cols = 30, rows = 6 })
 
         -- Type two lines of text.
         h:type("line1")
@@ -1241,7 +1241,7 @@ end
 function suite:test_scroll_in_textarea()
     testing.capture_stderr(function()
         local App = testing.load_app("test/apps/textarea_app.lua")
-        local h   = testing.render(App, { cols = 30, rows = 6 })
+        local h   = testing.harness(App, { cols = 30, rows = 6 })
 
         -- Fill the Textarea with many lines to force scrolling.
         -- Textarea height=4, so only 4 rows visible at a time.

@@ -27,7 +27,7 @@ function suite:test_mouse_click_fires_onclick()
         }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     local cx, cy = h:sgr(0, 0)
     h:mouse("down", 1, cx, cy)
     h:rerender()
@@ -54,7 +54,7 @@ function suite:test_enter_fires_onclick()
         }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:press("enter")
     h:rerender()
 
@@ -78,7 +78,7 @@ function suite:test_disabled_link_suppresses_callback_and_hyperlink()
         }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     local cx, cy = h:sgr(0, 0)
     h:mouse("down", 1, cx, cy)
     h:press("enter")
@@ -103,7 +103,7 @@ function suite:test_rich_children_mouse_click_fires_onclick_and_hyperlink()
         }
     end
 
-    local h = testing.render(App, { cols = 20, rows = 2 })
+    local h = testing.harness(App, { cols = 20, rows = 2 })
     local cx, cy = h:sgr(0, 0)
     h:mouse("down", 1, cx, cy)
     h:rerender()
@@ -130,7 +130,7 @@ function suite:test_rich_children_enter_fires_onclick()
         }
     end
 
-    local h = testing.render(App, { cols = 20, rows = 2 })
+    local h = testing.harness(App, { cols = 20, rows = 2 })
     h:press("enter")
     h:rerender()
 
@@ -152,7 +152,7 @@ function suite:test_link_rejects_label_and_children_together()
     end
 
     lt.assertError(function()
-        local h = testing.render(App, { cols = 10, rows = 1 })
+        local h = testing.harness(App, { cols = 10, rows = 1 })
         h:unmount()
     end)
 end

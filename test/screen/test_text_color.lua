@@ -20,7 +20,7 @@ function suite:test_red_text_in_cells_only()
             Text { color = "red", "hi" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     -- cells should have red fg (index 1)
     local cells = h:cells(1)
     lt.assertEquals(cells[1].fg, 1, "cell 1 should have red fg")
@@ -42,7 +42,7 @@ function suite:test_box_color_inherits_to_text()
             Text { "hi" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     -- Text has no explicit color, so it should inherit green (fg=2) from Box.
     lt.assertEquals(cells[1].fg, 2, "Text should inherit Box green color")
@@ -59,7 +59,7 @@ function suite:test_text_color_overrides_inherited()
             Text { color = "red", "hi" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     lt.assertEquals(cells[1].fg, 1, "Text explicit red should win")
     lt.assertEquals(cells[2].fg, 1, "Text explicit red should win")
@@ -74,7 +74,7 @@ function suite:test_text_dimcolor_overrides_inherited()
             Text { dimColor = "red", "hi" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     -- dimColor="red" → dim=true, fg=1 (red)
     lt.assertEquals(cells[1].fg, 1, "dimColor Text should use red fg")
@@ -94,7 +94,7 @@ function suite:test_nested_box_color_inheritance()
             },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     lt.assertEquals(cells[1].fg, 4, "Text should inherit blue from grandparent Box")
     lt.assertEquals(cells[2].fg, 4, "Text should inherit blue from grandparent Box")
@@ -111,7 +111,7 @@ function suite:test_inner_box_overrides_inherited_color()
             },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     -- yellow = fg=3 should appear (inner Box overrides blue)
     lt.assertEquals(cells[1].fg, 3, "inner Box yellow should override outer blue")
@@ -127,7 +127,7 @@ function suite:test_box_backgroundcolor_inherits_to_text()
             Text { "hi" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     -- bg=blue → bg=4
     lt.assertEquals(cells[1].bg, 4, "Text should inherit Box backgroundColor blue")
@@ -143,7 +143,7 @@ function suite:test_unknown_color_errors()
         return Text { color = "chartreuse", "hi" }
     end
     local ok, err = pcall(function()
-        local h = testing.render(App)
+        local h = testing.harness(App)
         h:unmount()
     end)
     lt.assertEquals(ok, false, "render should fail with bad color name")
@@ -160,7 +160,7 @@ function suite:test_border_color()
             Text { "" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     -- Border cells on row 1 should have cyan fg (fg=6)
     local cells = h:cells(1)
     lt.assertEquals(cells[1].fg, 6, "border cell should have cyan fg")
@@ -176,7 +176,7 @@ function suite:test_bold_with_background()
             Text { bold = true, backgroundColor = "blue", "hey" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     lt.assertEquals(cells[1].bold, true, "cell should be bold")
     lt.assertEquals(cells[1].bg, 4, "cell should have blue bg")

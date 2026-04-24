@@ -17,7 +17,7 @@ function suite:test_stdout_returns_write_field()
         handle = tui.useStdout()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(type(handle), "table")
     lt.assertEquals(type(handle.write), "function")
     b:unmount()
@@ -32,7 +32,7 @@ function suite:test_stdout_write_is_callable()
         w2 = tui.useStdout().write
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     -- Both should be callable functions
     lt.assertEquals(type(w1), "function")
     lt.assertEquals(type(w2), "function")
@@ -57,7 +57,7 @@ function suite:test_stderr_returns_write_field()
         handle = tui.useStderr()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(type(handle), "table")
     lt.assertEquals(type(handle.write), "function")
     b:unmount()
@@ -77,7 +77,7 @@ function suite:test_stderr_write_is_callable()
         fn = tui.useStderr().write
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(type(fn), "function")
     b:unmount()
 end

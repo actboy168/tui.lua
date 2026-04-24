@@ -13,7 +13,7 @@ local suite = lt.test "harness_csi"
 
 function suite.test_float_csi_fails_fatal()
     local function App() return tui.Text { "x" } end
-    local h = testing.render(App, { cols = 10, rows = 2 })
+    local h = testing.harness(App, { cols = 10, rows = 2 })
 
     local ok, err = pcall(function()
         h._terminal.write("\27[73.0;3.0H")
@@ -27,7 +27,7 @@ end
 
 function suite.test_valid_csi_passes()
     local function App() return tui.Text { "x" } end
-    local h = testing.render(App, { cols = 10, rows = 2 })
+    local h = testing.harness(App, { cols = 10, rows = 2 })
 
     h._terminal.write("\27[22;3H\27[0m\27[?25h\27[?25l")
     lt.assertEquals(type(h:ansi()), "string")
@@ -50,7 +50,7 @@ function suite:test_cursor_coords_are_integers_simple()
             extra.TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 3 })
+    local h = testing.harness(App, { cols = 40, rows = 3 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
     local col, row = h:cursor()
@@ -76,7 +76,7 @@ function suite:test_cursor_coords_are_integers_nested_flex()
             },
         }
     end
-    local h = testing.render(App, { cols = 80, rows = 75 })
+    local h = testing.harness(App, { cols = 80, rows = 75 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
     local col, row = h:cursor()
@@ -95,7 +95,7 @@ function suite:test_no_cursor_when_input_disabled()
             extra.TextInput { value = v, onChange = setV, focus = false },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 3 })
+    local h = testing.harness(App, { cols = 40, rows = 3 })
     local col, row = h:cursor()
     lt.assertEquals(col, nil, "disabled input should not advertise a cursor")
     lt.assertEquals(row, nil)
@@ -107,7 +107,7 @@ end
 -- ============================================================================
 
 function suite.test_csi_rejects_float_coords()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10,
             height = 5,
@@ -139,9 +139,9 @@ function suite.test_leaked_harness_does_not_corrupt_next_render()
     end
 
     -- Deliberately leak: no :unmount() on the first harness.
-    local h1 = testing.render(App, { cols = 20, rows = 3 })
+    local h1 = testing.harness(App, { cols = 20, rows = 3 })
     -- Second render must work cleanly despite the leaked h1.
-    local h2 = testing.render(App2, { cols = 20, rows = 3 })
+    local h2 = testing.harness(App2, { cols = 20, rows = 3 })
 
     -- h2 should render fresh content independently.
     lt.assertEquals(h2:row(1):find("second", 1, true) ~= nil, true,
@@ -168,7 +168,7 @@ function suite.test_harness_render_count_tracks_renders()
         set_val = setV
         return tui.Text { tostring(v) }
     end
-    local h = testing.render(App, { cols = 10, rows = 2 })
+    local h = testing.harness(App, { cols = 10, rows = 2 })
 
     -- Initial render only (no stabilization loop)
     h:expect_renders(1, "after initial render")
@@ -194,7 +194,7 @@ function suite.test_harness_expect_renders()
     local function App()
         return tui.Text { "x" }
     end
-    local h = testing.render(App, { cols = 10, rows = 2 })
+    local h = testing.harness(App, { cols = 10, rows = 2 })
     -- Initial render only
     h:expect_renders(1, "after initial render")
 

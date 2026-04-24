@@ -289,7 +289,7 @@ function M.run(opts)
 
         local App  = scenario.build()
         local sopts = scenario.opts or { cols = 80, rows = 24 }
-        local h    = testing.render(App, sopts)
+        local h    = testing.harness(App, sopts)
 
         local n = iterations * (scenario.iter_scale or 1)
         local r = bench_run(h, n, rounds)

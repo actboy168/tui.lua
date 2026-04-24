@@ -30,7 +30,7 @@ function suite:test_flex_grow_ratio_1_to_2()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 1 })
+    local h = testing.harness(App, { cols = 30, rows = 1 })
     local row = h:row(1)
     lt.assertEquals(row:sub(1, 1), "A", "first child starts at col 1")
     local b_col = row:find("B", 1, true)
@@ -57,7 +57,7 @@ function suite:test_padding_and_margin_combined()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     local row = h:row(1)
     lt.assertEquals(row:sub(1, 5), "     ", "first 5 cols blank (2 margin + 3 padding)")
     lt.assertEquals(row:sub(6, 6), "X", "content at col 6")
@@ -85,7 +85,7 @@ function suite:test_deep_nesting_20_levels()
             make_nested(20),
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 1 })
+    local h = testing.harness(App, { cols = 40, rows = 1 })
     local row = h:row(1)
     -- 20 nested paddingLeft=1 → content at col 21.
     lt.assertEquals(row:sub(1, 20), string.rep(" ", 20),

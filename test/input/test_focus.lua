@@ -24,7 +24,7 @@ function suite:test_bare_useFocus_does_not_autofocus()
         return tui.Text { f.isFocused and "Y" or "N" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id(), nil)
     lt.assertEquals(h:frame(), "N")
     h:unmount()
@@ -36,7 +36,7 @@ function suite:test_autofocus_true_takes_focus()
         return tui.Text { f.isFocused and "Y" or "N" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id(), "only")
     -- autoFocus sets focused_id synchronously, but isFocused state is
     -- consumed on the next paint.
@@ -68,7 +68,7 @@ function suite:test_tab_and_shift_tab_cycle()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 2 })
+    local h = testing.harness(App, { cols = 2, rows = 2 })
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
     h:press("tab")
@@ -104,7 +104,7 @@ function suite:test_focus_manager_jump()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 3 })
+    local h = testing.harness(App, { cols = 1, rows = 3 })
     lt.assertEquals(focus_mod.get_focused_id(), "x")
     jump_to("z")
     h:rerender()
@@ -134,7 +134,7 @@ function suite:test_disable_focus_falls_back_to_broadcast()
         return tui.Text { "x" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id(), "only")
 
     h:press("tab")
@@ -173,7 +173,7 @@ function suite:test_unmount_transfers_focus()
         return tui.Box(children)
     end
 
-    local h = testing.render(App, { cols = 1, rows = 3 })
+    local h = testing.harness(App, { cols = 1, rows = 3 })
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
     h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "b")
@@ -210,7 +210,7 @@ function suite:test_textinput_autofocus_default()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("hi")
     h:rerender()
     lt.assertEquals(value, "hi")
@@ -239,7 +239,7 @@ function suite:test_two_textinputs_tab_routes()
         }
     end
 
-    local h = testing.render(App, { cols = 20, rows = 2 })
+    local h = testing.harness(App, { cols = 20, rows = 2 })
     lt.assertEquals(focus_mod.get_focused_id(), "inA")
     h:type("x")
     h:rerender()
@@ -282,7 +282,7 @@ function suite:test_tab_order_stable_across_rerenders()
         }
     end
 
-    local h = testing.render(App, { cols = 5, rows = 3 })
+    local h = testing.harness(App, { cols = 5, rows = 3 })
     lt.assertEquals(focus_mod.get_focused_id(), "p")
 
     -- Force three rerenders via unrelated state. If useFocus's subscription
@@ -330,7 +330,7 @@ function suite:test_duplicate_focus_id_raises()
     end
 
     local ok, err = pcall(function()
-        testing.render(App, { cols = 2, rows = 2 })
+        testing.harness(App, { cols = 2, rows = 2 })
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("duplicate focus id", 1, true) ~= nil, true,
@@ -362,7 +362,7 @@ function suite:test_inactive_entry_is_skipped_by_tab()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 3 })
+    local h = testing.harness(App, { cols = 1, rows = 3 })
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
     -- Tab skips the inactive "b" and lands on "c".
@@ -387,7 +387,7 @@ function suite:test_inactive_does_not_autofocus()
         return tui.Text { f.isFocused and "Y" or "N" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id(), nil, "autoFocus should be ignored when isActive=false")
     lt.assertEquals(h:frame(), "N")
     h:unmount()
@@ -421,7 +421,7 @@ function suite:test_isactive_hot_update_transfers_focus()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 3 })
+    local h = testing.harness(App, { cols = 1, rows = 3 })
     lt.assertEquals(focus_mod.get_focused_id(), "b")
 
     -- Deactivate b: focus should walk forward to c (next active neighbor).
@@ -452,7 +452,7 @@ function suite:test_isactive_hot_update_clears_when_all_inactive()
         return tui.Text { "x" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id(), "only")
     set_active(false)
     h:rerender()
@@ -485,7 +485,7 @@ function suite:test_id_hot_update_resubscribes()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 3 })
+    local h = testing.harness(App, { cols = 1, rows = 3 })
     local ids = function()
         local out = {}
         for _, e in ipairs(testing.focus_entries()) do out[#out + 1] = e.id end
@@ -516,7 +516,7 @@ function suite:test_textinput_disabled_is_inactive_entry()
         }
     end
 
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     -- All three are in the chain (stable hook call order).
     lt.assertEquals(#testing.focus_entries(), 3)
     -- First active one autoFocuses (TextInput default).
@@ -555,7 +555,7 @@ function suite:test_focus_stack_restores_on_unmount()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 2 })
+    local h = testing.harness(App, { cols = 2, rows = 2 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
@@ -606,7 +606,7 @@ function suite:test_focus_stack_multiple_layers()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 3 })
+    local h = testing.harness(App, { cols = 2, rows = 3 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
@@ -668,7 +668,7 @@ function suite:test_focus_stack_skips_removed_entries()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 3 })
+    local h = testing.harness(App, { cols = 2, rows = 3 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
@@ -725,7 +725,7 @@ function suite:test_focus_stack_skips_inactive_entries()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 2 })
+    local h = testing.harness(App, { cols = 2, rows = 2 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
@@ -779,7 +779,7 @@ function suite:test_tab_does_not_push_focus_stack()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 3 })
+    local h = testing.harness(App, { cols = 2, rows = 3 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
@@ -829,7 +829,7 @@ function suite:test_focus_same_id_no_duplicate_stack()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 2 })
+    local h = testing.harness(App, { cols = 2, rows = 2 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
@@ -887,7 +887,7 @@ function suite:test_onfocus_onblur_fire_on_transitions()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 2 })
+    local h = testing.harness(App, { cols = 1, rows = 2 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
     lt.assertEquals(table.concat(events, ","), "a:focus")
@@ -917,7 +917,7 @@ function suite:test_onfocus_fires_for_autofocus()
         return tui.Text { "x" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "only")
     lt.assertEquals(table.concat(events, ","), "focus")
@@ -963,7 +963,7 @@ function suite:test_onblur_fires_on_unmount()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 2 })
+    local h = testing.harness(App, { cols = 1, rows = 2 })
     h:rerender()
     lt.assertEquals(focus_mod.get_focused_id(), "a")
     lt.assertEquals(table.concat(events, ","), "a:focus")
@@ -997,7 +997,7 @@ function suite:test_onblur_fires_when_isactive_goes_false()
         return tui.Text { "x" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:rerender()
     lt.assertEquals(table.concat(events, ","), "focus")
 
@@ -1032,7 +1032,7 @@ function suite:test_onfocus_onblur_latest_closure()
         return tui.Text { ("n=%d"):format(n) }
     end
 
-    local h = testing.render(App, { cols = 5, rows = 1 })
+    local h = testing.harness(App, { cols = 5, rows = 1 })
     h:rerender()
     lt.assertEquals(counter, 0)  -- onFocus fired with n=0
 
@@ -1071,7 +1071,7 @@ function suite:test_refocus_same_entry_no_duplicate_onfocus()
         return tui.Text { "x" }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:rerender()
     lt.assertEquals(table.concat(events, ","), "focus")
 

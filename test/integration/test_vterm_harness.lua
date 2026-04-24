@@ -16,7 +16,7 @@ function suite:test_vterm_always_available()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     lt.assertNotEquals(h:vterm(), nil)
     h:unmount()
 end
@@ -26,7 +26,7 @@ function suite:test_vterm_without_interactive()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = false })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = false })
     lt.assertNotEquals(h:vterm(), nil)
     -- Non-interactive: no BSU/ESU, no cursorHide, no bracketed paste
     local vt = h:vterm()
@@ -40,7 +40,7 @@ function suite:test_vterm_enabled_returns_state()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     lt.assertEquals(h:vterm().rows, 3)
     h:unmount()
 end
@@ -52,7 +52,7 @@ function suite:test_bracketed_paste_enabled()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     local vt = h:vterm()
     lt.assertEquals(vterm.has_mode(vt, 2004), true)
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?2004h"), true)
@@ -63,7 +63,7 @@ function suite:test_focus_events_enabled()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     local vt = h:vterm()
     lt.assertEquals(vterm.has_mode(vt, 1004), true)
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1004h"), true)
@@ -74,7 +74,7 @@ function suite:test_cursor_hidden_on_init()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     local vt = h:vterm()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?25l"), true)
     h:unmount()
@@ -87,7 +87,7 @@ function suite:test_sync_update_wraps_output()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     local vt = h:vterm()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?2026h"), true)
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?2026l"), true)
@@ -104,7 +104,7 @@ function suite:test_mouse_mode_auto_enable_with_onclick()
             tui.Text { "click me" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
     lt.assertEquals(vterm.mouse_level(vt) > 0, true)
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1000h"), true)
@@ -115,7 +115,7 @@ function suite:test_no_mouse_mode_without_onclick()
     local function App()
         return tui.Text { "no click" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     local vt = h:vterm()
     lt.assertEquals(vterm.mouse_level(vt), 0)
     h:unmount()
@@ -128,7 +128,7 @@ function suite:test_teardown_disables_bracketed_paste()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     h:clear_ansi()
     h:unmount()
     -- After unmount, the disable sequence should have been written
@@ -140,7 +140,7 @@ function suite:test_ansi_buf_still_works_with_vterm()
     local function App()
         return tui.Text { "hello" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     -- vterm write_log should have captured output
     local vt = h:vterm()
     lt.assertEquals(#vterm.write_log(vt) > 0, true)
@@ -154,7 +154,7 @@ function suite:test_vterm_screen_shows_content()
     local function App()
         return tui.Text { "AB" }
     end
-    local h = testing.render(App, { cols = 5, rows = 1 })
+    local h = testing.harness(App, { cols = 5, rows = 1 })
     local vt = h:vterm()
     lt.assertEquals(vterm.cell(vt, 1, 1).char, "A")
     lt.assertEquals(vterm.cell(vt, 2, 1).char, "B")
@@ -165,7 +165,7 @@ function suite:test_vterm_cursor_visible_with_text_input()
     local function App()
         return tui.TextInput { value = "hi" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 1, interactive = true })
     local vt = h:vterm()
     lt.assertEquals(vterm.cursor(vt).visible, true)
     h:unmount()
@@ -180,7 +180,7 @@ function suite:test_osc52_enabled_and_wired_in_interactive()
     local function App()
         return tui.Text { "clipboard test" }
     end
-    local h = testing.render(App, { cols = 20, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 3, interactive = true })
     local vt = h:vterm()
     local clipboard = require "tui.internal.clipboard"
     clipboard.copy("hello")
@@ -204,7 +204,7 @@ function suite:test_focus_in_dispatched_to_component()
         focus_states[#focus_states + 1] = state.focused
         return tui.Text { width = 10, height = 1, state.focused and "focused" or "blurred" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 1, interactive = true })
     -- Initial state: focused
     lt.assertEquals(focus_states[#focus_states], true)
     -- Dispatch focus_out as raw bytes through input_mod
@@ -229,7 +229,7 @@ function suite:test_focus_event_sequences_via_dispatch()
         end)
         return tui.Text { width = 5, height = 1, "x" }
     end
-    local h = testing.render(App, { cols = 5, rows = 1 })
+    local h = testing.harness(App, { cols = 5, rows = 1 })
     -- Dispatch focus events as raw bytes
     h:dispatch("\x1b[I")
     h:rerender()
@@ -250,7 +250,7 @@ function suite:test_main_screen_mode_set_in_interactive()
     local function App()
         return tui.Text { "main screen" }
     end
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
     -- diff_main first frame starts with \r to align to column 0
     -- (main-screen mode uses relative moves; alt-screen would use CUP)
@@ -273,7 +273,7 @@ function suite:test_main_screen_content_h_clipping()
     local function App()
         return tui.Text { "short" }
     end
-    local h = testing.render(App, { cols = 20, rows = 10, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 10, interactive = true })
     local vt = h:vterm()
     -- The content should only fill 1 row; the rest is untouched.
     -- The vterm screen row 1 should have "short".
@@ -290,7 +290,7 @@ function suite:test_teardown_cursor_restore()
     local function App()
         return tui.Text { "teardown" }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     -- Capture the write_log before unmount so we can verify teardown sequences
     local vt = h:vterm()
     local log_before = #vterm.write_log(vt)
@@ -328,7 +328,7 @@ function suite:test_teardown_moves_cursor_below_content()
             tui.TextInput { key = "d", value = "ab" },
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 5, interactive = true })
     local vt = h:vterm()
     local log_before = #vterm.write_log(vt)
     h:unmount()
@@ -363,7 +363,7 @@ function suite:test_teardown_moves_cursor_no_declared_cursor()
             tui.Text { key = "c", "row3" },
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 3, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 3, interactive = true })
     local vt = h:vterm()
     local log_before = #vterm.write_log(vt)
     h:unmount()
@@ -391,7 +391,7 @@ function suite:test_mouse_level_upgrade_and_downgrade()
         release_ref.setState = setState
         return tui.Text { "mouse lifecycle" }
     end
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
     -- Request mouse level 1 via the input module
     local input_mod = require "tui.internal.input"
@@ -426,7 +426,7 @@ function suite:test_mouse_level_3_any_motion()
     local function App()
         return tui.Text { "level 3" }
     end
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
     local input_mod = require "tui.internal.input"
     local release3 = input_mod.request_mouse_level(3)
@@ -454,7 +454,7 @@ function suite:test_mouse_auto_enable_disable_lifecycle()
         end
         return tui.Text { "plain" }
     end
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
     -- Auto-enable: onMouseDown present → mouse level > 0
     lt.assertEquals(vterm.mouse_level(vt) > 0, true,
@@ -590,7 +590,7 @@ function suite:test_vterm_resize_updates_dimensions()
     local function App()
         return tui.Text { "resize me" }
     end
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
     -- Initial dimensions
     lt.assertEquals(vt.cols, 20)
@@ -607,7 +607,7 @@ function suite:test_vterm_resize_preserves_content()
     local function App()
         return tui.Text { "hello world" }
     end
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
     -- Resize narrower (keep columns small, expand rows)
     h:resize(10, 8)

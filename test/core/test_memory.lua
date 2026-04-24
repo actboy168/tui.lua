@@ -31,11 +31,11 @@ function suite:test_mount_unmount_loop_does_not_leak_handlers()
     end
     -- Do one mount+unmount first to establish the post-unmount baseline
     -- (anything persistent that happens to exist won't bias us).
-    local h0 = testing.render(AppWithInput, { cols = 4, rows = 1 })
+    local h0 = testing.harness(AppWithInput, { cols = 4, rows = 1 })
     h0:unmount()
     local baseline = testing.input_handler_count()
     for _ = 1, 500 do
-        local h = testing.render(AppWithInput, { cols = 4, rows = 1 })
+        local h = testing.harness(AppWithInput, { cols = 4, rows = 1 })
         h:unmount()
     end
     lt.assertEquals(testing.input_handler_count(), baseline,
@@ -62,10 +62,10 @@ function suite:test_multiple_subscriptions_all_cleaned_up()
         }
     end
     -- Warm-up cycle to stabilize any global state.
-    local h0 = testing.render(App, { cols = 4, rows = 1 })
+    local h0 = testing.harness(App, { cols = 4, rows = 1 })
     h0:unmount()
     local baseline = testing.input_handler_count()
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     lt.assertEquals(testing.input_handler_count(), baseline + 3,
         "three useInput hooks should register three subscribers")
     h:unmount()

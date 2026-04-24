@@ -321,10 +321,10 @@ vterm.clear_input(vt)
 
 ### 7.1 vterm 为默认终端后端
 
-所有 `testing.render()` 调用自动创建 vterm 实例，h:vterm() 始终可用。
+所有 `testing.harness()` 调用自动创建 vterm 实例，h:vterm() 始终可用。
 
 ```lua
-local h = testing.render(App, { cols = 20, rows = 5 })
+local h = testing.harness(App, { cols = 20, rows = 5 })
 local vt = h:vterm()           -- 始终返回 vterm 实例
 vterm.has_sequence(vt, "\x1b[31m")  -- 可查询 ANSI 序列
 ```
@@ -340,10 +340,10 @@ vterm.has_sequence(vt, "\x1b[31m")  -- 可查询 ANSI 序列
 
 ```lua
 -- 非交互式（默认）：生产环境 paint() 的非交互式路径
-local h = testing.render(App, { cols = 20, rows = 5 })
+local h = testing.harness(App, { cols = 20, rows = 5 })
 
 -- 交互式：完整生产环境 paint() 路径
-local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
 local vt = h:vterm()
 -- 验证 BSU/ESU
 vterm.has_sequence(vt, "\x1b[?2026h")  -- true
@@ -383,7 +383,7 @@ function suite:test_mouse_mode_with_onclick()
         }
     end
 
-    local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
 
     -- 验证 mouse mode 序列已发出
@@ -402,7 +402,7 @@ function suite:test_sync_update()
         return tui.Text { "hello" }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 1, interactive = true })
+    local h = testing.harness(App, { cols = 10, rows = 1, interactive = true })
     local vt = h:vterm()
 
     -- 验证每帧被 BSU/ESU 包裹
@@ -420,7 +420,7 @@ function suite:test_red_text()
             tui.Text { color = "red", "hi" },
         }
     end
-    local h = testing.render(App)
+    local h = testing.harness(App)
     local cells = h:cells(1)
     lt.assertEquals(cells[1].fg, 1, "cell should have red fg")
     h:unmount()
@@ -436,7 +436,7 @@ function suite:test_rerender_stable()
             tui.Text { "key=", {text="value", color="cyan"} },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 2 })
+    local h = testing.harness(App, { cols = 20, rows = 2 })
     local vt = h:vterm()
     local before = vterm.screen_string(vt)
     h:rerender()

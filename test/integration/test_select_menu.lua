@@ -39,7 +39,7 @@ end
 -- ============================================================================
 
 function suite:test_initial_highlight()
-    local h = testing.render(MenuApp(nil, nil), { cols = 35, rows = 12 })
+    local h = testing.harness(MenuApp(nil, nil), { cols = 35, rows = 12 })
 
     -- First item should be prefixed with the indicator glyph "❯ "
     local frame = h:frame()
@@ -59,7 +59,7 @@ function suite:test_down_moves_highlight()
         changed_to = item.value
     end)
 
-    local h = testing.render(App, { cols = 35, rows = 12 })
+    local h = testing.harness(App, { cols = 35, rows = 12 })
 
     h:press("down")
     h:rerender()
@@ -86,7 +86,7 @@ function suite:test_up_wraps_to_last()
         changed_to = item.value
     end)
 
-    local h = testing.render(App, { cols = 35, rows = 12 })
+    local h = testing.harness(App, { cols = 35, rows = 12 })
 
     -- Up from first item wraps to last (delta)
     h:press("up")
@@ -102,7 +102,7 @@ function suite:test_navigation_sequence()
         trail[#trail + 1] = item.value
     end)
 
-    local h = testing.render(App, { cols = 35, rows = 12 })
+    local h = testing.harness(App, { cols = 35, rows = 12 })
 
     h:press("down")  -- → beta
     h:rerender()
@@ -129,7 +129,7 @@ function suite:test_enter_confirms_first_item()
     local selected = nil
     local App = MenuApp(function(item) selected = item end, nil)
 
-    local h = testing.render(App, { cols = 35, rows = 12 })
+    local h = testing.harness(App, { cols = 35, rows = 12 })
 
     h:press("enter")
 
@@ -146,7 +146,7 @@ function suite:test_enter_confirms_navigated_item()
     local selected = nil
     local App = MenuApp(function(item) selected = item end, nil)
 
-    local h = testing.render(App, { cols = 35, rows = 12 })
+    local h = testing.harness(App, { cols = 35, rows = 12 })
 
     h:press("down")
     h:rerender()
@@ -167,13 +167,13 @@ end
 -- ============================================================================
 
 function suite:test_snapshot_initial()
-    local h = testing.render(MenuApp(nil, nil), { cols = 35, rows = 12 })
+    local h = testing.harness(MenuApp(nil, nil), { cols = 35, rows = 12 })
     h:match_snapshot("select_initial_35x12")
     h:unmount()
 end
 
 function suite:test_snapshot_after_navigation()
-    local h = testing.render(MenuApp(nil, nil), { cols = 35, rows = 12 })
+    local h = testing.harness(MenuApp(nil, nil), { cols = 35, rows = 12 })
     h:press("down")
     h:rerender()
     h:press("down")
@@ -187,7 +187,7 @@ end
 -- ============================================================================
 
 function suite:test_one_render_per_keypress()
-    local h = testing.render(MenuApp(nil, nil), { cols = 35, rows = 12 })
+    local h = testing.harness(MenuApp(nil, nil), { cols = 35, rows = 12 })
     h:reset_render_count()
 
     h:press("down")

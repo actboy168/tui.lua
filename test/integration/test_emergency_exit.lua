@@ -62,7 +62,7 @@ function suite:test_useinput_sees_ctrl_c()
         end)
         return tui.Text { "x" }
     end
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:dispatch("\3")
     h:rerender()
     lt.assertEquals(saw_ctrl_c, true)

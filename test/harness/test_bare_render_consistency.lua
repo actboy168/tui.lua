@@ -29,7 +29,7 @@ function suite:test_useState_setter_updates_tree()
     end
 
     -- Bare
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(tree_text(b:tree()), "0")
     refs.setVal(42)
     b:rerender()
@@ -38,7 +38,7 @@ function suite:test_useState_setter_updates_tree()
 
     -- Harness
     refs = {}
-    local h = testing.render(App)
+    local h = testing.harness(App)
     lt.assertEquals(tree_text(h:tree()), "0")
     refs.setVal(42)
     h:paint()
@@ -57,7 +57,7 @@ function suite:test_useEffect_fires_on_mount()
         tui.useEffect(function() count_bare = count_bare + 1 end, {})
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(App1)
+    local b = testing.bare(App1)
     lt.assertEquals(count_bare, 1)
     b:unmount()
 
@@ -65,7 +65,7 @@ function suite:test_useEffect_fires_on_mount()
         tui.useEffect(function() count_harness = count_harness + 1 end, {})
         return tui.Text { "x" }
     end
-    local h = testing.render(App2)
+    local h = testing.harness(App2)
     lt.assertEquals(count_harness, 1)
     h:unmount()
 end
@@ -80,7 +80,7 @@ function suite:test_useEffect_cleanup_on_unmount()
         end, {})
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(App1)
+    local b = testing.bare(App1)
     lt.assertEquals(bare_cleaned, false)
     b:unmount()
     lt.assertEquals(bare_cleaned, true)
@@ -91,7 +91,7 @@ function suite:test_useEffect_cleanup_on_unmount()
         end, {})
         return tui.Text { "x" }
     end
-    local h = testing.render(App2)
+    local h = testing.harness(App2)
     lt.assertEquals(harness_cleaned, false)
     h:unmount()
     lt.assertEquals(harness_cleaned, true)
@@ -114,7 +114,7 @@ function suite:test_useReducer_dispatch_updates_tree()
     end
 
     -- Bare
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(tree_text(b:tree()), "0")
     refs.dispatch("inc")
     b:rerender()
@@ -123,7 +123,7 @@ function suite:test_useReducer_dispatch_updates_tree()
 
     -- Harness
     refs = {}
-    local h = testing.render(App)
+    local h = testing.harness(App)
     lt.assertEquals(tree_text(h:tree()), "0")
     refs.dispatch("inc")
     h:paint()
@@ -144,7 +144,7 @@ function suite:test_useRef_persists_across_renders()
     end
 
     -- Bare
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(refs.ref.current, 1)
     b:rerender()
     lt.assertEquals(refs.ref.current, 2, "bare: ref should persist")
@@ -152,7 +152,7 @@ function suite:test_useRef_persists_across_renders()
 
     -- Harness
     refs = {}
-    local h = testing.render(App)
+    local h = testing.harness(App)
     lt.assertEquals(refs.ref.current, 1)
     h:paint()
     lt.assertEquals(refs.ref.current, 2, "harness: ref should persist")
@@ -180,7 +180,7 @@ function suite:test_useMemo_caches_until_deps_change()
     end
 
     -- Bare
-    local b = testing.mount_bare(make_app("bare"))
+    local b = testing.bare(make_app("bare"))
     lt.assertEquals(compute_counts.bare, 1)
     refs.bare.setD(1)  -- same dep
     b:rerender()
@@ -192,7 +192,7 @@ function suite:test_useMemo_caches_until_deps_change()
 
     -- Harness
     refs = {}
-    local h = testing.render(make_app("harness"))
+    local h = testing.harness(make_app("harness"))
     lt.assertEquals(compute_counts.harness, 1)
     refs.harness.setD(1)
     h:paint()
@@ -219,12 +219,12 @@ function suite:test_useContext_same_value_in_both_modes()
     end
 
     -- Bare
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(tree_text(b:tree()), "hello")
     b:unmount()
 
     -- Harness
-    local h = testing.render(App)
+    local h = testing.harness(App)
     lt.assertEquals(tree_text(h:tree()), "hello")
     h:unmount()
 end
@@ -246,13 +246,13 @@ function suite:test_dispatch_same_bytes()
     end
 
     -- Use raw dispatch with up arrow (not intercepted by focus)
-    local b = testing.mount_bare(make_app(bare_keys))
+    local b = testing.bare(make_app(bare_keys))
     b:dispatch("\x1b[A")  -- CSI A = up arrow
     lt.assertEquals(#bare_keys, 1, "bare: should receive 1 key")
     lt.assertEquals(bare_keys[1], "up")
     b:unmount()
 
-    local h = testing.render(make_app(harness_keys))
+    local h = testing.harness(make_app(harness_keys))
     h:dispatch("\x1b[A")
     h:rerender()
     lt.assertEquals(#harness_keys, 1, "harness: should receive 1 key")
@@ -275,12 +275,12 @@ function suite:test_type_same_chars()
         end
     end
 
-    local b = testing.mount_bare(make_app(bare_chars))
+    local b = testing.bare(make_app(bare_chars))
     b:type("hi")
     lt.assertEquals(bare_chars, { "h", "i" }, "bare: type should deliver chars")
     b:unmount()
 
-    local h = testing.render(make_app(harness_chars))
+    local h = testing.harness(make_app(harness_chars))
     h:type("hi")
     h:rerender()
     lt.assertEquals(harness_chars, { "h", "i" }, "harness: type should deliver chars")
@@ -309,8 +309,8 @@ function suite:test_focus_next_advances_same()
         }
     end
 
-    local b = testing.mount_bare(App)
-    local h = testing.render(App)
+    local b = testing.bare(App)
+    local h = testing.harness(App)
 
     lt.assertEquals(focus_mod.get_focused_id(), focus_mod.get_focused_id(), "initial focus should match")
 
@@ -334,8 +334,8 @@ function suite:test_advance_updates_clock_same()
         return tui.Text { "x" }
     end
 
-    local b = testing.mount_bare(App)
-    local h = testing.render(App)
+    local b = testing.bare(App)
+    local h = testing.harness(App)
 
     b:advance(100)
     h:advance(100)
@@ -359,8 +359,8 @@ function suite:test_same_tree_kind_and_text()
         }
     end
 
-    local b = testing.mount_bare(App)
-    local h = testing.render(App)
+    local b = testing.bare(App)
+    local h = testing.harness(App)
 
     local bt = b:tree()
     local ht = h:tree()
@@ -387,7 +387,7 @@ function suite:test_unmount_runs_effect_cleanups()
         end, {})
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(App1)
+    local b = testing.bare(App1)
     b:unmount()
 
     local App2 = function()
@@ -396,7 +396,7 @@ function suite:test_unmount_runs_effect_cleanups()
         end, {})
         return tui.Text { "x" }
     end
-    local h = testing.render(App2)
+    local h = testing.harness(App2)
     h:unmount()
 
     lt.assertEquals(bare_cleanups, harness_cleanups,

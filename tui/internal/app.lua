@@ -82,7 +82,7 @@ function App:resize(cols, rows)
     app_base.resize(self, cols, rows)
 end
 
-function App:exit() scheduler.stop(); end
+function App:exit() scheduler.stop() end
 
 function App:size()   return app_base.size(self) end
 function App:screen() return app_base.screen(self) end

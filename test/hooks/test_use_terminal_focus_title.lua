@@ -21,13 +21,13 @@ local function FocusApp()
 end
 
 function suite:test_initial_state_is_focused()
-    local h = testing.render(FocusApp, { cols = 20, rows = 1 })
+    local h = testing.harness(FocusApp, { cols = 20, rows = 1 })
     lt.assertEquals(h:row(1):match("^%S+"), "focused")
     h:unmount()
 end
 
 function suite:test_focus_out_event_changes_state()
-    local h = testing.render(FocusApp, { cols = 20, rows = 1 })
+    local h = testing.harness(FocusApp, { cols = 20, rows = 1 })
     -- ESC [ O  →  CSI O  →  focus_out
     h:dispatch("\x1b[O")
     h:rerender()
@@ -36,7 +36,7 @@ function suite:test_focus_out_event_changes_state()
 end
 
 function suite:test_focus_in_event_restores_state()
-    local h = testing.render(FocusApp, { cols = 20, rows = 1 })
+    local h = testing.harness(FocusApp, { cols = 20, rows = 1 })
     h:dispatch("\x1b[O")  -- lose focus
     h:rerender()
     h:dispatch("\x1b[I")  -- regain focus
@@ -54,7 +54,7 @@ function suite:test_focus_events_not_dispatched_to_useInput()
         end)
         return tui.Text { width = 5, height = 1, "x" }
     end
-    local h = testing.render(App, { cols = 5, rows = 1 })
+    local h = testing.harness(App, { cols = 5, rows = 1 })
     h:dispatch("\x1b[I")
     h:dispatch("\x1b[O")
     lt.assertEquals(#seen, 0, "focus events must not reach useInput handlers")
@@ -80,7 +80,7 @@ function suite:test_multiple_subscribers()
             tui.component(B)  {},
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 2 })
+    local h = testing.harness(App, { cols = 10, rows = 2 })
     local r1 = h:row(1):match("^%S+")
     local r2 = h:row(2):match("^%S+")
     lt.assertEquals(r1, "A:Y")
@@ -107,7 +107,7 @@ local function escape_ctrl(s)
 end
 
 function suite:test_title_osc_sequence_format()
-    local h = testing.render(tui.component(MountWithTitle), { cols = 5, rows = 1 })
+    local h = testing.harness(tui.component(MountWithTitle), { cols = 5, rows = 1 })
     local raw = h:ansi()
     h:unmount()
     -- Must contain ESC ] 0 ; mytitle  (BEL or ST terminator follows)
@@ -124,7 +124,7 @@ function suite:test_title_updates_on_prop_change()
         return tui.Text { width = 5, height = 1, title }
     end
 
-    local h = testing.render(DynTitleApp, { cols = 5, rows = 1 })
+    local h = testing.harness(DynTitleApp, { cols = 5, rows = 1 })
     set_title_ref.set("second")
     h:rerender()
     local raw = h:ansi()
@@ -140,7 +140,7 @@ function suite:test_title_cleared_on_unmount()
     end
 
     -- Capture only the unmount phase so we verify the cleanup effect fires.
-    local h = testing.render(DynApp, { cols = 5, rows = 1 })
+    local h = testing.harness(DynApp, { cols = 5, rows = 1 })
     h:clear_ansi()
     h:unmount()
     local raw = h:ansi()

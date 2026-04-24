@@ -31,7 +31,7 @@ end
 -- ============================================================================
 
 function suite:test_increment()
-    local h = testing.render(Counter, { cols = 25, rows = 7 })
+    local h = testing.harness(Counter, { cols = 25, rows = 7 })
 
     lt.assertEquals(h:row(2), "0                        ")
 
@@ -55,7 +55,7 @@ function suite:test_increment()
 end
 
 function suite:test_decrement_below_zero()
-    local h = testing.render(Counter, { cols = 25, rows = 7 })
+    local h = testing.harness(Counter, { cols = 25, rows = 7 })
 
     h:press("down")
     h:rerender()
@@ -73,7 +73,7 @@ end
 -- ============================================================================
 
 function suite:test_render_count_per_keypress()
-    local h = testing.render(Counter, { cols = 25, rows = 7 })
+    local h = testing.harness(Counter, { cols = 25, rows = 7 })
     h:reset_render_count()
 
     h:press("up")
@@ -94,13 +94,13 @@ end
 -- ============================================================================
 
 function suite:test_snapshot_initial()
-    local h = testing.render(Counter, { cols = 25, rows = 7 })
+    local h = testing.harness(Counter, { cols = 25, rows = 7 })
     h:match_snapshot("counter_initial_25x7")
     h:unmount()
 end
 
 function suite:test_snapshot_after_increments()
-    local h = testing.render(Counter, { cols = 25, rows = 7 })
+    local h = testing.harness(Counter, { cols = 25, rows = 7 })
     h:press("up")
     h:rerender()
     h:press("up")

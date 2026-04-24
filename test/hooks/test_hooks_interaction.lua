@@ -27,7 +27,7 @@ function suite:test_callback_in_effect_deps_stable()
         end, { cb })
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(effect_runs, 1)
     lt.assertEquals(cb_calls, 1)
     -- Callback identity stable -> effect should NOT rerun
@@ -56,7 +56,7 @@ function suite:test_callback_wrapper_stable_effect_does_not_rerun()
         end, { cb })
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(effect_runs, 1)
     lt.assertEquals(captured_values, { 1 })
     lt.assertEquals(#captured_cb, 1)
@@ -91,7 +91,7 @@ function suite:test_memo_result_cached_in_ref()
         end
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(compute_calls, 1)
     b:rerender()
     -- useMemo cached, compute not called again
@@ -115,7 +115,7 @@ function suite:test_ref_mutation_does_not_invalidate_memo()
         ref_mutations = ref_mutations + 1
         return tui.Text { tostring(memo_val) }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(compute_calls, 1)
     lt.assertEquals(ref_mutations, 1)
     b:rerender()
@@ -154,7 +154,7 @@ function suite:test_reducer_dispatch_via_context()
             Consumer,
         }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(states[#states], 10)
     -- Note: In real app, Consumer would call ctx.dispatch("inc")
     -- Here we verify the dispatch is passed through context
@@ -183,7 +183,7 @@ function suite:test_state_drives_effect_uses_stable_callback()
         end, { count })  -- only count in deps, callback is stable
         return tui.Text { tostring(count) }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(effect_results, { 2 })
     multiplier = 3
     b:rerender()
@@ -217,7 +217,7 @@ function suite:test_complex_component_hook_identities_stable()
         refs[#refs + 1] = r
         return tui.Text { tostring(s) }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     -- First render captures initial values
     lt.assertEquals(states, { 0 })
     lt.assertEquals(memos, { 0 })
@@ -261,7 +261,7 @@ function suite:test_effect_cleanup_with_callback_closure()
         end, { cb })
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(setups, { "initial" })
     lt.assertEquals(#cleanups, 0)
     value = "updated"
@@ -294,7 +294,7 @@ function suite:test_reducer_state_drives_memo()
         end, { state })
         return tui.Text { tostring(doubled) }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(memo_computes, 1)
     b:rerender()
     -- State unchanged, memo cached
@@ -327,7 +327,7 @@ function suite:test_hook_order_maintained_with_conditional_rendering()
         end
         return tui.Text { s1 }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(state_values, { "a" })
     lt.assertEquals(memo_values, { "a_memo" })
     b:rerender()

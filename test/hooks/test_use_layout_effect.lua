@@ -16,7 +16,7 @@ function suite:test_runs_synchronously_during_render()
         order[#order + 1] = "render"
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(order[1], "render")
     lt.assertEquals(order[2], "layout")
     b:unmount()
@@ -37,7 +37,7 @@ function suite:test_cleanup_before_rerun()
         end, { val })
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(order[1], "run1")
     setN(2)
     b:rerender()
@@ -56,7 +56,7 @@ function suite:test_empty_deps_runs_once()
         end, {})
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(count, 1)
     b:rerender()
     lt.assertEquals(count, 1)
@@ -74,7 +74,7 @@ function suite:test_nil_deps_runs_every_render()
         end, nil)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(count, 1)
     b:rerender()
     lt.assertEquals(count, 2)
@@ -94,7 +94,7 @@ function suite:test_cleanup_on_unmount()
         end, {})
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(cleaned, false)
     b:unmount()
     lt.assertEquals(cleaned, true)
@@ -112,7 +112,7 @@ function suite:test_setState_visible_next_frame()
         end, {})
         return tui.Text { tostring(val) }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     -- Layout effect ran but setState is deferred to next frame.
     lt.assertEquals(val, 1)
     -- The tree from first render still has "0" because setState was after stabilization.
@@ -132,7 +132,7 @@ function suite:test_layout_effect_runs_before_effect()
         end, {})
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(order[1], "layout")
     lt.assertEquals(order[2], "effect")
     b:unmount()

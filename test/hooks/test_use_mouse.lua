@@ -24,7 +24,7 @@ end
 
 function suite:test_left_button_down()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 10, y = 5 })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -37,7 +37,7 @@ end
 
 function suite:test_left_button_up()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "up", button = 1, x = 3, y = 7 })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -50,7 +50,7 @@ end
 
 function suite:test_middle_button_down()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 2, x = 1, y = 1 })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -61,7 +61,7 @@ end
 
 function suite:test_right_button_down()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 3, x = 1, y = 1 })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -75,7 +75,7 @@ end
 
 function suite:test_scroll_up()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "scroll", scroll = 1, x = 1, y = 1 })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -86,7 +86,7 @@ end
 
 function suite:test_scroll_down()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "scroll", scroll = -1, x = 1, y = 1 })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -100,7 +100,7 @@ end
 
 function suite:test_mouse_move()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "move", button = 1, x = 15, y = 8 })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -115,7 +115,7 @@ end
 
 function suite:test_shift_modifier()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr {
         type = "down", button = 1, x = 5, y = 5, shift = true,
     })
@@ -129,7 +129,7 @@ end
 
 function suite:test_meta_modifier()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr {
         type = "down", button = 1, x = 5, y = 5, meta = true,
     })
@@ -143,7 +143,7 @@ end
 
 function suite:test_ctrl_modifier()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr {
         type = "down", button = 1, x = 5, y = 5, ctrl = true,
     })
@@ -165,7 +165,7 @@ function suite:test_mouse_not_forwarded_to_useInput()
         tui.useMouse(function(_ev) end)
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
     h:rerender()
     lt.assertFalse(got_key, "mouse event must not reach useInput")
@@ -177,7 +177,7 @@ end
 
 function suite:test_harness_mouse_down()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:mouse("down", 1, 5, 3)
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -190,7 +190,7 @@ end
 
 function suite:test_harness_mouse_up()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:mouse("up", 1, 5, 3)
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -201,7 +201,7 @@ end
 
 function suite:test_harness_mouse_scroll_up()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:mouse("scroll_up", nil, 1, 1)
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -212,7 +212,7 @@ end
 
 function suite:test_harness_mouse_scroll_down()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:mouse("scroll_down", nil, 1, 1)
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -223,7 +223,7 @@ end
 
 function suite:test_harness_mouse_modifiers()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:mouse("down", 1, 1, 1, { shift = true, ctrl = true })
     h:rerender()
     lt.assertEquals(#events, 1)
@@ -238,7 +238,7 @@ end
 
 function suite:test_x10_button_down()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     -- left button (0) at col=10 (10+32=42=0x2A), row=5 (5+32=37=0x25)
     h:dispatch(mouse_helpers.x10 { type = "down", button = 1, x = 10, y = 5 })
     h:rerender()
@@ -252,7 +252,7 @@ end
 
 function suite:test_x10_release()
     local events = {}
-    local h = testing.render(make_app(events), { cols = 10, rows = 1 })
+    local h = testing.harness(make_app(events), { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.x10 { type = "up", x = 1, y = 1 })
     h:rerender()
     lt.assertEquals(#events, 1)

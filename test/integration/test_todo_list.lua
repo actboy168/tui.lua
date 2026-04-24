@@ -60,7 +60,7 @@ end
 -- ============================================================================
 
 function suite:test_initial_empty_state()
-    local h = testing.render(TodoApp, { cols = 45, rows = 17 })
+    local h = testing.harness(TodoApp, { cols = 45, rows = 17 })
 
     -- "No tasks" placeholder visible
     lt.assertNotEquals(h:frame():find("No tasks"), nil)
@@ -75,7 +75,7 @@ end
 -- ============================================================================
 
 function suite:test_add_single_task()
-    local h = testing.render(TodoApp, { cols = 45, rows = 17 })
+    local h = testing.harness(TodoApp, { cols = 45, rows = 17 })
 
     h:type("Buy milk")
     h:rerender()
@@ -97,7 +97,7 @@ end
 -- ============================================================================
 
 function suite:test_add_multiple_tasks()
-    local h = testing.render(TodoApp, { cols = 45, rows = 17 })
+    local h = testing.harness(TodoApp, { cols = 45, rows = 17 })
 
     h:type("Task one")
     h:rerender()
@@ -128,7 +128,7 @@ end
 -- ============================================================================
 
 function suite:test_input_clears_after_submit()
-    local h = testing.render(TodoApp, { cols = 45, rows = 17 })
+    local h = testing.harness(TodoApp, { cols = 45, rows = 17 })
 
     h:type("Do something")
     h:rerender()
@@ -152,7 +152,7 @@ end
 -- ============================================================================
 
 function suite:test_empty_submit_noop()
-    local h = testing.render(TodoApp, { cols = 45, rows = 17 })
+    local h = testing.harness(TodoApp, { cols = 45, rows = 17 })
 
     h:press("enter")  -- submit with empty input
 
@@ -166,7 +166,7 @@ end
 -- ============================================================================
 
 function suite:test_snapshot_with_tasks()
-    local h = testing.render(TodoApp, { cols = 45, rows = 17 })
+    local h = testing.harness(TodoApp, { cols = 45, rows = 17 })
 
     h:type("First task")
     h:rerender()

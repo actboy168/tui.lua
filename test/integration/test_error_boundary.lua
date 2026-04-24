@@ -32,7 +32,7 @@ function suite:test_error_boundary_catches_child_throw()
         }
     end
 
-    local h = testing.render(App, { cols = 8, rows = 1 })
+    local h = testing.harness(App, { cols = 8, rows = 1 })
     lt.assertEquals(h:frame(), "FALLBACK")
     -- Subsequent rerenders keep showing fallback (boundary stays tripped).
     h:rerender()
@@ -54,7 +54,7 @@ function suite:test_error_boundary_no_throw_passthrough()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     lt.assertEquals(h:frame(), "OK")
     h:unmount()
 end
@@ -82,7 +82,7 @@ function suite:test_error_boundary_isolates_sibling_subtrees()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 2 })
+    local h = testing.harness(App, { cols = 4, rows = 2 })
     lt.assertEquals(h:row(1), "BAD!")
     lt.assertEquals(h:row(2), "GOOD")
     h:unmount()
@@ -105,7 +105,7 @@ function suite:test_error_boundary_nested_inner_catches_first()
         }
     end
 
-    local h = testing.render(App, { cols = 5, rows = 1 })
+    local h = testing.harness(App, { cols = 5, rows = 1 })
     lt.assertEquals(h:frame(), "INNER")
     h:unmount()
 end
@@ -134,7 +134,7 @@ function suite:test_error_from_deeper_descendant_caught()
         }
     end
 
-    local h = testing.render(App, { cols = 7, rows = 1 })
+    local h = testing.harness(App, { cols = 7, rows = 1 })
     lt.assertEquals(h:frame(), "DEEP-FB")
     h:unmount()
 end
@@ -151,7 +151,7 @@ function suite:test_no_boundary_error_propagates()
     local function App() return Bad {} end
 
     local ok, err = pcall(function()
-        testing.render(App, { cols = 4, rows = 1 })
+        testing.harness(App, { cols = 4, rows = 1 })
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("unhandled", 1, true) ~= nil, true,
@@ -177,7 +177,7 @@ function suite:test_fatal_error_bypasses_boundary()
     end
 
     local ok, err = pcall(function()
-        testing.render(App, { cols = 4, rows = 1 })
+        testing.harness(App, { cols = 4, rows = 1 })
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("[tui:fatal]", 1, true) ~= nil, true,
@@ -200,7 +200,7 @@ function suite:test_reconciler_duplicate_key_is_fatal_past_boundary()
     end
 
     local ok, err = pcall(function()
-        testing.render(App, { cols = 4, rows = 1 })
+        testing.harness(App, { cols = 4, rows = 1 })
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("duplicate key", 1, true) ~= nil, true,
@@ -230,7 +230,7 @@ function suite:test_useeffect_body_throw_caught_by_boundary()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     -- Effect error sets boundary.caught_error after the tree is committed;
     -- the next paint observes the tripped boundary and swaps in fallback.
     h:rerender()
@@ -259,7 +259,7 @@ function suite:test_useeffect_cleanup_throw_caught_by_boundary()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:frame(), "C   ", "first mount OK — effect returned cleanup, not yet invoked")
     -- Flip deps so cleanup fires before the new body runs.
     phase[1] = "second"
@@ -284,7 +284,7 @@ function suite:test_useeffect_throw_without_boundary_propagates()
     local function App() return Bad {} end
 
     local ok, err = pcall(function()
-        testing.render(App, { cols = 2, rows = 1 })
+        testing.harness(App, { cols = 2, rows = 1 })
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("loose-effect", 1, true) ~= nil, true,
@@ -307,7 +307,7 @@ function suite:test_boundary_caught_error_is_sticky()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     -- Effect error sets boundary.caught_error after the tree is committed;
     -- the next paint observes the tripped boundary and swaps in fallback.
     h:rerender()
@@ -339,7 +339,7 @@ function suite:test_useinput_handler_throw_caught_by_boundary()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:frame(), "BAD ", "no key pressed yet, child still mounted")
     h:type("x")   -- drives input.dispatch → broadcast handler → throws
     h:rerender()
@@ -367,7 +367,7 @@ function suite:test_usefocus_onInput_throw_caught_by_boundary()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id() ~= nil, true, "autoFocus took focus")
     h:type("y")   -- dispatch_focused delivers to focused onInput → throws
     h:rerender()
@@ -388,7 +388,7 @@ function suite:test_useinput_throw_without_boundary_propagates()
     local Bad = tui.component(Bad_fn)
     local function App() return Bad {} end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     local ok, err = pcall(function() h:type("a"); h:rerender() end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("loose-key", 1, true) ~= nil, true,
@@ -415,7 +415,7 @@ function suite:test_fallback_function_receives_err_and_reset()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:frame(), "FN!!")
     lt.assertEquals(seen_reset_type, "function")
     lt.assertEquals(type(seen_err), "table",
@@ -448,7 +448,7 @@ function suite:test_reset_clears_caught_error()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     lt.assertEquals(h:frame(), "FB  ")
     -- Flip so Bad no longer throws, then reset.
     armed[1] = false
@@ -479,7 +479,7 @@ function suite:test_reset_then_rethrow_catches_new_error()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     lt.assertEquals(h:frame(), "FB")
     which[1] = "second"
     last_reset()
@@ -513,7 +513,7 @@ function suite:test_reset_is_reference_stable()
         }
     end
 
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:rerender()
     h:rerender()
     lt.assertEquals(#seen >= 3, true, "expected multiple fallback invocations, got " .. #seen)
@@ -536,7 +536,7 @@ function suite:test_fallback_function_that_throws_degrades_to_empty()
         }
     end
 
-    local h = testing.render(App, { cols = 4, rows = 1 })
+    local h = testing.harness(App, { cols = 4, rows = 1 })
     -- Empty box fills with spaces at this width.
     lt.assertEquals(h:frame(), "    ")
     h:unmount()
@@ -553,7 +553,7 @@ function suite:test_fallback_function_with_fatal_still_propagates()
     end
 
     local ok, err = pcall(function()
-        testing.render(App, { cols = 4, rows = 1 })
+        testing.harness(App, { cols = 4, rows = 1 })
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("fatal-from-fb", 1, true) ~= nil, true,
@@ -582,7 +582,7 @@ function suite:test_useerrorboundary_sees_caught_error()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     lt.assertEquals(h:frame(), "fb")
     lt.assertEquals(type(seen_err_in_fb), "table",
         "useErrorBoundary should expose caught_error as table, got: " .. tostring(seen_err_in_fb))
@@ -616,7 +616,7 @@ function suite:test_useerrorboundary_reset_clears_boundary()
         }
     end
 
-    local h = testing.render(App, { cols = 5, rows = 1 })
+    local h = testing.harness(App, { cols = 5, rows = 1 })
     lt.assertEquals(h:row(1):sub(1, 4), "fb  ")
     lt.assertEquals(captured.caught_error ~= nil, true)
     armed[1] = false
@@ -637,7 +637,7 @@ function suite:test_useerrorboundary_without_ancestor_is_noop()
         return tui.Text { "v" }
     end
 
-    local h = testing.render(View, { cols = 1, rows = 1 })
+    local h = testing.harness(View, { cols = 1, rows = 1 })
     lt.assertEquals(seen.caught_error, nil)
     lt.assertEquals(type(seen.reset), "function")
     -- Calling reset is a no-op.

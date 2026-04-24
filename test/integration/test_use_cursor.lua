@@ -30,7 +30,7 @@ function suite:test_cursor_is_relative_to_component_root()
         }
     end
 
-    local h = testing.render(App, { cols = 20, rows = 6 })
+    local h = testing.harness(App, { cols = 20, rows = 6 })
     local col, row = h:cursor()
     lt.assertEquals(col, 6)
     lt.assertEquals(row, 3)
@@ -49,7 +49,7 @@ function suite:test_cursor_disappears_when_component_stops_declaring_it()
         }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 2 })
+    local h = testing.harness(App, { cols = 10, rows = 2 })
     local col, row = h:cursor()
     lt.assertEquals(col, 3)
     lt.assertEquals(row, 1)
@@ -77,7 +77,7 @@ function suite:test_nil_position_hides_cursor()
         }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 2 })
+    local h = testing.harness(App, { cols = 10, rows = 2 })
     local col, row = h:cursor()
     lt.assertEquals(col, 2)
     lt.assertEquals(row, 1)

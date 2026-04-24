@@ -20,7 +20,7 @@ function suite:test_static_initial_items_render()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     lt.assertEquals(h:row(1):sub(1, 5), "hello")
     lt.assertEquals(h:row(2):sub(1, 5), "world")
     h:unmount()
@@ -38,7 +38,7 @@ function suite:test_static_appending_items_produces_incremental_diff()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     -- Drain the initial-frame ANSI so we only measure the incremental diff.
     h:clear_ansi()
     items[#items + 1] = "second"
@@ -62,7 +62,7 @@ function suite:test_static_no_change_produces_zero_diff()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     local vt = h:vterm()
     -- Capture the screen before rerender
     local before = vterm.screen_string(vt)
@@ -91,7 +91,7 @@ function suite:test_static_preserves_item_identity_when_cached()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     h:rerender()
     lt.assertEquals(render_calls, 2, "render() should be memoized per item")
     h:unmount()
@@ -117,7 +117,7 @@ function suite:test_static_clear_then_reappend()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 10 })
+    local h = testing.harness(App, { cols = 20, rows = 10 })
     lt.assertEquals(render_calls, 3, "initial render once per item")
     -- Clear (in-place) then re-append; each new slot must re-render because
     -- identity check fails (nil cache slot from the earlier shrink).
@@ -154,7 +154,7 @@ function suite:test_static_render_error_caught_by_boundary()
             },
         }
     end
-    local h = testing.render(App, { cols = 8, rows = 3 })
+    local h = testing.harness(App, { cols = 8, rows = 3 })
     lt.assertEquals(h:row(1):sub(1, 2), "FB")
     h:unmount()
 end
@@ -180,7 +180,7 @@ function suite:test_static_large_list_append_then_unmount()
         }
     end
     for i = 1, 1000 do items[i] = "row" .. i end
-    local h = testing.render(App, { cols = 8, rows = 1000 })
+    local h = testing.harness(App, { cols = 8, rows = 1000 })
     lt.assertEquals(render_calls, 1000, "each of 1000 items rendered once")
     -- Rerender: everything cached, zero additional calls.
     h:rerender()
@@ -205,7 +205,7 @@ function suite:test_static_large_list_append_then_unmount()
             },
         }
     end
-    local h2 = testing.render(App2, { cols = 8, rows = 2 })
+    local h2 = testing.harness(App2, { cols = 8, rows = 2 })
     lt.assertEquals(calls2, 1, "fresh mount starts with empty cache")
     lt.assertEquals(h2:row(1):sub(1, 5), "after")
     h2:unmount()
@@ -232,7 +232,7 @@ function suite:test_static_items_identity_stable_no_rerender()
             },
         }
     end
-    local h = testing.render(App, { cols = 8, rows = 4 })
+    local h = testing.harness(App, { cols = 8, rows = 4 })
     lt.assertEquals(render_calls, 2)
     -- Mutate an unrelated field on the cached item objects. Static compares
     -- via rawequal (object identity), so this is a cache hit.

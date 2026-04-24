@@ -19,7 +19,7 @@ function test_newline:test_newline_default_count()
             tui.Text { key = "second", "second" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
 
     local rows = h:rows()
     lt.assertEquals(#rows, 3)
@@ -40,7 +40,7 @@ function test_newline:test_newline_with_count()
             tui.Text { key = "second", "second" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 4 })
+    local h = testing.harness(App, { cols = 20, rows = 4 })
 
     local rows = h:rows()
     lt.assertEquals(#rows, 4)
@@ -62,7 +62,7 @@ function test_newline:test_newline_in_row_layout()
             tui.Text { key = "right", "right" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
 
     -- In row layout, Newline (as a Box with height) participates in layout.
     -- The exact rendering depends on Yoga layout, but it shouldn't crash.
@@ -86,7 +86,7 @@ function test_newline:test_spacer_fills_space()
             tui.Text { key = "bottom", "bottom" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
 
     local rows = h:rows()
     lt.assertEquals(#rows, 5)
@@ -111,7 +111,7 @@ function test_newline:test_spacer_in_row()
             tui.Text { key = "b", "B" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
 
     local row = h:row(1)
     -- "A" should be at the beginning, "B" at the end
@@ -133,7 +133,7 @@ function test_newline:test_spacer_multiple()
             tui.Text { key = "bottom", "bottom" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
 
     local rows = h:rows()
     lt.assertEquals(#rows, 5)
@@ -158,7 +158,7 @@ function test_newline:test_newline_and_spacer_combined()
             tui.Text { key = "footer", "footer" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 6 })
+    local h = testing.harness(App, { cols = 20, rows = 6 })
 
     local rows = h:rows()
     lt.assertEquals(#rows, 6)

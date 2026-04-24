@@ -179,7 +179,7 @@ function suite:test_child_does_not_overflow_parent()
             local App   = shape.builder(rng)
             local cols  = rng.int(10, 120)
             local rows  = rng.int(5, 50)
-            local h = testing.render(App, { cols = cols, rows = rows })
+            local h = testing.harness(App, { cols = cols, rows = rows })
             local ok, err = pcall(assert_no_overflow, h:tree())
             h:unmount()
             if not ok then error(err, 0) end

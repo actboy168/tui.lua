@@ -29,7 +29,7 @@ function suite:test_cursor_show_with_text_input()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 35, rows = 5, interactive = true })
     h:rerender()  -- ensure cursor position is emitted
 
     local vt = h:vterm()
@@ -53,7 +53,7 @@ function suite:test_no_cursor_show_without_text_input()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 25, rows = 5, interactive = true })
 
     local vt = h:vterm()
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?25l"), true,
@@ -86,7 +86,7 @@ function suite:test_incremental_diff_size()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 12, interactive = true })
+    local h = testing.harness(App, { cols = 25, rows = 12, interactive = true })
 
     -- Capture the size of the first (full-redraw) paint
     local full_size = #h:ansi()
@@ -118,7 +118,7 @@ function suite:test_resize_triggers_full_redraw()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 10, interactive = true })
+    local h = testing.harness(App, { cols = 35, rows = 10, interactive = true })
     local first_size = #h:ansi()
 
     -- Normal re-render after no changes (no key, no state) → minimal diff
@@ -156,7 +156,7 @@ function suite:test_cells_bold_attribute()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
 
     local cells = h:cells(1)
     lt.assertNotEquals(cells, nil, "cells() must return a table")
@@ -180,7 +180,7 @@ function suite:test_cells_dim_and_default_color()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
 
     local cells = h:cells(1)
     lt.assertTrue(#cells >= 3, "must have at least 3 cells for 'dim'")
@@ -206,7 +206,7 @@ function suite:test_cells_chars_concat_to_text()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
 
     local cells = h:cells(1)
     local s = ""
@@ -238,7 +238,7 @@ function suite:test_term_type_iterm2_adds_osc1337()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5, term_type = "iterm2", interactive = false })
+    local h = testing.harness(App, { cols = 25, rows = 5, term_type = "iterm2", interactive = false })
     h:rerender()
 
     -- OSC1337 SetMark = ESC ] 1337 ; SetMark BEL (0x07)
@@ -262,7 +262,7 @@ function suite:test_term_type_unknown_no_osc1337()
         }
     end
 
-    local h = testing.render(App, { cols = 25, rows = 5, term_type = "unknown", interactive = false })
+    local h = testing.harness(App, { cols = 25, rows = 5, term_type = "unknown", interactive = false })
     h:rerender()
 
     local ansi = h:ansi()
@@ -287,14 +287,14 @@ function suite:test_term_type_restored_after_unmount()
     end
 
     -- First render: force iterm2
-    local h1 = testing.render(App, { cols = 25, rows = 5, term_type = "iterm2", interactive = false })
+    local h1 = testing.harness(App, { cols = 25, rows = 5, term_type = "iterm2", interactive = false })
     h1:rerender()
     lt.assertNotEquals(h1:ansi():find("\27%]1337;SetMark", 1, false), nil,
         "iterm2 should emit OSC1337")
     h1:unmount()
 
     -- Second render: no term_type override — must NOT see iterm2 OSC1337
-    local h2 = testing.render(App, { cols = 25, rows = 5, term_type = "unknown", interactive = false })
+    local h2 = testing.harness(App, { cols = 25, rows = 5, term_type = "unknown", interactive = false })
     h2:rerender()
     lt.assertEquals(h2:ansi():find("\27%]1337;SetMark", 1, false), nil,
         "after unmount, iterm2 override should be restored; unknown should not emit OSC1337")
@@ -322,7 +322,7 @@ function suite:test_paste_received_by_text_input()
         }
     end
 
-    local h = testing.render(App, { cols = 35, rows = 5, interactive = true })
+    local h = testing.harness(App, { cols = 35, rows = 5, interactive = true })
     h:paste("hello world")
 
     h:rerender()

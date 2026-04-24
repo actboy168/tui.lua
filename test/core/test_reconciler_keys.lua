@@ -51,7 +51,7 @@ function suite:test_reorder_preserves_state_via_key()
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
 
-    local h = testing.render(App, { cols = 5, rows = 2 })
+    local h = testing.harness(App, { cols = 5, rows = 2 })
     setters.a(7)
     setters.b(9)
     h:rerender()
@@ -89,7 +89,7 @@ function suite:test_insert_at_head_preserves_existing()
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
 
-    local h = testing.render(App, { cols = 5, rows = 2 })
+    local h = testing.harness(App, { cols = 5, rows = 2 })
     setters.a(3)
     h:rerender()
     lt.assertEquals(log.a, 3)
@@ -127,7 +127,7 @@ function suite:test_delete_middle_cleans_up_only_that_one()
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 3 })
+    local h = testing.harness(App, { cols = 2, rows = 3 })
     lt.assertEquals(#cleanups, 0)
 
     items = { "a", "c" }
@@ -160,7 +160,7 @@ function suite:test_no_key_positional_regression()
             return tui.Box { flexDirection = "column", table.unpack(kids) }
         end
 
-        local h = testing.render(App, { cols = 5, rows = 2 })
+        local h = testing.harness(App, { cols = 5, rows = 2 })
         setters.a(5); setters.b(6)
         h:rerender()
         lt.assertEquals(log.a, 5)
@@ -197,7 +197,7 @@ function suite:test_mixed_keyed_and_unkeyed()
             }
         end
 
-        local h = testing.render(App, { cols = 5, rows = 3 })
+        local h = testing.harness(App, { cols = 5, rows = 3 })
         setters.a(1); setters.X(2); setters.c(3)
         h:rerender()
         lt.assertEquals(log.a, 1)
@@ -228,7 +228,7 @@ function suite:test_duplicate_key_errors()
     end
 
     local ok, err = pcall(function()
-        testing.render(App, { cols = 2, rows = 2 })
+        testing.harness(App, { cols = 2, rows = 2 })
     end)
     lt.assertEquals(ok, false)
     lt.assertEquals(type(err) == "string" and err:find("duplicate key", 1, true) ~= nil, true,
@@ -258,7 +258,7 @@ function suite:test_key_change_forces_remount()
         }
     end
 
-    local h = testing.render(App, { cols = 2, rows = 1 })
+    local h = testing.harness(App, { cols = 2, rows = 1 })
     lt.assertEquals(#cleanups, 0)
 
     current_key = "k2"
@@ -292,7 +292,7 @@ function suite:test_host_key_stabilizes_descendants()
         return tui.Box { flexDirection = "column", table.unpack(rows) }
     end
 
-    local h = testing.render(App, { cols = 5, rows = 2 })
+    local h = testing.harness(App, { cols = 5, rows = 2 })
     setters.a(11); setters.b(22)
     h:rerender()
     lt.assertEquals(log.a, 11)
@@ -334,7 +334,7 @@ function suite:test_large_random_reorder_preserves_all_state()
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
 
-    local h = testing.render(App, { cols = 8, rows = 100 })
+    local h = testing.harness(App, { cols = 8, rows = 100 })
     -- Seed each child's state with its numeric index so we can verify the
     -- value still belongs to the same id after shuffling.
     for i, id in ipairs(ids) do setters[id](i * 3) end
@@ -398,7 +398,7 @@ function suite:test_interleaved_insert_delete_mixed_keys()
             return tui.Box { flexDirection = "column", table.unpack(kids) }
         end
 
-        local h = testing.render(App, { cols = 5, rows = 10 })
+        local h = testing.harness(App, { cols = 5, rows = 10 })
         setters.a(1); setters.x(2); setters.b(3); setters.y(4); setters.c(5)
         h:rerender()
         lt.assertEquals(log.a, 1); lt.assertEquals(log.b, 3); lt.assertEquals(log.c, 5)
@@ -447,7 +447,7 @@ function suite:test_key_rename_plus_reorder()
         return tui.Box { flexDirection = "column", table.unpack(kids) }
     end
 
-    local h = testing.render(App, { cols = 6, rows = 4 })
+    local h = testing.harness(App, { cols = 6, rows = 4 })
     setters.a(10); setters.b(20); setters.c(30); setters.d(40)
     h:rerender()
 

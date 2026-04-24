@@ -16,7 +16,7 @@ function suite:test_bare_rerender_and_tree()
     local function App()
         return tui.Text { "hello" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:expect_renders(1)
     lt.assertEquals(b:tree().kind, "text")
     lt.assertEquals(b:tree().text, "hello")
@@ -34,7 +34,7 @@ function suite:test_bare_dispatch_input()
         end)
         return tui.Text { "test" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:dispatch("a")
     lt.assertEquals(events[1].name, "char")
     lt.assertEquals(events[1].input, "a")
@@ -56,7 +56,7 @@ function suite:test_bare_type_ascii()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:type("hi")
     lt.assertEquals(#events, 2)
     lt.assertEquals(events[1].name, "char")
@@ -74,7 +74,7 @@ function suite:test_bare_type_cjk()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     -- "中" is 3 bytes in UTF-8
     b:type("\228\184\173")
     lt.assertEquals(#events, 1)
@@ -95,7 +95,7 @@ function suite:test_bare_press_named_keys()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:press("enter")
     -- Note: "tab" is intercepted by focus system, use "up" instead
     b:press("up")
@@ -115,7 +115,7 @@ function suite:test_bare_press_error_on_invalid()
     local function App()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     local ok, err = pcall(function() b:press("invalid_key") end)
     lt.assertEquals(ok, false)
     lt.assertEquals(err:find("unknown key", 1, true) ~= nil, true)
@@ -134,7 +134,7 @@ function suite:test_bare_advance_triggers_interval()
         end, 100)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(ticks, 0)
 
     b:advance(50)   -- not enough
@@ -159,7 +159,7 @@ function suite:test_bare_advance_triggers_timeout()
         end, {})
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(fired, false)
 
     b:advance(99)
@@ -174,7 +174,7 @@ function suite:test_bare_advance_error_on_negative()
     local function App()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     local ok, err = pcall(function() b:advance(-1) end)
     lt.assertEquals(ok, false)
     lt.assertEquals(err:find("non-negative", 1, true) ~= nil, true)
@@ -190,7 +190,7 @@ function suite:test_bare_focus_id()
         tui.useFocus { id = "test", autoFocus = true }
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(focus_mod.get_focused_id(), "test")
     b:unmount()
 end
@@ -209,7 +209,7 @@ function suite:test_bare_focus_next_prev()
             CompC { key = "c" },
         }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(focus_mod.get_focused_id(), "b")  -- b has autoFocus
 
     focus_mod.focus_next()
@@ -234,7 +234,7 @@ function suite:test_bare_focus_explicit()
             CompB { key = "b" },
         }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(focus_mod.get_focused_id(), "a")
 
     focus_mod.focus("b")
@@ -251,7 +251,7 @@ function suite:test_bare_does_not_auto_rerender_on_input()
         tui.useInput(function() end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:expect_renders(1)
 
     b:type("x")
@@ -267,7 +267,7 @@ function suite:test_bare_does_not_auto_rerender_on_advance()
         tui.useEffect(function() end, {})
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:expect_renders(1)
 
     b:advance(1000)
@@ -297,7 +297,7 @@ function suite:test_bare_input_then_advance_combined()
         end, {})
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
 
     b:type("abc")
     lt.assertEquals(inputs, { "a", "b", "c" })
@@ -317,7 +317,7 @@ function suite:test_bare_focus_with_input()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:rerender()  -- run effect after initial render
     lt.assertEquals(focus_mod.get_focused_id(), "main")
     lt.assertEquals(focus_changes[#focus_changes], true)
@@ -336,7 +336,7 @@ function suite:test_bare_shift_arrow_keys()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:press("shift+up")
     b:press("shift+down")
     b:press("shift+left")
@@ -360,7 +360,7 @@ function suite:test_bare_shift_home_end()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:press("shift+home")
     b:press("shift+end")
     lt.assertEquals(events[1].name, "home")
@@ -382,7 +382,7 @@ function suite:test_bare_press_single_char_uses_type()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:press("a")
     b:press("Z")
     b:press("1")
@@ -407,7 +407,7 @@ function suite:test_bare_press_cjk_falls_back_to_type()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     -- Single CJK character passed to press() should work via type() fallback
     b:press("\228\184\173")  -- "中"
     lt.assertEquals(#events, 1)
@@ -428,7 +428,7 @@ function suite:test_bare_f5_to_f12_keys()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:press("f5")
     b:press("f6")
     b:press("f7")
@@ -452,7 +452,7 @@ function suite:test_bare_insert_key()
         end)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:press("insert")
     lt.assertEquals(#events, 1)
     lt.assertEquals(events[1].name, "insert")
@@ -472,7 +472,7 @@ function suite:test_find_by_kind()
             },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 5 })
+    local h = testing.harness(App, { cols = 40, rows = 5 })
     local tree = h:tree()
 
     -- find_by_kind returns the first match in DFS order
@@ -499,7 +499,7 @@ function suite:test_find_all_by_kind()
             },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 5 })
+    local h = testing.harness(App, { cols = 40, rows = 5 })
     local tree = h:tree()
 
     local texts = testing.find_all_by_kind(tree, "text")
@@ -523,7 +523,7 @@ function suite:test_text_content()
             },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 5 })
+    local h = testing.harness(App, { cols = 40, rows = 5 })
     local contents = testing.text_content(h:tree())
     lt.assertEquals(contents, { "hello", " ", "world" })
     h:unmount()
@@ -541,7 +541,7 @@ function suite:test_bare_render_count_initial()
     local function App()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     -- mount_bare does 1 initial render
     lt.assertEquals(b:render_count(), 1)
     b:unmount()
@@ -551,7 +551,7 @@ function suite:test_bare_render_count_tracks_rerenders()
     local function App()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(b:render_count(), 1)
 
     b:rerender()
@@ -567,7 +567,7 @@ function suite:test_bare_reset_render_count()
     local function App()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:rerender()
     b:rerender()
     lt.assertEquals(b:render_count(), 3)
@@ -584,7 +584,7 @@ function suite:test_bare_expect_renders_pass()
     local function App()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     -- Should not error when count matches
     b:expect_renders(1)
     b:rerender()
@@ -596,7 +596,7 @@ function suite:test_bare_expect_renders_fail()
     local function App()
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     local ok, err = pcall(function()
         b:expect_renders(5)  -- actually 1
     end)
@@ -619,7 +619,7 @@ function suite:test_bare_same_state_no_rerender()
         set_value = setV
         return tui.Text { tostring(v) }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     local state = b:state()
 
     -- Setting same value should not mark dirty
@@ -639,7 +639,7 @@ function suite:test_bare_different_state_triggers_rerender()
         set_value = setV
         return tui.Text { tostring(v) }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(b:render_count(), 1)
 
     -- Setting different value triggers rerender

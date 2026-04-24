@@ -15,7 +15,7 @@ function suite:test_memo_computes_on_mount()
         captured = v
         return tui.Text { tostring(v) }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(calls, 1)
     lt.assertEquals(captured, 42)
     b:unmount()
@@ -28,7 +28,7 @@ function suite:test_memo_cached_on_unchanged_deps()
         tui.useMemo(function() calls = calls + 1; return {} end, { 1, "a" })
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(calls, 1)
     b:rerender()
     b:rerender()
@@ -44,7 +44,7 @@ function suite:test_memo_recomputes_on_dep_change()
         tui.useMemo(function() calls = calls + 1; return dep_a end, { dep_a })
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(calls, 1)
     b:rerender()
     lt.assertEquals(calls, 1)
@@ -64,7 +64,7 @@ function suite:test_memo_returns_identity_stable_table()
         seen[#seen + 1] = t
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:rerender()
     b:rerender()
     lt.assertEquals(#seen, 3)
@@ -80,7 +80,7 @@ function suite:test_memo_nil_deps_recomputes_every_render()
         tui.useMemo(function() calls = calls + 1; return 1 end, nil)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(calls, 1)
     b:rerender()
     b:rerender()

@@ -29,7 +29,7 @@ end
 
 function suite:test_middleware_observes_events()
     local seen = {}
-    local h = testing.render(make_app(function(ev)
+    local h = testing.harness(make_app(function(ev)
         seen[#seen+1] = ev.name
     end), { cols = 10, rows = 1 })
     input_mod.dispatch("a")
@@ -49,7 +49,7 @@ function suite:test_middleware_can_consume_event()
         tui.useInput(function(_ev) broadcast_count = broadcast_count + 1 end)
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     input_mod.dispatch("a")
     h:paint()
     lt.assertEquals(broadcast_count, 0, "consumed event must not reach useInput")
@@ -66,7 +66,7 @@ function suite:test_middleware_runs_in_registration_order()
         end, {})
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     input_mod.dispatch("a")
     h:paint()
     lt.assertEquals(order[1], 1)
@@ -84,7 +84,7 @@ function suite:test_middleware_stops_at_first_consumer()
         end, {})
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     input_mod.dispatch("a")
     h:paint()
     lt.assertFalse(second_called, "second middleware must not run after event is consumed")
@@ -101,7 +101,7 @@ function suite:test_unsubscribe_removes_middleware()
         end, {})
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     unsub()
     input_mod.dispatch("a")
     h:paint()
@@ -121,7 +121,7 @@ function suite:test_middleware_sees_assembled_paste_event()
         end, {})
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     input_mod.dispatch(input_helpers.paste("hello"))
     h:paint()
     -- Middleware must see exactly one "paste" event
@@ -144,7 +144,7 @@ function suite:test_middleware_does_not_intercept_paste_accumulation()
         tui.usePaste(function(text) pasted[#pasted+1] = text end)
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     input_mod.dispatch(input_helpers.paste("hello"))
     h:paint()
     -- paste_start / paste_end should NOT appear in middleware (consumed before chain)
@@ -170,7 +170,7 @@ function suite:test_middleware_sees_mouse_events_before_bus()
         tui.useMouse(function(ev) bus_types[#bus_types+1] = ev.type end)
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
     h:rerender()
     lt.assertEquals(#mw_types, 1)
@@ -191,7 +191,7 @@ function suite:test_middleware_can_consume_mouse_before_bus()
         tui.useMouse(function(_ev) bus_called = true end)
         return tui.Text { width = 10, height = 1, "" }
     end
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:dispatch(mouse_helpers.sgr { type = "down", button = 1, x = 1, y = 1 })
     lt.assertFalse(bus_called, "middleware consumed mouse; bus must not fire")
     h:unmount()

@@ -27,7 +27,7 @@ function suite:test_input_resolve_key_dispatches_same_semantics_as_press()
         return tui.Text { "" }
     end
 
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     b:dispatch(testing.input.resolve_key("shift+up"))
     b:press("shift+up")
 
@@ -53,7 +53,7 @@ function suite:test_input_paste_helper_matches_harness_paste()
         return tui.Text { "" }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:dispatch(testing.input.paste("alpha"))
     h:rerender()
     h:paste("beta")
@@ -92,7 +92,7 @@ function suite:test_harness_mouse_matches_helper_dispatch()
         return tui.Text { "" }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     h:mouse("scroll_down", nil, 4, 2, { meta = true })
     h:rerender()
     h:dispatch(testing.mouse.harness("scroll_down", nil, 4, 2, { meta = true }))

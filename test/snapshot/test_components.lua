@@ -21,7 +21,7 @@ function suite:test_box_simple()
             tui.Text { "Hello" }
         }
     end
-    local h = testing.render(App, { cols = 15, rows = 5 })
+    local h = testing.harness(App, { cols = 15, rows = 5 })
     h:match_snapshot("box_simple_15x5")
     h:unmount()
 end
@@ -34,7 +34,7 @@ function suite:test_box_border_round()
             tui.Text { "Rounded" }
         }
     end
-    local h = testing.render(App, { cols = 15, rows = 6 })
+    local h = testing.harness(App, { cols = 15, rows = 6 })
     h:match_snapshot("box_border_round_15x6")
     h:unmount()
 end
@@ -47,7 +47,7 @@ function suite:test_box_border_single()
             tui.Text { "Single" }
         }
     end
-    local h = testing.render(App, { cols = 15, rows = 6 })
+    local h = testing.harness(App, { cols = 15, rows = 6 })
     h:match_snapshot("box_border_single_15x6")
     h:unmount()
 end
@@ -60,7 +60,7 @@ function suite:test_box_border_double()
             tui.Text { "Double" }
         }
     end
-    local h = testing.render(App, { cols = 15, rows = 6 })
+    local h = testing.harness(App, { cols = 15, rows = 6 })
     h:match_snapshot("box_border_double_15x6")
     h:unmount()
 end
@@ -74,7 +74,7 @@ function suite:test_box_with_padding()
             tui.Text { "Padded" }
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 7 })
+    local h = testing.harness(App, { cols = 20, rows = 7 })
     h:match_snapshot("box_padding_20x7")
     h:unmount()
 end
@@ -89,7 +89,7 @@ function suite:test_box_flex_row()
             tui.Box { key = "c", width = 6, height = 3, tui.Text { "C" } },
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("box_flex_row_25x5")
     h:unmount()
 end
@@ -104,7 +104,7 @@ function suite:test_box_flex_column()
             tui.Box { key = "c", width = 10, height = 3, tui.Text { "C" } },
         }
     end
-    local h = testing.render(App, { cols = 15, rows = 12 })
+    local h = testing.harness(App, { cols = 15, rows = 12 })
     h:match_snapshot("box_flex_column_15x12")
     h:unmount()
 end
@@ -120,7 +120,7 @@ function suite:test_text_plain()
             tui.Text { "Hello World" }
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     h:match_snapshot("text_plain_20x5")
     h:unmount()
 end
@@ -134,7 +134,7 @@ function suite:test_text_colored()
             tui.Text { key = "blue", color = "blue", "Blue Text" },
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 7 })
+    local h = testing.harness(App, { cols = 25, rows = 7 })
     h:match_snapshot("text_colored_25x7")
     h:unmount()
 end
@@ -146,7 +146,7 @@ function suite:test_text_multiline()
             tui.Text { "Line 1\nLine 2\nLine 3" }
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 7 })
+    local h = testing.harness(App, { cols = 20, rows = 7 })
     h:match_snapshot("text_multiline_20x7")
     h:unmount()
 end
@@ -158,7 +158,7 @@ function suite:test_text_truncation()
             tui.Text { "This is a very long text" }
         }
     end
-    local h = testing.render(App, { cols = 15, rows = 5 })
+    local h = testing.harness(App, { cols = 15, rows = 5 })
     h:match_snapshot("text_truncated_15x5")
     h:unmount()
 end
@@ -179,7 +179,7 @@ function suite:test_textinput_empty()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("textinput_empty_25x5")
     h:unmount()
 end
@@ -196,7 +196,7 @@ function suite:test_textinput_with_value()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("textinput_value_25x5")
     h:unmount()
 end
@@ -214,7 +214,7 @@ function suite:test_textinput_with_placeholder()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("textinput_placeholder_25x5")
     h:unmount()
 end
@@ -232,7 +232,7 @@ function suite:test_textinput_in_border()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 7 })
+    local h = testing.harness(App, { cols = 25, rows = 7 })
     h:match_snapshot("textinput_bordered_25x7")
     h:unmount()
 end
@@ -249,7 +249,7 @@ function suite:test_textinput_typed()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:type("abc")
     h:rerender()
     h:match_snapshot("textinput_typed_25x5")
@@ -267,7 +267,7 @@ function suite:test_spinner_dots()
             extra.Spinner { type = "dots" }
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     h:match_snapshot("spinner_dots_20x5")
     h:unmount()
 end
@@ -279,7 +279,7 @@ function suite:test_spinner_line()
             extra.Spinner { type = "line" }
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     h:match_snapshot("spinner_line_20x5")
     h:unmount()
 end
@@ -291,7 +291,7 @@ function suite:test_spinner_with_label()
             extra.Spinner { type = "dots", label = "Loading..." }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("spinner_label_25x5")
     h:unmount()
 end
@@ -303,7 +303,7 @@ function suite:test_spinner_colored()
             extra.Spinner { type = "dots", color = "yellow", label = "Working" }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("spinner_colored_25x5")
     h:unmount()
 end
@@ -319,7 +319,7 @@ function suite:test_progress_empty()
             extra.ProgressBar { value = 0, width = 15 }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("progress_empty_25x5")
     h:unmount()
 end
@@ -331,7 +331,7 @@ function suite:test_progress_half()
             extra.ProgressBar { value = 0.5, width = 15 }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("progress_half_25x5")
     h:unmount()
 end
@@ -343,7 +343,7 @@ function suite:test_progress_full()
             extra.ProgressBar { value = 1, width = 15 }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("progress_full_25x5")
     h:unmount()
 end
@@ -355,7 +355,7 @@ function suite:test_progress_colored()
             extra.ProgressBar { value = 0.7, width = 15, color = "green" }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("progress_colored_25x5")
     h:unmount()
 end
@@ -371,7 +371,7 @@ function suite:test_progress_custom_chars()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 5 })
+    local h = testing.harness(App, { cols = 25, rows = 5 })
     h:match_snapshot("progress_custom_25x5")
     h:unmount()
 end
@@ -397,7 +397,7 @@ function suite:test_static_list()
             }
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 7 })
+    local h = testing.harness(App, { cols = 20, rows = 7 })
     h:match_snapshot("static_list_20x7")
     h:unmount()
 end
@@ -414,7 +414,7 @@ function suite:test_static_empty()
             }
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     h:match_snapshot("static_empty_20x5")
     h:unmount()
 end
@@ -432,7 +432,7 @@ function suite:test_newline()
             tui.Text { key = "l2", "Line 2" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 7 })
+    local h = testing.harness(App, { cols = 20, rows = 7 })
     h:match_snapshot("newline_20x7")
     h:unmount()
 end
@@ -447,7 +447,7 @@ function suite:test_spacer()
             tui.Text { key = "bottom", "Bottom" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 9 })
+    local h = testing.harness(App, { cols = 20, rows = 9 })
     h:match_snapshot("spacer_20x9")
     h:unmount()
 end
@@ -471,7 +471,7 @@ function suite:test_select_single()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 9 })
+    local h = testing.harness(App, { cols = 25, rows = 9 })
     h:match_snapshot("select_single_25x9")
     h:unmount()
 end
@@ -492,7 +492,7 @@ function suite:test_select_with_initial_index()
             }
         }
     end
-    local h = testing.render(App, { cols = 25, rows = 9 })
+    local h = testing.harness(App, { cols = 25, rows = 9 })
     h:match_snapshot("select_initial_2_25x9")
     h:unmount()
 end

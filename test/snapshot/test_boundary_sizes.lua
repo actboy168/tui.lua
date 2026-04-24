@@ -20,7 +20,7 @@ function suite:test_minimal_box()
             width = 1, height = 1,
         }
     end
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:match_snapshot("minimal_box_1x1")
     h:unmount()
 end
@@ -32,7 +32,7 @@ function suite:test_minimal_text()
             tui.Text { "X" }
         }
     end
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:match_snapshot("minimal_text_1x1")
     h:unmount()
 end
@@ -44,7 +44,7 @@ function suite:test_minimal_border()
             width = 1, height = 1,
         }
     end
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     h:match_snapshot("minimal_border_1x1")
     h:unmount()
 end
@@ -62,7 +62,7 @@ function suite:test_narrow_box_stack()
             tui.Box { flexGrow = 1, tui.Text { "Body" } },
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     h:match_snapshot("narrow_stack_10x3")
     h:unmount()
 end
@@ -74,7 +74,7 @@ function suite:test_narrow_text_wrap()
             tui.Text { "Long text here" }
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     h:match_snapshot("narrow_text_10x3")
     h:unmount()
 end
@@ -90,7 +90,7 @@ function suite:test_narrow_input()
             }
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     h:match_snapshot("narrow_input_10x3")
     h:unmount()
 end
@@ -102,7 +102,7 @@ function suite:test_narrow_spinner()
             extra.Spinner { type = "line" }
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     h:match_snapshot("narrow_spinner_10x3")
     h:unmount()
 end
@@ -114,7 +114,7 @@ function suite:test_narrow_progress()
             extra.ProgressBar { value = 0.5, width = 8 }
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     h:match_snapshot("narrow_progress_10x3")
     h:unmount()
 end
@@ -141,7 +141,7 @@ function suite:test_wide_layout()
             },
         }
     end
-    local h = testing.render(App, { cols = 120, rows = 40 })
+    local h = testing.harness(App, { cols = 120, rows = 40 })
     h:match_snapshot("wide_layout_120x40")
     h:unmount()
 end
@@ -154,7 +154,7 @@ function suite:test_wide_text()
             tui.Text { text }
         }
     end
-    local h = testing.render(App, { cols = 120, rows = 40 })
+    local h = testing.harness(App, { cols = 120, rows = 40 })
     h:match_snapshot("wide_text_120x40")
     h:unmount()
 end
@@ -176,7 +176,7 @@ function suite:test_wide_row_of_boxes()
             table.unpack(boxes)
         }
     end
-    local h = testing.render(App, { cols = 120, rows = 12 })
+    local h = testing.harness(App, { cols = 120, rows = 12 })
     h:match_snapshot("wide_row_boxes_120x12")
     h:unmount()
 end
@@ -194,7 +194,7 @@ function suite:test_resize_from_narrow_to_wide()
             tui.Text { ("%dx%d"):format(size.cols, size.rows) }
         }
     end
-    local h = testing.render(App, { cols = 10, rows = 3 })
+    local h = testing.harness(App, { cols = 10, rows = 3 })
     h:match_snapshot("resize_narrow_10x3")
     h:resize(40, 10)
     h:rerender()

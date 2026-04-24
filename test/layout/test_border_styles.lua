@@ -18,7 +18,7 @@ local BYTE_PLUS = 0x2B              -- + is 43
 local BYTE_HYPHEN = 0x2D            -- - is 45
 
 function suite.test_borderStyle_double()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "double",
@@ -33,7 +33,7 @@ function suite.test_borderStyle_double()
 end
 
 function suite.test_borderStyle_bold()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "bold",
@@ -48,7 +48,7 @@ function suite.test_borderStyle_bold()
 end
 
 function suite.test_borderStyle_round()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "round",
@@ -63,7 +63,7 @@ function suite.test_borderStyle_round()
 end
 
 function suite.test_borderStyle_classic()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "classic",
@@ -83,7 +83,7 @@ function suite.test_borderStyle_classic()
 end
 
 function suite.test_borderStyle_singleDouble()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "singleDouble",
@@ -98,7 +98,7 @@ function suite.test_borderStyle_singleDouble()
 end
 
 function suite.test_borderStyle_doubleSingle()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "doubleSingle",
@@ -113,7 +113,7 @@ function suite.test_borderStyle_doubleSingle()
 end
 
 function suite.test_borderColor_applies_to_border()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "single",
@@ -129,7 +129,7 @@ function suite.test_borderColor_applies_to_border()
 end
 
 function suite.test_borderDimColor_applies_dim()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "single",
@@ -146,7 +146,7 @@ function suite.test_borderDimColor_applies_dim()
 end
 
 function suite.test_borderColor_overrides_color()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 10, height = 5,
             borderStyle = "single",
@@ -163,7 +163,7 @@ function suite.test_borderColor_overrides_color()
 end
 
 function suite.test_text_uses_color_not_borderColor()
-    local h = testing.render(function()
+    local h = testing.harness(function()
         return tui.Box {
             width = 15, height = 5,
             borderStyle = "single",

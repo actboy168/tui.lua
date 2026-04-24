@@ -24,7 +24,7 @@ function suite:test_minimum_1x1_viewport()
             tui.Text { "hello" },
         }
     end
-    local h = testing.render(App, { cols = 1, rows = 1 })
+    local h = testing.harness(App, { cols = 1, rows = 1 })
     local row = h:row(1)
     lt.assertEquals(#row, 1, "1-col viewport yields 1-byte row")
     h:unmount()
@@ -41,7 +41,7 @@ function suite:test_large_999x999_viewport()
             tui.Text { "ok" },
         }
     end
-    local h = testing.render(App, { cols = 999, rows = 999 })
+    local h = testing.harness(App, { cols = 999, rows = 999 })
     lt.assertEquals(h:row(1):sub(1, 2), "ok")
     -- Bottom row should be all spaces (no content there).
     lt.assertEquals(h:row(999):sub(1, 5), "     ")
@@ -60,7 +60,7 @@ function suite:test_rapid_resize_sequence()
             tui.Text { "content" },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 5 })
+    local h = testing.harness(App, { cols = 20, rows = 5 })
     local sizes = {
         { 10,  3 }, { 50, 20 }, { 5,  2 }, { 100, 50 }, { 1, 1 },
         { 40, 10 }, { 80, 24 }, { 30, 8 }, { 120, 40 }, { 25, 5 },
@@ -90,7 +90,7 @@ function suite:test_focused_element_clipped_after_shrink()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 1 })
+    local h = testing.harness(App, { cols = 30, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id(), "only")
     -- Shrink viewport to fewer cols than the input's content.
     h:resize(5, 1)

@@ -14,7 +14,7 @@ function suite:test_no_provider_returns_default()
         captured = tui.useContext(Ctx)
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Consumer)
+    local b = testing.bare(Consumer)
     lt.assertEquals(captured, "fallback")
     b:unmount()
 end
@@ -30,7 +30,7 @@ function suite:test_provider_value_reaches_child()
     local function App()
         return Ctx.Provider { value = "hello", Consumer }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(captured, "hello")
     b:unmount()
 end
@@ -52,7 +52,7 @@ function suite:test_nested_providers_nearest_wins()
             },
         }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(captured, "inner")
     b:unmount()
 end
@@ -76,7 +76,7 @@ function suite:test_sibling_providers_are_independent()
             },
         }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(got_a, "a1")
     lt.assertEquals(got_b, "b1")
     b:unmount()
@@ -94,7 +94,7 @@ function suite:test_provider_value_change_triggers_consumer_observation()
     local function App()
         return Ctx.Provider { value = value, Consumer }
     end
-    local b = testing.mount_bare(App)
+    local b = testing.bare(App)
     lt.assertEquals(captured, "v1")
     value = "v2"
     b:rerender()

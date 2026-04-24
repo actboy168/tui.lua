@@ -46,7 +46,7 @@ function suite:test_initial_empty_with_placeholder()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     local te = testing.find_cursor_host(h:tree())
     -- focus=false → no cursor tag.
     lt.assertEquals(te, nil)
@@ -64,7 +64,7 @@ function suite:test_char_insertion_updates_value()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("hi")   -- 'h' then 'i'; each keystroke auto-rerenders between
     h:rerender()
     lt.assertEquals(value, "hi")
@@ -82,7 +82,7 @@ function suite:test_cjk_insertion_updates_value()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Simulate IME-confirmed "中" then "文" as two UTF-8 bursts; :type walks
     -- UTF-8 boundaries so each 3-byte codepoint goes out as one dispatch.
     h:type("\228\184\173\230\150\135")  -- "中文"
@@ -102,7 +102,7 @@ function suite:test_backspace_deletes_last_char()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "ab")
@@ -120,7 +120,7 @@ function suite:test_left_arrow_moves_caret_and_insert_in_middle()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("left")  -- caret 2 → 1; :press auto-rerenders so caret is committed
     h:rerender()
     h:type("b")      -- insert "b" at position 1 → "abc"
@@ -142,7 +142,7 @@ function suite:test_enter_triggers_onsubmit()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("enter")
     h:rerender()
     lt.assertEquals(submitted, "hello")
@@ -161,7 +161,7 @@ function suite:test_unfocused_ignores_input()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("xyz")
     h:rerender()
     lt.assertEquals(value, "start")
@@ -179,7 +179,7 @@ function suite:test_cursor_x_tracks_caret_column()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     lt.assertEquals(te ~= nil, true)
@@ -197,7 +197,7 @@ function suite:test_cursor_absolute_position_at_caret()
             TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
     local col, row = h:cursor()
@@ -217,7 +217,7 @@ function suite:test_cursor_advances_on_type_and_backspace()
             TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 1 })
+    local h = testing.harness(App, { cols = 30, rows = 1 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
     local col0 = h:cursor()
@@ -244,7 +244,7 @@ function suite:test_cursor_inside_bordered_padded_box()
             TextInput { value = v, onChange = setV, autoFocus = true },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 3 })
+    local h = testing.harness(App, { cols = 20, rows = 3 })
     -- autoFocus sets isFocused state on the next paint.
     h:rerender()
     local col, row = h:cursor()
@@ -267,7 +267,7 @@ function suite:test_mask_hides_chars_but_preserves_width()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     local text = testing.find_by_kind(h:tree(), "text")
@@ -290,7 +290,7 @@ function suite:test_backspace_removes_cluster()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("backspace")
     h:rerender()
     lt.assertEquals(value, "")
@@ -309,7 +309,7 @@ function suite:test_flag_is_single_cluster()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     lt.assertEquals(te ~= nil, true)
@@ -337,7 +337,7 @@ function suite:test_large_sequential_typing()
             },
         }
     end
-    local h = testing.render(App, { cols = 1000, rows = 1 })
+    local h = testing.harness(App, { cols = 1000, rows = 1 })
     local payload = string.rep("a", 1000)
     h:type(payload)
     h:rerender()
@@ -360,7 +360,7 @@ function suite:test_backspace_on_empty_noop()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("backspace")
     h:rerender()
     h:press("backspace")
@@ -383,7 +383,7 @@ function suite:test_left_arrow_over_wide_char_moves_one_cluster()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     -- Initial caret at end: col = 1 + 2 + 1 = 4.
@@ -416,7 +416,7 @@ function suite:test_delete_removes_cluster_forward()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")         -- caret to 0
     h:rerender()
     h:press("delete")       -- remove the "é" cluster
@@ -437,7 +437,7 @@ function suite:test_right_arrow_moves_caret()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     local te = testing.find_cursor_host(h:tree())
@@ -465,7 +465,7 @@ function suite:test_right_arrow_over_wide_char()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     local te = testing.find_cursor_host(h:tree())
@@ -494,7 +494,7 @@ function suite:test_right_arrow_at_end_noop()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("right")
     h:rerender()
     h:press("right")
@@ -518,7 +518,7 @@ function suite:test_home_and_end()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     local te = testing.find_cursor_host(h:tree())
@@ -541,7 +541,7 @@ function suite:test_ctrl_a_selects_all_then_ctrl_e_moves_to_end()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("ctrl+a")
     h:rerender()
     h:type("X")
@@ -571,7 +571,7 @@ function suite:test_ctrl_u_deletes_to_line_start()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     for _ = 1, 6 do h:press("right") end
     h:press("ctrl+u")
@@ -594,7 +594,7 @@ function suite:test_ctrl_k_deletes_to_line_end()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     for _ = 1, 6 do h:press("right") end
     h:press("ctrl+k")
@@ -617,7 +617,7 @@ function suite:test_ctrl_w_deletes_previous_word()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("ctrl+w")
     h:rerender()
     lt.assertEquals(value, "hello brave ")
@@ -638,7 +638,7 @@ function suite:test_ctrl_left_and_ctrl_right_move_by_word()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 1 })
+    local h = testing.harness(App, { cols = 30, rows = 1 })
     h:press("ctrl+left")
     h:rerender()
     local te = testing.find_cursor_host(h:tree())
@@ -665,7 +665,7 @@ function suite:test_ctrl_backspace_and_ctrl_delete_delete_words()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 1 })
+    local h = testing.harness(App, { cols = 30, rows = 1 })
     h:press("ctrl+backspace")
     h:rerender()
     lt.assertEquals(value, "hello brave ")
@@ -688,7 +688,7 @@ function suite:test_shift_left_type_replaces_selection()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("shift+left")
     h:rerender()
     h:type("X")
@@ -708,7 +708,7 @@ function suite:test_shift_home_paste_replaces_selection()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("shift+home")
     h:rerender()
     h:paste("Z")
@@ -728,7 +728,7 @@ function suite:test_ctrl_a_highlights_selection()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch_event(key_event("char", "a", true))
     local cells = h:cells(1)
     lt.assertEquals(cells[1].inverse, true)
@@ -756,7 +756,7 @@ function suite:test_copy_and_cut_selection()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch_event(key_event("char", "a", true))
     h:dispatch_event(key_event("char", "c", true, true))
     lt.assertEquals(copied[1], "copy")
@@ -779,7 +779,7 @@ function suite:test_undo_and_redo()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("ab")
     h:rerender()
     h:dispatch_event(key_event("char", "z", true))
@@ -800,7 +800,7 @@ function suite:test_undo_coalescing_starts_new_group_after_cursor_move()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("ab")
     h:rerender()
     h:press("left")
@@ -827,7 +827,7 @@ function suite:test_can_disable_undo_and_redo_feature()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("ab")
     h:rerender()
     h:dispatch_event(key_event("char", "z", true))
@@ -864,7 +864,7 @@ function suite:test_can_disable_selection_copy_word_kill_features()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 1 })
+    local h = testing.harness(App, { cols = 30, rows = 1 })
     h:press("shift+left")
     h:rerender()
     h:type("!")
@@ -908,7 +908,7 @@ function suite:test_can_disable_paste_submit_and_ime_preview_features()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:paste("ZZ")
     h:rerender()
     lt.assertEquals(value, "ab")
@@ -940,7 +940,7 @@ function suite:test_can_customize_text_input_keymap()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("enter")
     h:rerender()
     lt.assertNil(submitted)
@@ -968,7 +968,7 @@ function suite:test_can_customize_text_input_core_keymap()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("left")
     h:rerender()
     h:type("x")
@@ -998,7 +998,7 @@ function suite:test_ime_confirm_replaces_selected_text()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     h:press("right")
@@ -1024,7 +1024,7 @@ function suite:test_delete_on_empty_noop()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("delete")
     h:rerender()
     h:press("delete")
@@ -1047,7 +1047,7 @@ function suite:test_delete_at_end_noop()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("delete")
     h:rerender()
     lt.assertEquals(fired, 0, "delete at end must not fire onChange")
@@ -1067,7 +1067,7 @@ function suite:test_caret_clamped_on_value_shrink()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- caret starts at end (col 5)
     local te = testing.find_cursor_host(h:tree())
@@ -1093,7 +1093,7 @@ function suite:test_placeholder_hidden_when_focused()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- autoFocus=true by default, so placeholder should NOT be shown,
     -- but isFocused state takes effect on the next paint.
     h:rerender()
@@ -1118,7 +1118,7 @@ function suite:test_placeholder_shown_when_unfocused()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     local te = testing.find_cursor_host(h:tree())
     lt.assertEquals(te, nil, "unfocused input should have no cursor")
     -- The row should show the placeholder text
@@ -1140,7 +1140,7 @@ function suite:test_horizontal_scroll_keeps_caret_visible()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     -- Caret sits at end; with width=5 the window scrolls so the caret
@@ -1159,7 +1159,7 @@ function suite:test_typing_past_width_scrolls()
             TextInput { value = v, onChange = setV, autoFocus = true, width = 5 },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("abcdef")  -- 6 chars in a 5-col window
     h:rerender()
     local te = testing.find_cursor_host(h:tree())
@@ -1181,7 +1181,7 @@ function suite:test_mask_with_cjk_chars()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     local text = testing.find_by_kind(h:tree(), "text")
@@ -1204,7 +1204,7 @@ function suite:test_enter_on_empty_fires_onsubmit()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("enter")
     h:rerender()
     lt.assertEquals(submitted, "")
@@ -1224,7 +1224,7 @@ function suite:test_width_prop_constrains_render()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     local text = testing.find_by_kind(h:tree(), "text")
@@ -1247,7 +1247,7 @@ function suite:test_left_at_start_noop()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")  -- caret to 0
     h:rerender()
     h:press("left")  -- no-op at start
@@ -1270,7 +1270,7 @@ function suite:test_insert_after_home_right_right()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     h:press("right")   -- caret at 1 (after "a")
@@ -1295,7 +1295,7 @@ function suite:test_delete_in_middle()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     h:press("right")   -- caret at 1 (after "a")
@@ -1318,7 +1318,7 @@ function suite:test_backspace_in_middle()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     h:press("right")      -- caret at 1
@@ -1343,7 +1343,7 @@ function suite:test_key_sequence_home_delete_end_backspace()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")     -- caret at 0
     h:rerender()
     h:press("delete")   -- remove "a" → "bcde"
@@ -1387,7 +1387,7 @@ function suite:test_ime_single_cjk_via_dispatch()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中" as a single 3-byte event
     h:rerender()
     lt.assertEquals(value, "\228\184\173")
@@ -1407,7 +1407,7 @@ function suite:test_ime_multi_cjk_via_dispatch()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173\230\150\135")  -- "中文" as two codepoints in one batch
     h:rerender()
     lt.assertEquals(value, "\228\184\173\230\150\135")
@@ -1427,7 +1427,7 @@ function suite:test_ime_multi_cjk_via_type_works()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("\228\184\173\230\150\135")  -- "中文" — one char at a time
     h:rerender()
     lt.assertEquals(value, "\228\184\173\230\150\135")
@@ -1449,7 +1449,7 @@ function suite:test_ime_combining_mark_via_type()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- "e" + COMBINING ACUTE (U+0301) = "é"
     h:type("e\204\129")
     h:rerender()
@@ -1474,7 +1474,7 @@ function suite:test_ime_flag_emoji_via_type()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- 🇯🇵 = RI_J + RI_P, each 4 bytes
     h:type("\240\159\135\175\240\159\135\181")
     h:rerender()
@@ -1496,7 +1496,7 @@ function suite:test_ime_insert_cjk_in_middle()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     h:press("right")  -- caret at 1 (between "a" and "b")
@@ -1519,7 +1519,7 @@ function suite:test_ime_insert_cjk_at_start()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")  -- caret at 0
     h:rerender()
     h:type("\228\184\173")  -- insert "中" → "中ab"
@@ -1540,7 +1540,7 @@ function suite:test_ime_single_cjk_dispatch_cursor()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中"
     h:rerender()
     local te = testing.find_cursor_host(h:tree())
@@ -1561,7 +1561,7 @@ function suite:test_ime_mixed_ascii_cjk_via_type()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:type("a\228\184\173b")  -- "a" + "中" + "b"
     h:rerender()
     lt.assertEquals(value, "a\228\184\173b")
@@ -1583,7 +1583,7 @@ function suite:test_ime_multi_ascii_via_dispatch()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("abc")  -- 3 ASCII chars in one batch
     h:rerender()
     lt.assertEquals(value, "abc")
@@ -1602,7 +1602,7 @@ function suite:test_ime_bulk_dispatch_then_backspace()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("abc")   -- bulk: 3 chars
     h:rerender()
     h:press("backspace") -- delete "c" → "ab"
@@ -1623,7 +1623,7 @@ function suite:test_ime_mixed_ascii_cjk_via_dispatch()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- "a" + "中" + "b" in one dispatch batch
     h:dispatch("a\228\184\173b")
     h:rerender()
@@ -1661,7 +1661,7 @@ function suite:test_ime_consecutive_commits()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("\228\189\160")  -- "你"
     h:rerender()
     lt.assertEquals(value, "\228\189\160")
@@ -1686,7 +1686,7 @@ function suite:test_ime_commit_then_backspace()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中"
     h:rerender()
     lt.assertEquals(value, "\228\184\173")
@@ -1708,7 +1708,7 @@ function suite:test_ime_commit_then_left_then_insert()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173\230\150\135")  -- "中文"
     h:rerender()
     h:press("left")  -- caret moves past "文" to col 2 (after "中")
@@ -1732,7 +1732,7 @@ function suite:test_ime_commit_in_narrow_window_scrolls()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Type 3 CJK chars (6 display cols) into width=5 window
     h:dispatch("\228\184\173\230\150\135\228\186\186")  -- "中文人"
     h:rerender()
@@ -1756,7 +1756,7 @@ function suite:test_ime_two_phase_commit()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Phase 1: commit "你"
     h:dispatch("\228\189\160")
     h:rerender()
@@ -1784,7 +1784,7 @@ function suite:test_ime_commit_in_middle_with_wide_chars()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Move caret to position after "a" (caret index 1)
     h:press("home")
     h:rerender()
@@ -1817,7 +1817,7 @@ function suite:test_ime_commit_flag_in_middle()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     h:press("right")  -- caret between "x" and "y"
@@ -1848,7 +1848,7 @@ function suite:test_ime_commit_then_submit()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:dispatch("\228\184\173")  -- "中"
     h:rerender()
     h:press("enter")
@@ -1870,7 +1870,7 @@ function suite:test_ime_after_backspace_replace()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("backspace")  -- "abc" → "ab"
     h:rerender()
     lt.assertEquals(value, "ab")
@@ -1903,7 +1903,7 @@ function suite:test_caret_clamped_to_zero_on_empty_value()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret starts at end of "hello" = col 5
     local te = testing.find_cursor_host(h:tree())
@@ -1928,7 +1928,7 @@ function suite:test_caret_clamped_on_shrink_to_one_char()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end = col 5
     local te = testing.find_cursor_host(h:tree())
@@ -1952,7 +1952,7 @@ function suite:test_caret_clamped_on_shrink_with_wide_chars()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end: 中(2)+文(2)+a(1)+b(1)+c(1) = 7
     local te = testing.find_cursor_host(h:tree())
@@ -1977,7 +1977,7 @@ function suite:test_caret_clamped_on_progressive_shrink()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     local te = testing.find_cursor_host(h:tree())
     lt.assertEquals(te._cursor_position.x, 5)
@@ -2008,7 +2008,7 @@ function suite:test_caret_in_middle_clamped_when_value_shrinks_below()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Move caret to position 3 (between "c" and "d")
     h:press("home")
     h:rerender()
@@ -2041,7 +2041,7 @@ function suite:test_caret_after_select_all_delete()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end
     local te = testing.find_cursor_host(h:tree())
@@ -2072,7 +2072,7 @@ function suite:test_type_after_caret_clamp_from_shrink()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Shrink value to "a"; caret clamps to 1
     v = "a"
     h:rerender()
@@ -2099,7 +2099,7 @@ function suite:test_backspace_wide_char_caret_offset()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Initial caret at end: a(1)+中(2)+b(1) = offset 4
     local te = testing.find_cursor_host(h:tree())
@@ -2131,7 +2131,7 @@ function suite:test_delete_wide_char_caret_offset_unchanged()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Move caret to after "中" (index 1), offset = 2
     h:press("home")
     h:rerender()
@@ -2176,7 +2176,7 @@ end
 function suite:test_click_focuses_textinput()
     testing.capture_stderr(function()
         local App = testing.load_app("test/apps/text_input_app.lua")
-        local h   = testing.render(App, { cols = 40, rows = 5 })
+        local h   = testing.harness(App, { cols = 40, rows = 5 })
 
         -- Find all clickable Boxes; the two TextInputs each have one.
         local boxes = find_clickable_boxes(h:tree())
@@ -2206,7 +2206,7 @@ end
 function suite:test_click_positions_cursor_in_textinput()
     testing.capture_stderr(function()
         local App = testing.load_app("test/apps/text_input_app.lua")
-        local h   = testing.render(App, { cols = 40, rows = 5 })
+        local h   = testing.harness(App, { cols = 40, rows = 5 })
 
         -- Type some text first (autoFocus is on the first field).
         h:type("hello")
@@ -2239,7 +2239,7 @@ end
 function suite:test_click_switches_focus_between_textinputs()
     testing.capture_stderr(function()
         local App = testing.load_app("test/apps/text_input_app.lua")
-        local h   = testing.render(App, { cols = 40, rows = 5 })
+        local h   = testing.harness(App, { cols = 40, rows = 5 })
 
         -- Type into the first TextInput (autoFocus).
         h:type("user")
@@ -2289,7 +2289,7 @@ function suite:test_caret_stays_when_value_grows_externally()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:rerender()  -- consume autoFocus isFocused state
     -- Caret at end = offset 2
     local te = testing.find_cursor_host(h:tree())
@@ -2315,7 +2315,7 @@ function suite:test_caret_valid_after_external_wide_char_replacement()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     -- Caret at end of "abc" = offset 3, index 3
     -- Replace with "中" (1 grapheme); caret 3 > #chars 1 → clamp to 1
     v = "\228\184\173"
@@ -2338,7 +2338,7 @@ function suite:test_caret_at_home_unaffected_by_shrink()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     h:press("home")
     h:rerender()
     local te = testing.find_cursor_host(h:tree())
@@ -2363,7 +2363,7 @@ function suite:test_cursor_integer_after_caret_clamp()
             },
         }
     end
-    local h = testing.render(App, { cols = 20, rows = 1 })
+    local h = testing.harness(App, { cols = 20, rows = 1 })
     v = ""
     h:rerender()
     local col, row = h:cursor()
@@ -2399,7 +2399,7 @@ function suite:test_multi_input_focused_cursor_wins()
             },
         }
     end
-    local h = testing.render(App, { cols = 30, rows = 3 })
+    local h = testing.harness(App, { cols = 30, rows = 3 })
 
     -- autoFocus effect triggers re-render; consume it before assertions.
     h:rerender()
@@ -2436,7 +2436,7 @@ function suite:test_paste_into_empty_input()
             },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 1 })
+    local h = testing.harness(App, { cols = 40, rows = 1 })
     h:dispatch(input_helpers.paste("hello world"))
     h:rerender()
     lt.assertEquals(value, "hello world")
@@ -2454,7 +2454,7 @@ function suite:test_paste_inserts_at_caret_middle()
             },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 1 })
+    local h = testing.harness(App, { cols = 40, rows = 1 })
     h:press("left")  -- move caret before 'c'
     h:rerender()
     h:dispatch(input_helpers.paste("b"))
@@ -2474,7 +2474,7 @@ function suite:test_paste_multiline()
             },
         }
     end
-    local h = testing.render(App, { cols = 40, rows = 1 })
+    local h = testing.harness(App, { cols = 40, rows = 1 })
     -- TextInput is single-line: newlines in pasted text are replaced with spaces.
     h:dispatch(input_helpers.paste("line1\nline2"))
     h:rerender()

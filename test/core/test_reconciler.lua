@@ -14,7 +14,7 @@ function suite:test_use_state_initial()
         captured = n
         return tui.Text { tostring(n) }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(captured, 42)
     b:unmount()
 end
@@ -29,7 +29,7 @@ function suite:test_set_state_triggers_new_value()
         setter_ref = setN
         return tui.Text { tostring(n) }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(values[1], 0)
 
     setter_ref(7)
@@ -48,7 +48,7 @@ function suite:test_two_states_independent()
         setA, setB = sA, sB
         return tui.Text { a .. b }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(got_a, "a")
     lt.assertEquals(got_b, "b")
 
@@ -72,7 +72,7 @@ function suite:test_effect_mount_once()
         tui.useEffect(function() run_count = run_count + 1 end, {})
         return tui.Text { "x", _setN = setN }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(run_count, 1)
     b:rerender()
     b:rerender()
@@ -87,7 +87,7 @@ function suite:test_effect_every_render()
         tui.useEffect(function() run_count = run_count + 1 end)  -- no deps = nil
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(run_count, 1)
     b:rerender()
     b:rerender()
@@ -110,7 +110,7 @@ function suite:test_effect_cleanup_on_unmount()
         return tui.Box { show and Child or nil }
     end
 
-    local b = testing.mount_bare(Root)
+    local b = testing.bare(Root)
     lt.assertEquals(cleaned, 0)
 
     show = false
@@ -129,7 +129,7 @@ function suite:test_shutdown_runs_cleanups()
         end, {})
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(cleaned, 0)
     reconciler.shutdown(b:state())
     lt.assertEquals(cleaned, 1)
@@ -145,7 +145,7 @@ function suite:test_set_state_same_value_is_noop()
         setter = s
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     setter(5)
     lt.assertEquals(type(setter), "function")
     b:unmount()
@@ -161,7 +161,7 @@ function suite:test_functional_setter()
         setter = s
         return tui.Text { tostring(n) }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(captured, 10)
     setter(function(v) return v + 5 end)
     b:rerender()
@@ -177,7 +177,7 @@ function suite:test_effect_deps_rerun_on_change()
         tui.useEffect(function() run_count = run_count + 1 end, { dep_value })
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(run_count, 1)
     b:rerender()
     lt.assertEquals(run_count, 1)
@@ -200,7 +200,7 @@ function suite:test_effect_cleanup_before_rerun()
         end, { dep })
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(events, { "setup" })
     dep = 2
     b:rerender()
@@ -218,7 +218,7 @@ function suite:test_effect_cleanup_nil_deps_every_render()
         end)  -- no deps = nil = every render
         return tui.Text { "x" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(events, { "s" })
     b:rerender()
     lt.assertEquals(events, { "s", "c", "s" })
@@ -239,7 +239,7 @@ function suite:test_use_input_subscribes_and_unsubscribes()
         return tui.Box { mounted and Child or nil }
     end
 
-    local b = testing.mount_bare(Root)
+    local b = testing.bare(Root)
     lt.assertEquals(testing.input_handler_count(), 1)
 
     b:dispatch("x")
@@ -267,7 +267,7 @@ function suite:test_use_input_uses_latest_handler()
         return tui.Text { "x" }
     end
 
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:dispatch("a")
     lt.assertEquals(sum, 1)
 
@@ -303,7 +303,7 @@ function suite:test_fn_identity_change_forces_remount()
         return tui.Box { tui.component(which, {}) }
     end
 
-    local b = testing.mount_bare(Root)
+    local b = testing.bare(Root)
     lt.assertEquals(events, { "A-setup" })
 
     which = B
@@ -335,7 +335,7 @@ function suite:test_fn_identity_stable_preserves_state()
         return tui.Box { CompEl {} }
     end
 
-    local b = testing.mount_bare(Root)
+    local b = testing.bare(Root)
     lt.assertEquals(counter_values, { 0 })
     lt.assertEquals(events, { "setup" })
 

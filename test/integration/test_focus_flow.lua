@@ -59,7 +59,7 @@ end
 -- ============================================================================
 
 function suite:test_initial_focus()
-    local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
+    local h = testing.harness(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()  -- needed after autoFocus to register cursor
 
     lt.assertEquals(focus_mod.get_focused_id(), "field_a")
@@ -77,7 +77,7 @@ end
 -- ============================================================================
 
 function suite:test_tab_forward()
-    local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
+    local h = testing.harness(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
     lt.assertEquals(focus_mod.get_focused_id(), "field_a")
@@ -103,7 +103,7 @@ end
 -- ============================================================================
 
 function suite:test_shift_tab_backward()
-    local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
+    local h = testing.harness(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
     lt.assertEquals(focus_mod.get_focused_id(), "field_a")
@@ -129,7 +129,7 @@ end
 -- ============================================================================
 
 function suite:test_cursor_follows_focus()
-    local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
+    local h = testing.harness(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
     local _, row_a = h:cursor()
@@ -153,7 +153,7 @@ end
 -- ============================================================================
 
 function suite:test_cursor_col_advances()
-    local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
+    local h = testing.harness(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
     local col0 = h:cursor()
@@ -172,7 +172,7 @@ end
 -- ============================================================================
 
 function suite:test_focus_direct()
-    local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
+    local h = testing.harness(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
     focus_mod.focus("field_c")
@@ -190,7 +190,7 @@ end
 -- ============================================================================
 
 function suite:test_focus_next_prev_api()
-    local h = testing.render(ThreeFieldForm, { cols = 45, rows = 10 })
+    local h = testing.harness(ThreeFieldForm, { cols = 45, rows = 10 })
     h:rerender()
 
     focus_mod.focus_next()

@@ -22,7 +22,7 @@ function suite:test_reducer_initial_state()
         captured_dispatch = d
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(captured_state, 0)
     lt.assertEquals(type(captured_dispatch), "function")
     b:unmount()
@@ -38,7 +38,7 @@ function suite:test_reducer_dispatch_updates_state()
         dispatch_ref = d
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     dispatch_ref("inc")
     b:rerender()
     dispatch_ref("inc")
@@ -57,7 +57,7 @@ function suite:test_reducer_dispatch_identity_stable()
         seen[#seen + 1] = d
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:rerender()
     b:rerender()
     lt.assertEquals(rawequal(seen[1], seen[2]), true)
@@ -73,7 +73,7 @@ function suite:test_reducer_noop_when_state_unchanged()
         dispatch_ref = d
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     b:expect_renders(1)
     -- noop action returns same state -> should not mark dirty
     dispatch_ref("noop")
@@ -95,7 +95,7 @@ function suite:test_reducer_lazy_init_with_third_arg()
         captured = s
         return tui.Text { "" }
     end
-    local b = testing.mount_bare(Comp)
+    local b = testing.bare(Comp)
     lt.assertEquals(captured, 50)
     lt.assertEquals(init_calls, 1)
     b:rerender()

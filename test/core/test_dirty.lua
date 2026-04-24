@@ -22,7 +22,7 @@ function suite:test_mount_effect_setter_on_next_frame()
         return tui.Text { ("n=%d"):format(n) }
     end
 
-    local h = testing.render(App, { cols = 10, rows = 1 })
+    local h = testing.harness(App, { cols = 10, rows = 1 })
     -- First frame: mount effect has not fired yet (or fired but setState
     -- is not consumed until next paint).
     lt.assertEquals(h:frame():sub(1, 5), "n=0  ", "first frame should show n=0")

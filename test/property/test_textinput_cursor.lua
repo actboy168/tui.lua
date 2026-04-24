@@ -97,7 +97,7 @@ function suite:test_cursor_within_bounds_random_value()
                 }
             end
 
-            local h = testing.render(App, { cols = cols, rows = rows })
+            local h = testing.harness(App, { cols = cols, rows = rows })
             h:rerender()  -- consume autoFocus isFocused state
             local ok, err = pcall(assert_cursor_valid, h)
             h:unmount()
@@ -145,7 +145,7 @@ function suite:test_cursor_within_bounds_with_border()
                 return tui.Box(props)
             end
 
-            local h = testing.render(App, { cols = cols, rows = rows })
+            local h = testing.harness(App, { cols = cols, rows = rows })
             h:rerender()
             local ok, err = pcall(assert_cursor_valid, h)
             h:unmount()
@@ -181,7 +181,7 @@ function suite:test_cursor_within_bounds_after_navigation()
                 }
             end
 
-            local h = testing.render(App, { cols = cols, rows = rows })
+            local h = testing.harness(App, { cols = cols, rows = rows })
             h:rerender()
 
             local <const> NAV_KEYS = { "home", "end", "left", "right" }
@@ -229,7 +229,7 @@ function suite:test_cursor_within_bounds_auto_width()
                 }
             end
 
-            local h = testing.render(App, { cols = cols, rows = rows })
+            local h = testing.harness(App, { cols = cols, rows = rows })
             h:rerender()
             local ok, err = pcall(assert_cursor_valid, h)
             h:unmount()
