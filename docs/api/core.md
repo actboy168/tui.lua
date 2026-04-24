@@ -410,6 +410,29 @@ local boundary = tui.useErrorBoundary()
 -- boundary.boundary: table?
 ```
 
+### 可点击语义
+
+#### useClickable
+
+```lua
+local click = tui.useClickable {
+    onClick = function(ev) end,
+    disabled = boolean,
+    autoFocus = boolean,
+    focusId = string,
+    id = string,
+    payload = table,  -- 附加到事件对象的数据
+}
+
+-- click.isFocused: boolean
+-- click.focus(): function()  -- 主动获取焦点
+-- click.isClickable: boolean
+-- click.onMouseDown: function?  -- 宿主层鼠标按下 handler，可挂在 Box 上
+-- click.fire(source, ev): boolean  -- 手动触发语义点击
+```
+
+`useClickable` 把宿主层 `onMouseDown` 和键盘 `Enter` 统一成语义 `onClick`，并标准化事件对象（`ev.source = "mouse" | "keyboard"`）。`extra.Link` 和 `extra.Button` 内部都复用它。
+
 ---
 
 ## 工具函数

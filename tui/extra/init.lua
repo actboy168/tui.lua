@@ -16,6 +16,7 @@ M.Select      = require("tui.extra.select").Select
 M.Spinner     = require("tui.extra.spinner").Spinner
 M.ProgressBar = require("tui.extra.progress_bar").ProgressBar
 M.Link        = require("tui.extra.link").Link
+M.Button      = require("tui.extra.button").Button
 M.Newline     = require("tui.extra.newline").Newline
 M.Spacer      = require("tui.extra.newline").Spacer
 

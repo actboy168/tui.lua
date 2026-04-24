@@ -99,6 +99,7 @@ extra.TextInput { ... }
 | `extra.TextInput` | 单行文本输入 |
 | `extra.Textarea` | 多行文本编辑器 |
 | `extra.Link` | 高层超链接组件（`href` + 可选 `onClick`） |
+| `extra.Button` | 带边框的可点击按钮 |
 | `extra.Select` | 选项列表 |
 | `extra.Spinner` | 加载动画 |
 | `extra.ProgressBar` | 进度条 |
@@ -106,7 +107,7 @@ extra.TextInput { ... }
 | `extra.Newline` | 换行 |
 | `extra.Spacer` | 弹性空间 |
 
-高级控件的完整属性、示例和键盘操作参见 [高级控件](../api/extra.md)。如果你只需要普通可交互超链接，优先用 `extra.Link`；如果你要承载外部预渲染 ANSI/OSC 8 输出，使用 `tui.RawAnsi`；如果你要给任意子树附加输出级效果，使用 `tui.Transform`。`extra.Link` 示例见 [`examples/link.lua`](../../examples/link.lua)。
+高级控件的完整属性、示例和键盘操作参见 [高级控件](../api/extra.md)。如果你只需要普通可交互超链接，优先用 `extra.Link`；如果你要添加可点击操作按钮，使用 `extra.Button`；如果你要承载外部预渲染 ANSI/OSC 8 输出，使用 `tui.RawAnsi`；如果你要给任意子树附加输出级效果，使用 `tui.Transform`。`extra.Link` 示例见 [`examples/link.lua`](../../examples/link.lua)，`extra.Button` 示例见 [`examples/button.lua`](../../examples/button.lua)。
 
 ## 自定义组件
 

@@ -31,9 +31,8 @@ _暂无_
 ### 内置组件扩充
 
 - `P0` **ScrollBox**：可滚动容器 + 命令式滚动 API（scrollTo/scrollBy）+ stickyScroll + 视口裁剪；复杂内容展示刚需（Lua 层为主，C 层可选加速）
-- `P1` **Button**：焦点/悬停/点击/键盘激活；对比 Ink `Button` 组件（Lua 层）
 - `P1` **`form.lua`**：多输入框 + 字段导航；表单/对话式应用刚需
-- `P2` **Link / Button 交互态样式**：hover / focus / pressed 视觉反馈；Link 目前只有默认蓝色下划线，后续可结合 `useHover()` 和焦点态统一组件交互样式
+- `P1` **Link / Button 交互态样式**：hover / focus / pressed 视觉反馈；Link 目前只有默认蓝色下划线，后续可结合 `useHover()` 和焦点态统一组件交互样式
 - `P3` Markdown / syntax-highlight：AI chat 核心诉求，靠后实施
 
 ### 渲染性能与稳定性

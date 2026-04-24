@@ -85,6 +85,17 @@ luamake lua examples/dashboard.lua
 # 按键: Esc 退出
 ```
 
+## 交互组件示例
+
+### [button.lua](button.lua) - Button 组件
+
+带边框的按钮示例，展示 `extra.Button` 的 `label`、rich children、键盘激活和禁用态。
+
+```bash
+luamake lua examples/button.lua
+# 按键: Enter 激活聚焦按钮, q/Esc 退出
+```
+
 ## 超链接示例
 
 ### [link.lua](link.lua) - Link 组件
@@ -126,8 +137,9 @@ luamake lua examples/chat_mock.lua
 4. [todo_list.lua](todo_list.lua) - 列表渲染
 5. [wizard_form.lua](wizard_form.lua) - 多步骤流程
 6. [dashboard.lua](dashboard.lua) - 实时数据
-7. [link.lua](link.lua) - 高层超链接交互
-8. [raw_ansi.lua](raw_ansi.lua) - 低层 ANSI / OSC 8 输出
+7. [button.lua](button.lua) - 可点击按钮交互
+8. [link.lua](link.lua) - 高层超链接交互
+9. [raw_ansi.lua](raw_ansi.lua) - 低层 ANSI / OSC 8 输出
 
 ## 创建自己的示例
 
@@ -169,5 +181,5 @@ luamake lua my_example.lua
 | login_form.lua, wizard_form.lua | [焦点系统](../docs/guide/05-focus.md) |
 | todo_list.lua, select_menu.lua | [组件详解](../docs/guide/03-components.md) |
 | dashboard.lua, progress_demo.lua | [布局系统](../docs/guide/02-layout.md) |
-| link.lua, raw_ansi.lua | [组件详解](../docs/guide/03-components.md) |
+| button.lua, link.lua, raw_ansi.lua | [组件详解](../docs/guide/03-components.md) |
 | chat_mock.lua | 综合示例 |

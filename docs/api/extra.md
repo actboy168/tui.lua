@@ -291,6 +291,41 @@ extra.Textarea {
 
 ---
 
+## Button
+
+可点击按钮组件。默认渲染为带边框的按钮，语义回调统一使用 `onClick`，支持 `label` 简写和 rich children。
+
+```lua
+extra.Button {
+    label = "保存",
+    onClick = function(ev)
+        -- ev.source == "mouse" or "keyboard"
+    end,
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `label` | string | 显式单行文本；与 children 二选一 |
+| `children` | string / element... | 可混合文本和元素子树 |
+| `onClick` | function | 可选语义回调；鼠标按下和键盘 `Enter` 都会触发，`ev.source` 区分 `"mouse"` / `"keyboard"` |
+| `autoFocus` | boolean | 未禁用且可点击时生效 |
+| `focusId` / `id` | string | 焦点标识 |
+| `isDisabled` | boolean | 禁用后不触发 `onClick` |
+| `color` / `backgroundColor` / `bold` / `italic` / `underline` / `strikethrough` / `inverse` / `dim` / `dimColor` | mixed | `label` 路径的文本样式；rich children 建议在子树内显式控制 |
+| 其他 `Box` props | table | 透传给外层 `Box`，可用于布局和覆盖默认边框/内边距 |
+
+### 说明
+
+- `label` 不能包含 ESC、BEL 或换行；直接字符串 children 不能包含 ESC/BEL
+- `Button.onClick` 是高层语义回调；底层宿主鼠标事件名是 `onMouseDown`
+- 默认外观是带边框按钮；rich children 路径仍复用同一套点击/焦点语义
+- 示例见 [`examples/button.lua`](../../examples/button.lua)
+
+---
+
 ## Link
 
 终端超链接组件。`href` 表示终端原生跳转目标，`onClick` 是应用层语义回调。plain-label 路径走 `RawAnsi`，rich-children 路径走 `Transform` 子树超链接处理。

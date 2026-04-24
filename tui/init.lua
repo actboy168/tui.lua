@@ -26,6 +26,7 @@ local hook_focus   = require "tui.hook.focus"
 local hook_terminal = require "tui.hook.terminal"
 local hook_measure = require "tui.hook.measure"
 local hook_cursor  = require "tui.hook.cursor"
+local hook_clickable = require "tui.hook.clickable"
 local text_mod     = require "tui.internal.text"
 local log_mod      = require "tui.internal.log"
 
@@ -109,6 +110,7 @@ M.useTerminalFocus = hook_terminal.useTerminalFocus
 M.useTerminalTitle = hook_terminal.useTerminalTitle
 M.useMouse         = hook_input.useMouse
 M.useClipboard     = hook_measure.useClipboard
+M.useClickable     = hook_clickable.useClickable
 
 -- Scheduler passthrough (users can bypass hooks if they really want to).
 M.setInterval = scheduler.setInterval

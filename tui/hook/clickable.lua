@@ -1,4 +1,5 @@
-local tui = require "tui"
+local useRef   = require("tui.hook.state").useRef
+local useFocus = require("tui.hook.focus").useFocus
 
 local M = {}
 
@@ -28,13 +29,13 @@ end
 function M.useClickable(opts)
     opts = opts or {}
 
-    local ctx = tui.useRef {}
+    local ctx = useRef {}
     ctx.current.onClick = opts.onClick
     ctx.current.disabled = opts.disabled and true or false
     ctx.current.payload = opts.payload or nil
 
     local active = (not ctx.current.disabled) and (ctx.current.onClick ~= nil)
-    local focus = tui.useFocus {
+    local focus = useFocus {
         autoFocus = active and (opts.autoFocus == true),
         id = opts.focusId or opts.id,
         isActive = active,
