@@ -9,7 +9,7 @@
  *
  * Layout after `require "tui.core"`:
  *   tui_core = {
- *       terminal = { set_raw, get_size, windows_vt_enable, read,
+ *       terminal = { set_raw, get_size, init, read,
  *                    write },
  *       keys     = { parse },
  *       wcwidth  = { wcwidth, string_width, char_width },
@@ -46,7 +46,6 @@ int tui_open_yoga(lua_State *L);
 
 DLL_EXPORT LUAMOD_API int
 luaopen_tui_core(lua_State *L) {
-    luaL_checkversion(L);
     lua_createtable(L, 0, 7);
 
     /* terminal sub-table */

@@ -1240,7 +1240,7 @@ term_set_raw(lua_State *L) {
 }
 
 static int
-term_windows_vt_enable(lua_State *L) {
+term_init(lua_State *L) {
     (void)L;
     lua_pushboolean(L, 1);
     return 1;
@@ -1248,24 +1248,14 @@ term_windows_vt_enable(lua_State *L) {
 
 static int
 l_as_terminal(lua_State *L) {
-    vterm_t *vt = check_vterm(L, 1);
-    lua_createtable(L, 0, 5);
-
-    lua_pushvalue(L, 1);  /* push vt userdata as upvalue */
-    lua_pushcclosure(L, term_write, 1);
-    lua_setfield(L, -2, "write");
-
-    lua_pushvalue(L, 1);
-    lua_pushcclosure(L, term_get_size, 1);
-    lua_setfield(L, -2, "get_size");
-
-    lua_pushvalue(L, 1);
-    lua_pushcclosure(L, term_set_raw, 1);
-    lua_setfield(L, -2, "set_raw");
-
-    lua_pushcfunction(L, term_windows_vt_enable);
-    lua_setfield(L, -2, "windows_vt_enable");
-
+    luaL_Reg l[] = {
+        { "init",              term_init              },
+        { "set_raw",           term_set_raw           },
+        { "get_size",          term_get_size          },
+        { "write",             term_write             },
+        { NULL, NULL },
+    };
+    luaL_newlib(L, l);
     return 1;
 }
 

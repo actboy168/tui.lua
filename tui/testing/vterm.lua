@@ -176,6 +176,9 @@ function M.as_terminal(vt, opts)
     local capabilities = opts.capabilities
 
     return {
+        init = function()
+            return true
+        end,
         write = function(s)
             if validate_csi then
                 local bad = M.check_csi_integers(s)
@@ -200,9 +203,6 @@ function M.as_terminal(vt, opts)
         end,
         set_raw = function(on)
             vt:set_raw(on and true or false)
-        end,
-        windows_vt_enable = function()
-            return true
         end,
         resize = function(cols, rows)
             vt:resize(cols, rows)

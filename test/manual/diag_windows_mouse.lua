@@ -39,9 +39,9 @@ local function main()
     io.stdout:write("Click inside the window with your mouse, or press 'q' to quit.\n\n")
 
     -- Enable VT processing on stdout
-    local ok = terminal.windows_vt_enable()
+    local ok = terminal.init()
     if not ok then
-        io.stdout:write("Warning: windows_vt_enable() returned false. VT sequences may not work.\n")
+        io.stdout:write("Warning: init() returned false. VT sequences may not work.\n")
     end
 
     -- Enter raw mode

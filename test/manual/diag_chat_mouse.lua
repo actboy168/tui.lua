@@ -49,7 +49,7 @@ io.open(input_mod._debug_log, "w"):close()
 local function test_raw_mouse()
     dbg("\n=== Test 1: raw terminal.read + keys.parse ===")
     local terminal = tui_core.terminal
-    terminal.windows_vt_enable()
+    terminal.init()
     terminal.set_raw(true)
 
     -- 手动发送鼠标启用序列（和 diag_windows_mouse.lua 一样）

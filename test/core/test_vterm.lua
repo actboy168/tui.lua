@@ -380,9 +380,9 @@ function suite:test_terminal_set_raw()
     lt.assertEquals(vterm.mode(vt).raw, true)
 end
 
-function suite:test_terminal_windows_vt_enable()
+function suite:test_terminal_init()
     local vt, term = make_term(10, 3)
-    lt.assertEquals(term.windows_vt_enable(), true)
+    lt.assertEquals(term.init(), true)
 end
 
 -- ---------------------------------------------------------------------------

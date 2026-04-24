@@ -793,7 +793,6 @@ lnodeSet(lua_State *L) {
 
 int
 tui_open_yoga(lua_State *L) {
-	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "node_new",                lnodeNew                },
 		{ "node_free",               lnodeFree               },

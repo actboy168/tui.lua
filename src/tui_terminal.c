@@ -17,7 +17,7 @@
 /* ── 输出 ─────────────────────────────────────────────────────── */
 
 static int
-l_windows_vt_enable(lua_State *L) {
+l_init(lua_State *L) {
     SetConsoleOutputCP(65001);
     SetConsoleCP(65001);
     HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -52,8 +52,6 @@ l_get_size(lua_State *L) {
     lua_pushinteger(L, csbi.srWindow.Bottom - csbi.srWindow.Top  + 1);
     return 2;
 }
-
-#endif /* _WIN32 */
 
 /* ── Shared input-normalization helpers ───────────────────────── */
 
@@ -203,8 +201,6 @@ append_key_records(const tui_keyrec_t *recs, size_t nread, char *buf, int cap) {
 }
 
 /* ── raw mode ─────────────────────────────────────────────────── */
-
-#if defined(_WIN32)
 
 static DWORD s_orig_in_mode  = 0;
 static DWORD s_orig_out_mode = 0;
@@ -360,7 +356,7 @@ l_read(lua_State *L) {
 static struct termios s_orig_termios;
 static int            s_raw_saved = 0;
 
-static int l_windows_vt_enable(lua_State *L) { (void)L; return 0; }
+static int l_init(lua_State *L) { (void)L; return 0; }
 
 static int
 l_set_raw(lua_State *L) {
@@ -427,11 +423,10 @@ l_write(lua_State *L) {
 
 int
 tui_open_terminal(lua_State *L) {
-    luaL_checkversion(L);
     luaL_Reg l[] = {
+        { "init",              l_init              },
         { "set_raw",           l_set_raw           },
         { "get_size",          l_get_size          },
-        { "windows_vt_enable", l_windows_vt_enable },
         { "read",              l_read              },
         { "write",             l_write             },
         { NULL, NULL },

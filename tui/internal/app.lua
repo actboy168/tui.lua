@@ -23,7 +23,7 @@ App.__index = App
 function M.render(root, opts)
     opts = opts or {}
 
-    terminal.windows_vt_enable()
+    terminal.init()
     terminal.set_raw(true)
 
     local caps = terminal_mod.detect_capabilities()
