@@ -33,7 +33,7 @@
 #define COLOR_LEVEL_256   1
 #define COLOR_LEVEL_24BIT 2
 
-/* ── cell_t — 12-byte display cell ──────────────────────────── */
+/* ── cell_t — 16-byte display cell ──────────────────────────── */
 
 typedef struct {
     union {
@@ -44,13 +44,14 @@ typedef struct {
             uint8_t  _pad[2];
         } ext;
     } u;
-    uint8_t  len;       /* 1..8 inline, 0xFF slab, 0 WIDE_TAIL */
-    uint8_t  width;     /* 0 tail, 1 narrow, 2 wide head */
-    uint16_t style_id;  /* style pool index; 0 = default */
+    uint8_t  len;          /* 1..8 inline, 0xFF slab, 0 WIDE_TAIL */
+    uint8_t  width;        /* 0 tail, 1 narrow, 2 wide head */
+    uint16_t style_id;     /* style pool index; 0 = default */
+    uint16_t hyperlink_id; /* hyperlink pool index; 0 = none */
 } cell_t;
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-_Static_assert(sizeof(cell_t) == 12, "cell_t must be 12 bytes");
+_Static_assert(sizeof(cell_t) == 16, "cell_t must be 16 bytes");
 #endif
 
 /* ── slab_t — variable-length byte store ────────────────────── */
@@ -78,6 +79,17 @@ typedef struct {
     uint32_t       cap;
 } style_pool_t;
 
+typedef struct {
+    char    *uri;
+    uint32_t len;
+} hyperlink_entry_t;
+
+typedef struct {
+    hyperlink_entry_t *entries;
+    uint32_t           count;
+    uint32_t           cap;
+} hyperlink_pool_t;
+
 /* ── Shared helpers ─────────────────────────────────────────── */
 
 static inline cell_t *
@@ -88,9 +100,10 @@ cell_at(cell_t *buf, int w, int x, int y) {
 static inline void
 cell_set_space(cell_t *c) {
     c->u.inline_bytes[0] = ' ';
-    c->len      = 1;
-    c->width    = 1;
-    c->style_id = 0;
+    c->len          = 1;
+    c->width        = 1;
+    c->style_id     = 0;
+    c->hyperlink_id = 0;
 }
 
 static inline void
@@ -99,8 +112,10 @@ fill_space(cell_t *buf, int n) {
         cell_t *c = &buf[i];
         memset(c, 0, sizeof(*c));
         c->u.inline_bytes[0] = ' ';
-        c->len   = 1;
-        c->width = 1;
+        c->len          = 1;
+        c->width        = 1;
+        c->style_id     = 0;
+        c->hyperlink_id = 0;
     }
 }
 
@@ -120,8 +135,9 @@ static inline int
 cell_eq(const cell_t *a, const slab_t *slab_a,
         const cell_t *b, const slab_t *slab_b) {
     if (a->len != b->len || a->width != b->width) return 0;
-    if (a->len == 0)    return 1;                  /* both WIDE_TAIL */
     if (a->style_id != b->style_id) return 0;
+    if (a->hyperlink_id != b->hyperlink_id) return 0;
+    if (a->len == 0)    return 1;                  /* both WIDE_TAIL */
     if (a->len == 0xFF) {
         if (a->u.ext.slab_len != b->u.ext.slab_len) return 0;
         return memcmp(slab_a->buf + a->u.ext.slab_off,
@@ -201,6 +217,53 @@ style_intern(style_pool_t *p,
 
 static inline void
 pool_free(style_pool_t *p) {
+    free(p->entries);
+    p->entries = NULL;
+    p->count = p->cap = 0;
+}
+
+static inline const hyperlink_entry_t *
+hyperlink_get(const hyperlink_pool_t *p, uint16_t id) {
+    if (id == 0 || (uint32_t)(id - 1) >= p->count)
+        return NULL;
+    return &p->entries[id - 1];
+}
+
+static inline uint16_t
+hyperlink_intern(hyperlink_pool_t *p, const char *uri, uint32_t len) {
+    if (!uri || len == 0) return 0;
+    for (uint32_t i = 0; i < p->count; i++) {
+        const hyperlink_entry_t *e = &p->entries[i];
+        if (e->len == len && memcmp(e->uri, uri, len) == 0)
+            return (uint16_t)(i + 1);
+    }
+    if (p->count >= p->cap) {
+        uint32_t ncap = p->cap ? p->cap * 2 : 32;
+        if (ncap > 65534u) ncap = 65534u;
+        hyperlink_entry_t *ne = (hyperlink_entry_t *)realloc(p->entries,
+                                                              ncap * sizeof(hyperlink_entry_t));
+        if (!ne) return 0;
+        p->entries = ne;
+        p->cap = ncap;
+    }
+    char *copy = (char *)malloc((size_t)len + 1u);
+    if (!copy) return 0;
+    memcpy(copy, uri, len);
+    copy[len] = '\0';
+    uint16_t id = (uint16_t)(p->count + 1);
+    hyperlink_entry_t *e = &p->entries[p->count++];
+    e->uri = copy;
+    e->len = len;
+    return id;
+}
+
+static inline void
+hyperlink_pool_free(hyperlink_pool_t *p) {
+    if (p->entries) {
+        for (uint32_t i = 0; i < p->count; i++) {
+            free(p->entries[i].uri);
+        }
+    }
     free(p->entries);
     p->entries = NULL;
     p->count = p->cap = 0;

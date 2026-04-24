@@ -2161,7 +2161,7 @@ local function find_clickable_boxes(tree)
     local out = {}
     local function walk(e)
         if not e then return end
-        if e.kind == "box" and e.props and type(e.props.onClick) == "function" then
+        if e.kind == "box" and e.props and type(e.props.onMouseDown) == "function" then
             out[#out + 1] = e
         end
         if e.children then

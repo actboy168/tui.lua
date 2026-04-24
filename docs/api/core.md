@@ -99,10 +99,16 @@ tui.Box {
     borderTop = boolean, borderBottom = boolean,
     borderLeft = boolean, borderRight = boolean,
 
+    -- 鼠标事件
+    onMouseDown = function(ev),
+    onScroll = function(ev),
+
     -- 子元素
     children
 }
 ```
+
+`onMouseDown` 是宿主层原始鼠标按下事件，handler 接收 `{ col, row, localCol, localRow, target }`。语义化点击组件应使用各自的高层 API，例如 `extra.Link.onClick`。
 
 ### Text
 
@@ -132,7 +138,7 @@ tui.Text {
 
 ### RawAnsi
 
-预渲染 ANSI 行片段。对齐 Ink 风格，只接收 `lines` 和 `width`。内容仍进入 screen backend，因此可以参与布局、裁剪、diff 和测试，而不是直接把原始字节写到 stdout。
+预渲染 ANSI 行片段。对齐 Ink 风格，只接收 `lines` 和 `width`。当前支持 SGR 样式序列与 OSC 8 超链接。内容仍进入 screen backend，因此可以参与布局、裁剪、diff 和测试，而不是直接把原始字节写到 stdout。
 
 ```lua
 tui.RawAnsi {
@@ -151,10 +157,11 @@ tui.RawAnsi {
 }
 ```
 
-- 只支持 SGR 样式序列（颜色、bold、underline、inverse、256 色、RGB 等）
-- 不支持光标移动、擦除、清屏等控制序列，遇到会直接报错
+- 支持 SGR 样式序列与 OSC 8 超链接
+- 不支持其他 OSC，也不支持光标移动、擦除、清屏等控制序列，遇到会直接报错
 - `RawAnsi` 不接收 children；换行和按宽度切分由调用方负责
 - `lines = {}` 时不渲染任何节点
+- 示例见 [`examples/raw_ansi.lua`](../../examples/raw_ansi.lua)
 
 ### ErrorBoundary
 

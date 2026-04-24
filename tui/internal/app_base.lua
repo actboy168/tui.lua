@@ -83,7 +83,7 @@ end
 function setup_hit_test()
     input_mod.set_hit_test_handler(function(ev)
         if ev.type == "down" and ev.button == 1 then
-            return hit_test.dispatch_click(ev.x, ev.y)
+            return hit_test.dispatch_mouse_down(ev.x, ev.y)
         elseif ev.type == "scroll" then
             return hit_test.dispatch_scroll(ev.x, ev.y, ev.scroll)
         end

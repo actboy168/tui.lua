@@ -684,12 +684,12 @@ local function textarea_impl(props)
         row_elements[r + 1] = row_el
     end
 
-    -- Mouse support: add onClick and onScroll to the outer Box.
+    -- Mouse support: add onMouseDown and onScroll to the outer Box.
     -- localCol/localRow are 0-based offsets relative to the handler Box,
-    -- provided by hit_test.dispatch_click / dispatch_scroll.
-    local onClick
+    -- provided by hit_test.dispatch_mouse_down / dispatch_scroll.
+    local onMouseDown
     if not disabled then
-        onClick = function(ev)
+        onMouseDown = function(ev)
             -- Click to focus
             if not focus_flag then
                 focus_handle.focus()
@@ -737,7 +737,7 @@ local function textarea_impl(props)
         flexDirection = "column",
         width = width,
         height = vis_height,
-        onClick = onClick,
+        onMouseDown = onMouseDown,
         onScroll = onScroll,
         table.unpack(row_elements),
     }

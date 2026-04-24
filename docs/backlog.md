@@ -32,8 +32,9 @@ _暂无_
 
 - `P0` **ScrollBox**：可滚动容器 + 命令式滚动 API（scrollTo/scrollBy）+ stickyScroll + 视口裁剪；复杂内容展示刚需（Lua 层为主，C 层可选加速）
 - `P1` **Button**：焦点/悬停/点击/键盘激活；对比 Ink `Button` 组件（Lua 层）
+- `P1` **可点击语义原语（clickable / pressable）**：抽离 Link 已验证的 `onMouseDown` + focus + `Enter` => 语义 `onClick` 模式，供 Button、可点击列表项、Tab 等复用
 - `P1` **`form.lua`**：多输入框 + 字段导航；表单/对话式应用刚需
-- `P1` **Ansi**：解析 ANSI 转义序列（SGR / OSC）渲染为带样式 Text，用于外部工具输出（`git diff --color`）
+- `P2` **Link / Button 交互态样式**：hover / focus / pressed 视觉反馈；Link 目前只有默认蓝色下划线，后续可结合 `useHover()` 和焦点态统一组件交互样式
 - `P2` **`Transform { transform=fn }`**：对子树输出做后处理变换
 - `P3` Markdown / syntax-highlight：AI chat 核心诉求，靠后实施
 
@@ -41,7 +42,6 @@ _暂无_
 
 - `P1` **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点，解决弹窗关闭后焦点丢失问题
 - `P1` **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
-- `P2` **超链接（OSC 8）**：终端超链接支持，URL 去重存储到 HyperlinkPool
 - `P3` **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
 - `P3` **CharPool 字符串去重**：相同文本共享存储，减少内存占用
 - `P3` **`focus` 链表 entry→idx 映射**：当前 Tab 切换线性搜索 O(n) → O(1)
@@ -57,7 +57,7 @@ _暂无_
 
 #### 控件与交互测试
 
-- `P2` **hit_test 单元测试**：`hit_test.lua` 的 `do_hit_test`、`dispatch_click`、`dispatch_scroll`、`has_mouse_props` 路径尚无独立单元测试
+- `P2` **hit_test 单元测试**：`hit_test.lua` 的 `do_hit_test`、`dispatch_mouse_down`、`dispatch_scroll`、`has_mouse_props` 路径尚无独立单元测试
 - `P2` **其他控件测试迁移到 load_app 模式**：Select、Spinner、Static、ProgressBar 等控件的测试目前使用内联 App，应迁移到 `test/apps/` 独立 fixture + `load_app` 模式（参考 text_input / textarea 的迁移方式）
 - `P2` **test/apps fixture 自身验证**：`text_input_app.lua` 和 `textarea_app.lua` 作为测试基础设施，缺少直接验证其能正确加载和渲染的测试
 - `P2` **滚动测试健壮性改进**：`test_scroll_in_textarea` 依赖光标位置避免 `clamp_scroll` 回滚，应增加 `clamp_scroll` 独立单元测试，或使测试更明确表达前提
@@ -101,7 +101,7 @@ _暂无_
 
 - `P2` **终端身份探测**：XTVERSION/DA1 查询，针对不同终端（iTerm2、Kitty、WezTerm、conhost 等）缓存能力并做兼容处理（C + Lua）
 - `P2` **Windows 终端兼容**：检测并规避 conhost cursor-up viewport yank bug；其他 Windows Terminal 特定缺陷处理（C + Lua）
-- `P2` **Windows Terminal / VS Code Terminal 鼠标兼容**：✅ `tui_terminal.c` 已支持将 Windows 原生 `MOUSE_EVENT_RECORD` 转换为 SGR 扩展鼠标序列；hit_test + auto mouse mode 已确保 `onClick`/`onScroll` 在 Windows 下正常工作；剩余问题：Windows Terminal / VS Code Terminal 下 `useMouse` / editor 拖选路径仍需验证（相关改动曾回滚并暂缓，避免影响 Shift+Enter 等键盘行为）
+- `P2` **Windows Terminal / VS Code Terminal 鼠标兼容**：✅ `tui_terminal.c` 已支持将 Windows 原生 `MOUSE_EVENT_RECORD` 转换为 SGR 扩展鼠标序列；hit_test + auto mouse mode 已确保 `onMouseDown`/`onScroll` 在 Windows 下正常工作；剩余问题：Windows Terminal / VS Code Terminal 下 `useMouse` / editor 拖选路径仍需验证（相关改动曾回滚并暂缓，避免影响 Shift+Enter 等键盘行为）
 - `P2` **tmux/screen 穿透**：DCS 封装，使 OSC/DCS 序列在 tmux multiplexer 下正确透传（C + Lua）
 
 ### Kitty Keyboard Protocol 扩展（基础 KKP 已实现）
@@ -120,6 +120,7 @@ _暂无_
 - `P2` `error.lua`：ErrorBoundary 错误捕获与恢复流程展示
 - `P3` `theme.lua`：颜色、样式、border 综合展示
 - `P3` `focus_animation.lua`：`useTerminalFocus` + `useInterval` 配合，失焦时暂停动画、恢复焦点时继续；`useTerminalFocus` 最典型使用场景
+- `P3` `hyperlink.lua`：演示 `RawAnsi` 的 OSC 8、`extra.Link` 的 `href` / `onClick`、以及 mouse / keyboard 两种激活来源
 
 ### 定时器数据结构（仅当成为瓶颈再做）
 

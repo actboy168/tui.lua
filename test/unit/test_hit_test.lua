@@ -41,14 +41,14 @@ end
 function suite:test_click_bubbles_from_text_to_box()
     local clicked = false
     hit_test.set_tree({
-        kind = "box", props = { onClick = function() clicked = true end },
+        kind = "box", props = { onMouseDown = function() clicked = true end },
         rect = { x = 0, y = 0, w = 80, h = 1 },
         children = {
             { kind = "text", props = {}, rect = { x = 0, y = 0, w = 5, h = 1 },
               children = { "Hi" }, text = "Hi" },
         },
     })
-    lt.assertTrue(hit_test.dispatch_click(1, 1))
+    lt.assertTrue(hit_test.dispatch_mouse_down(1, 1))
     lt.assertTrue(clicked)
 end
 
@@ -60,11 +60,11 @@ function suite:test_click_on_clickable_box()
         children = {
             { kind = "box", props = {},
               rect = { x = 0, y = 0, w = 80, h = 20 }, children = {} },
-            { kind = "box", props = { onClick = function(ev) info = ev end },
+            { kind = "box", props = { onMouseDown = function(ev) info = ev end },
               rect = { x = 0, y = 20, w = 80, h = 1 }, children = {} },
         },
     })
-    lt.assertTrue(hit_test.dispatch_click(1, 21))
+    lt.assertTrue(hit_test.dispatch_mouse_down(1, 21))
     lt.assertNotEquals(info, nil)
     lt.assertEquals(info.localCol, 0)
     lt.assertEquals(info.localRow, 0)
@@ -77,14 +77,14 @@ function suite:test_later_sibling_overlays_earlier()
         rect = { x = 0, y = 0, w = 80, h = 24 },
         children = {
             { kind = "box", key = "A",
-              props = { onClick = function() hit_key = "A" end },
+              props = { onMouseDown = function() hit_key = "A" end },
               rect = { x = 0, y = 0, w = 80, h = 10 }, children = {} },
             { kind = "box", key = "B",
-              props = { onClick = function() hit_key = "B" end },
+              props = { onMouseDown = function() hit_key = "B" end },
               rect = { x = 0, y = 5, w = 80, h = 10 }, children = {} },
         },
     })
-    lt.assertTrue(hit_test.dispatch_click(1, 7))
+    lt.assertTrue(hit_test.dispatch_mouse_down(1, 7))
     lt.assertEquals(hit_key, "B")
 end
 
@@ -129,12 +129,12 @@ function suite:test_row_offset_click_localRow_is_content_relative()
     local info
     hit_test.set_row_offset(5)
     hit_test.set_tree({
-        kind = "box", props = { onClick = function(ev) info = ev end },
+        kind = "box", props = { onMouseDown = function(ev) info = ev end },
         rect = { x = 0, y = 0, w = 80, h = 10 },
         children = {},
     })
     -- SGR (1, 8) → content (0, 2)
-    lt.assertTrue(hit_test.dispatch_click(1, 8))
+    lt.assertTrue(hit_test.dispatch_mouse_down(1, 8))
     lt.assertNotEquals(info, nil)
     lt.assertEquals(info.localRow, 2)
 end

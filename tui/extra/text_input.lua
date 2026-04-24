@@ -448,16 +448,16 @@ local function text_input_impl(props)
     end
 
     -- Mouse support: wrap the Text element in a Box so the framework's
-    -- hit-test can dispatch onClick events to this component.
-    local onClick
+    -- hit-test can dispatch onMouseDown events to this component.
+    local onMouseDown
     if not disabled then
-        onClick = function(ev)
+        onMouseDown = function(ev)
             -- Click to focus
             if not focus_flag then
                 focus_handle.focus()
             end
             -- Click to move cursor: localCol is the 0-based column offset
-            -- relative to the handler Box (provided by hit_test.dispatch_click).
+            -- relative to the handler Box (provided by hit_test.dispatch_mouse_down).
             local local_col = ev.localCol
             if local_col < 0 then local_col = 0 end
             -- Convert display column to character index
@@ -474,7 +474,7 @@ local function text_input_impl(props)
     return tui.Box {
         width  = render_width,
         height = 1,
-        onClick = onClick,
+        onMouseDown = onMouseDown,
         text_el,
     }
 end

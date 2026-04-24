@@ -91,7 +91,8 @@ typedef struct {
      * or resize), avoiding a redundant O(w*h) fill_space each frame. */
     int  next_clean;
     int  color_level;    /* COLOR_LEVEL_* — limits SGR output depth */
-    style_pool_t pool;   /* persistent style pool (never reset between frames) */
+    style_pool_t     pool;   /* persistent style pool (never reset between frames) */
+    hyperlink_pool_t links;  /* persistent hyperlink pool (never reset between frames) */
 } screen_t;
 
 #define SCREEN_MT "tui_core.screen"
@@ -386,7 +387,7 @@ l_clear(lua_State *L) {
 static int
 put_cell(screen_t *s, int x, int y,
          const char *str, size_t slen, int cw,
-         uint16_t style_id) {
+         uint16_t style_id, uint16_t hyperlink_id) {
     if (x < 0 || y < 0 || x >= s->w || y >= s->h) return 0;
     if (cw == 2 && x + 1 >= s->w) return 0;
     if (slen == 0 || slen > 256u) return 0;  /* cap grapheme cluster at 256B */
@@ -407,8 +408,9 @@ put_cell(screen_t *s, int x, int y,
         c->u.ext.slab_len = (uint16_t)slen;
         c->len = 0xFF;
     }
-    c->width    = (uint8_t)cw;
-    c->style_id = style_id;
+    c->width        = (uint8_t)cw;
+    c->style_id     = style_id;
+    c->hyperlink_id = hyperlink_id;
 
     /* Track rightmost column written for damage-based row skipping in diff. */
     {
@@ -419,11 +421,12 @@ put_cell(screen_t *s, int x, int y,
     if (cw == 2) {
         cell_t *tail = cell_at(s->next, s->w, x + 1, y);
         memset(tail, 0, sizeof(*tail));
-        tail->len      = 0;  /* WIDE_TAIL */
-        tail->width    = 0;
-        /* Tail keeps the head's style so a diff over (head,tail) is
-         * consistent when the style changes but bytes don't. */
-        tail->style_id = style_id;
+        tail->len          = 0;  /* WIDE_TAIL */
+        tail->width        = 0;
+        /* Tail keeps the head's style/link so a diff over (head,tail) is
+         * consistent when metadata changes but bytes don't. */
+        tail->style_id     = style_id;
+        tail->hyperlink_id = hyperlink_id;
     }
     return 1;
 }
@@ -440,7 +443,7 @@ l_put(lua_State *L) {
     if (cw != 1 && cw != 2) TUI_FATAL(L, "screen.put: width must be 1 or 2");
 
     uint16_t style_id = (uint16_t)luaL_optinteger(L, 6, 0);
-    put_cell(s, x, y, str, slen, cw, style_id);
+    put_cell(s, x, y, str, slen, cw, style_id, 0);
     return 0;
 }
 
@@ -537,17 +540,17 @@ l_put_border(lua_State *L) {
     if (w < 2 || h < 2) return 0;
     const border_glyphs_t *g = border_lookup(style);
 
-    put_cell(s, x,           y,           g->tl, 3, 1, style_id);
-    put_cell(s, x + w - 1,   y,           g->tr, 3, 1, style_id);
-    put_cell(s, x,           y + h - 1,   g->bl, 3, 1, style_id);
-    put_cell(s, x + w - 1,   y + h - 1,   g->br, 3, 1, style_id);
+    put_cell(s, x,           y,           g->tl, 3, 1, style_id, 0);
+    put_cell(s, x + w - 1,   y,           g->tr, 3, 1, style_id, 0);
+    put_cell(s, x,           y + h - 1,   g->bl, 3, 1, style_id, 0);
+    put_cell(s, x + w - 1,   y + h - 1,   g->br, 3, 1, style_id, 0);
     for (int i = 1; i < w - 1; i++) {
-        put_cell(s, x + i,   y,           g->hh, 3, 1, style_id);
-        put_cell(s, x + i,   y + h - 1,   g->hh, 3, 1, style_id);
+        put_cell(s, x + i,   y,           g->hh, 3, 1, style_id, 0);
+        put_cell(s, x + i,   y + h - 1,   g->hh, 3, 1, style_id, 0);
     }
     for (int i = 1; i < h - 1; i++) {
-        put_cell(s, x,       y + i,       g->vv, 3, 1, style_id);
-        put_cell(s, x + w - 1, y + i,     g->vv, 3, 1, style_id);
+        put_cell(s, x,       y + i,       g->vv, 3, 1, style_id, 0);
+        put_cell(s, x + w - 1, y + i,     g->vv, 3, 1, style_id, 0);
     }
     return 0;
 }
@@ -580,7 +583,7 @@ l_draw_line(lua_State *L) {
         grapheme_next((const unsigned char *)text, tlen, &i, &clen, &cw);
         if (cw <= 0) continue;  /* controls / lone 0-width: skip */
         if (cx + cw > stop) break;
-        put_cell(s, cx, y, text + i0, clen, cw, style_id);
+        put_cell(s, cx, y, text + i0, clen, cw, style_id, 0);
         cx += cw;
     }
     return 0;
@@ -760,6 +763,75 @@ parse_sgr_escape(lua_State *L, const char *text, size_t tlen, size_t i, sgr_stat
     return tlen;
 }
 
+static size_t
+parse_osc8_escape(lua_State *L, screen_t *s, const char *text, size_t tlen, size_t i,
+                  uint16_t *hyperlink_id) {
+    size_t j = i + 2;
+    int terminated = 0;
+    while (j < tlen) {
+        unsigned char ch = (unsigned char)text[j];
+        if (ch == 0x07) {
+            terminated = 1;
+            break;
+        }
+        if (ch == 0x1B && j + 1 < tlen && text[j + 1] == '\\') {
+            terminated = 2;
+            break;
+        }
+        j++;
+    }
+    if (!terminated) {
+        luaL_error(L, "screen.draw_ansi_line: unterminated OSC sequence");
+    }
+
+    size_t payload_end = j;
+    size_t payload_len = payload_end - (i + 2);
+    const char *payload = text + i + 2;
+
+    const char *sep1 = memchr(payload, ';', payload_len);
+    if (!sep1) {
+        luaL_error(L, "screen.draw_ansi_line: malformed OSC sequence");
+    }
+    size_t cmd_len = (size_t)(sep1 - payload);
+    if (cmd_len != 1 || payload[0] != '8') {
+        luaL_error(L, "screen.draw_ansi_line: unsupported OSC sequence");
+    }
+    const char *rest = sep1 + 1;
+    size_t rest_len = payload_len - (size_t)(rest - payload);
+    const char *sep2 = memchr(rest, ';', rest_len);
+    if (!sep2) {
+        luaL_error(L, "screen.draw_ansi_line: malformed OSC 8 sequence");
+    }
+    const char *uri = sep2 + 1;
+    size_t uri_len = rest_len - (size_t)(uri - rest);
+    if (uri_len == 0) {
+        *hyperlink_id = 0;
+    } else {
+        uint16_t id = hyperlink_intern(&s->links, uri, (uint32_t)uri_len);
+        if (id == 0) {
+            luaL_error(L, "screen.draw_ansi_line: failed to intern hyperlink");
+        }
+        *hyperlink_id = id;
+    }
+    return j + (terminated == 1 ? 1 : 2);
+}
+
+static size_t
+parse_ansi_escape(lua_State *L, screen_t *s, const char *text, size_t tlen, size_t i,
+                  sgr_state_t *state, uint16_t *hyperlink_id) {
+    if (i + 1 >= tlen) {
+        luaL_error(L, "screen.draw_ansi_line: unterminated ANSI escape sequence");
+    }
+    if (text[i + 1] == '[') {
+        return parse_sgr_escape(L, text, tlen, i, state);
+    }
+    if (text[i + 1] == ']') {
+        return parse_osc8_escape(L, s, text, tlen, i, hyperlink_id);
+    }
+    luaL_error(L, "screen.draw_ansi_line: unsupported ANSI control sequence");
+    return tlen;
+}
+
 static int
 l_draw_ansi_line(lua_State *L) {
     screen_t *s = check_screen(L, 1);
@@ -772,13 +844,14 @@ l_draw_ansi_line(lua_State *L) {
     sgr_state_t state;
     sgr_state_reset(&state);
     uint16_t style_id = 0;
+    uint16_t hyperlink_id = 0;
 
     int cx = x;
     int stop = x + max_w;
     size_t i = 0;
     while (i < tlen) {
         if ((unsigned char)text[i] == 0x1B) {
-            i = parse_sgr_escape(L, text, tlen, i, &state);
+            i = parse_ansi_escape(L, s, text, tlen, i, &state, &hyperlink_id);
             style_id = sgr_state_style_id(s, &state);
             continue;
         }
@@ -788,7 +861,7 @@ l_draw_ansi_line(lua_State *L) {
         grapheme_next((const unsigned char *)text, tlen, &i, &clen, &cw);
         if (cw <= 0) continue;
         if (cx + cw > stop) break;
-        put_cell(s, cx, y, text + i0, clen, cw, style_id);
+        put_cell(s, cx, y, text + i0, clen, cw, style_id, hyperlink_id);
         cx += cw;
     }
     return 0;
@@ -830,6 +903,40 @@ bytes_append_cup(bytes_t *b, int y, int x) {
     char tmp[32];
     int n = snprintf(tmp, sizeof(tmp), "\x1b[%d;%dH", y + 1, x + 1);
     bytes_append(b, tmp, (size_t)n);
+}
+
+static void
+bytes_append_osc8(bytes_t *b, const char *uri, uint32_t len) {
+    bytes_append_cstr(b, "\x1b]8;;");
+    if (uri && len > 0) bytes_append(b, uri, len);
+    bytes_append_cstr(b, "\x1b\\");
+}
+
+static void
+emit_hyperlink(bytes_t *b,
+               const hyperlink_pool_t *pool,
+               uint16_t *cur_id, uint16_t next_id) {
+    if (*cur_id == next_id) return;
+    if (next_id == 0) {
+        bytes_append_osc8(b, NULL, 0);
+        *cur_id = 0;
+        return;
+    }
+    const hyperlink_entry_t *he = hyperlink_get(pool, next_id);
+    if (!he) {
+        bytes_append_osc8(b, NULL, 0);
+        *cur_id = 0;
+        return;
+    }
+    bytes_append_osc8(b, he->uri, he->len);
+    *cur_id = next_id;
+}
+
+static void
+reset_hyperlink(bytes_t *b, uint16_t *cur_id) {
+    if (*cur_id == 0) return;
+    bytes_append_osc8(b, NULL, 0);
+    *cur_id = 0;
 }
 
 /* Map a 4-bit color nibble (0..15) to its ANSI SGR fg/bg parameter.
@@ -1022,6 +1129,7 @@ emit_relative_move(bytes_t *b,
 static void
 diff_alt(screen_t *s, bytes_t *out) {
     uint16_t cur_style_id = 0;
+    uint16_t cur_link_id = 0;
 
     if (!s->prev_valid) {
         /* first-frame / invalidated: clear-screen + full redraw. */
@@ -1031,11 +1139,13 @@ diff_alt(screen_t *s, bytes_t *out) {
             for (int x = 0; x < s->w; x++) {
                 const cell_t *c = cell_at(s->next, s->w, x, y);
                 if (c->len == 0) continue;  /* WIDE_TAIL: skip */
+                emit_hyperlink(out, &s->links, &cur_link_id, c->hyperlink_id);
                 emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
                 const uint8_t *p; uint32_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
             }
+            reset_hyperlink(out, &cur_link_id);
             reset_sgr(out, &cur_style_id);
         }
     } else {
@@ -1057,6 +1167,7 @@ diff_alt(screen_t *s, bytes_t *out) {
 
                 if (run_start < 0) {
                     bytes_append_cup(out, y, x);
+                    emit_hyperlink(out, &s->links, &cur_link_id, cn->hyperlink_id);
                     emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                     const uint8_t *p; uint32_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
@@ -1070,11 +1181,13 @@ diff_alt(screen_t *s, bytes_t *out) {
                         for (int k = last_change + 1; k < x; k++) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
+                            emit_hyperlink(out, &s->links, &cur_link_id, bc->hyperlink_id);
                             emit_sgr(out, &s->pool, s->color_level, &cur_style_id, bc->style_id);
                             const uint8_t *bp; uint32_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
                             bytes_append(out, bp, bn);
                         }
+                        emit_hyperlink(out, &s->links, &cur_link_id, cn->hyperlink_id);
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
@@ -1083,6 +1196,7 @@ diff_alt(screen_t *s, bytes_t *out) {
                         if (cn->width == 2) x++;
                     } else {
                         bytes_append_cup(out, y, x);
+                        emit_hyperlink(out, &s->links, &cur_link_id, cn->hyperlink_id);
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
@@ -1096,6 +1210,7 @@ diff_alt(screen_t *s, bytes_t *out) {
         }
     }
 
+    reset_hyperlink(out, &cur_link_id);
     reset_sgr(out, &cur_style_id);
 
     /* swap next/prev (both cells and slabs) so next frame diffs against this. */
@@ -1123,6 +1238,7 @@ diff_alt(screen_t *s, bytes_t *out) {
 static void
 diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
     uint16_t cur_style_id = 0;
+    uint16_t cur_link_id = 0;
     int virt_x = s->virt_x;
     int virt_y = s->virt_y;
 
@@ -1192,12 +1308,14 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                     if (x > 0) bytes_append_csi_n(out, x, 'C');
                 }
                 virt_x = x;
+                emit_hyperlink(out, &s->links, &cur_link_id, c->hyperlink_id);
                 emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
                 const uint8_t *p; uint32_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
                 virt_x += c->width;
             }
+            reset_hyperlink(out, &cur_link_id);
             reset_sgr(out, &cur_style_id);
         }
         virt_y = effective_h - 1;
@@ -1211,12 +1329,14 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                 if (c->len == 0) continue;
                 emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                 virt_x = x; virt_y = y;
+                emit_hyperlink(out, &s->links, &cur_link_id, c->hyperlink_id);
                 emit_sgr(out, &s->pool, s->color_level, &cur_style_id, c->style_id);
                 const uint8_t *p; uint32_t n;
                 cell_bytes(c, &s->next_slab, &p, &n);
                 bytes_append(out, p, n);
                 virt_x += c->width;
             }
+            reset_hyperlink(out, &cur_link_id);
             reset_sgr(out, &cur_style_id);
         }
     } else {
@@ -1243,6 +1363,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                     /* open new run */
                     emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                     virt_x = x; virt_y = y;
+                    emit_hyperlink(out, &s->links, &cur_link_id, cn->hyperlink_id);
                     emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                     const uint8_t *p; uint32_t n;
                     cell_bytes(cn, &s->next_slab, &p, &n);
@@ -1258,12 +1379,14 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                         for (int k = last_change + 1; k < x; k++) {
                             const cell_t *bc = cell_at(s->next, s->w, k, y);
                             if (bc->len == 0) continue;
+                            emit_hyperlink(out, &s->links, &cur_link_id, bc->hyperlink_id);
                             emit_sgr(out, &s->pool, s->color_level, &cur_style_id, bc->style_id);
                             const uint8_t *bp; uint32_t bn;
                             cell_bytes(bc, &s->next_slab, &bp, &bn);
                             bytes_append(out, bp, bn);
                         }
                         virt_x = x;
+                        emit_hyperlink(out, &s->links, &cur_link_id, cn->hyperlink_id);
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
@@ -1275,6 +1398,7 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
                         /* gap too big: new run */
                         emit_relative_move(out, virt_x, virt_y, x, y, s->w);
                         virt_x = x; virt_y = y;
+                        emit_hyperlink(out, &s->links, &cur_link_id, cn->hyperlink_id);
                         emit_sgr(out, &s->pool, s->color_level, &cur_style_id, cn->style_id);
                         const uint8_t *p; uint32_t n;
                         cell_bytes(cn, &s->next_slab, &p, &n);
@@ -1289,7 +1413,8 @@ diff_main(screen_t *s, bytes_t *out, int force_clear, int effective_h) {
         }
     }
 
-    /* Final SGR reset. */
+    /* Final hyperlink / SGR reset. */
+    reset_hyperlink(out, &cur_link_id);
     reset_sgr(out, &cur_style_id);
 
     /* Cursor restore: move to (0, effective_h-1) — the last claimed row.
@@ -1477,6 +1602,7 @@ l_gc(lua_State *L) {
     slab_free(&s->prev_slab);
     row_pool_free(&s->rows);
     pool_free(&s->pool);
+    hyperlink_pool_free(&s->links);
     free(s->dirty_xmax); s->dirty_xmax = NULL;
     free(s->prev_xmax);  s->prev_xmax  = NULL;
     return 0;
@@ -1484,7 +1610,7 @@ l_gc(lua_State *L) {
 
 /* ── Lua API: cells ──────────────────────────────────────────────
  * cells(ud, row) -> array of {char, width, bold, dim, underline,
- *                              inverse, italic, strikethrough, fg, bg}
+ *                              inverse, italic, strikethrough, fg, bg, hyperlink}
  * row is 1-based.  Wide-tail slots are skipped so the output array has
  * one entry per visible column position (head cells only).
  *
@@ -1513,7 +1639,7 @@ l_cells(lua_State *L) {
 
         const style_entry_t *se = pool_get(&s->pool, c->style_id);
 
-        lua_createtable(L, 0, 10);
+        lua_createtable(L, 0, 11);
 
         const uint8_t *p; uint32_t n;
         cell_bytes(c, slab, &p, &n);
@@ -1559,6 +1685,11 @@ l_cells(lua_State *L) {
             lua_pushinteger(L, (lua_Integer)se->bg_val);
         }
         lua_setfield(L, -2, "bg");
+
+        const hyperlink_entry_t *he = hyperlink_get(&s->links, c->hyperlink_id);
+        if (he) lua_pushlstring(L, he->uri, he->len);
+        else    lua_pushnil(L);
+        lua_setfield(L, -2, "hyperlink");
 
         lua_rawseti(L, -2, col);
         col++;

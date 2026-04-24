@@ -291,6 +291,44 @@ extra.Textarea {
 
 ---
 
+## Link
+
+终端超链接组件。内部通过 `RawAnsi` 输出 OSC 8；`href` 表示终端原生跳转目标，`onClick` 是应用层语义回调。
+
+```lua
+extra.Link {
+    href = "https://example.com",
+    onClick = function(ev)
+        -- ev.href
+        -- ev.source == "mouse" or "keyboard"
+    end,
+    "docs",
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `href` | string | 非空单行字符串；用于终端原生超链接 |
+| `onClick` | function | 可选语义回调；鼠标按下和键盘 `Enter` 都会触发，`ev.source` 区分 `"mouse"` / `"keyboard"` |
+| `label` | string | 显式文本；与 children 二选一 |
+| `children` | string... | 纯文本子节点；会按顺序拼接成单行标签 |
+| `autoFocus` | boolean | 仅在存在 `onClick` 且未禁用时生效 |
+| `focusId` / `id` | string | 焦点标识 |
+| `isDisabled` | boolean | 禁用后不触发 `onClick`，也不输出 OSC 8 |
+| `color` / `backgroundColor` / `bold` / `italic` / `underline` / `strikethrough` / `inverse` / `dim` / `dimColor` | mixed | 文本样式，默认蓝色下划线 |
+| 其他 `Box` props | table | 透传给外层 `Box`，可用于布局 |
+
+### 说明
+
+- `href`、`label` 和 children 不能包含 ESC、BEL 或换行
+- `Link.onClick` 是高层语义回调；底层宿主鼠标事件名是 `onMouseDown`
+- 应用只能知道组件收到了激活事件，不能知道终端是否真的打开了 `href`
+- 示例见 [`examples/link.lua`](../../examples/link.lua)
+
+---
+
 ## Select
 
 选项列表，支持键盘导航。

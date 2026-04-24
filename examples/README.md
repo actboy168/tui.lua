@@ -85,6 +85,26 @@ luamake lua examples/dashboard.lua
 # 按键: Esc 退出
 ```
 
+## 超链接示例
+
+### [link.lua](link.lua) - Link 组件
+
+推荐的高层超链接示例，展示 `extra.Link` 的 `href`、`onClick`、键盘激活和禁用态。
+
+```bash
+luamake lua examples/link.lua
+# 按键: Enter 激活聚焦链接, q/Esc 退出
+```
+
+### [raw_ansi.lua](raw_ansi.lua) - RawAnsi 超链接
+
+低层 ANSI/OSC 8 示例，展示已拆行、已格式化好的 ANSI 输出如何通过 `tui.RawAnsi` 参与布局和渲染。
+
+```bash
+luamake lua examples/raw_ansi.lua
+# 按键: q/Esc 退出
+```
+
 ### [chat_mock.lua](chat_mock.lua) - 聊天界面
 
 模拟聊天应用，展示复杂布局和实时更新。
@@ -106,6 +126,8 @@ luamake lua examples/chat_mock.lua
 4. [todo_list.lua](todo_list.lua) - 列表渲染
 5. [wizard_form.lua](wizard_form.lua) - 多步骤流程
 6. [dashboard.lua](dashboard.lua) - 实时数据
+7. [link.lua](link.lua) - 高层超链接交互
+8. [raw_ansi.lua](raw_ansi.lua) - 低层 ANSI / OSC 8 输出
 
 ## 创建自己的示例
 
@@ -147,4 +169,5 @@ luamake lua my_example.lua
 | login_form.lua, wizard_form.lua | [焦点系统](../docs/guide/05-focus.md) |
 | todo_list.lua, select_menu.lua | [组件详解](../docs/guide/03-components.md) |
 | dashboard.lua, progress_demo.lua | [布局系统](../docs/guide/02-layout.md) |
+| link.lua, raw_ansi.lua | [组件详解](../docs/guide/03-components.md) |
 | chat_mock.lua | 综合示例 |

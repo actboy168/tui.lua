@@ -73,6 +73,12 @@
 
 `h:dispatch("中文")` 已正确工作（ctxRef eager update）。Bracketed-paste 协议（`\x1b[200~` / `\x1b[201~`）由 `keys.c` 识别为 `paste_start` / `paste_end` 事件，`input.lua` 累加器合并为单一 `paste` 事件再分发；TextInput 的 `on_input` 处理 `name=="paste"` 分支批量插入，`usePaste(fn)` 对外暴露为 `tui.usePaste`。
 
+## 点击语义
+
+**宿主层用 `onMouseDown`，语义组件用 `onClick`。** hit-test 层上报的是原始左键按下，不等于“激活”。`Link` 这类组件可能由鼠标或键盘 `Enter` 触发，所以高层 API 保留 `onClick` 表示语义激活，底层 host prop 改名 `onMouseDown` 避免歧义。未来 `Button` 等组件沿用同一约定。
+
+**`href` / OSC 8 和 `onClick` 分离。** 终端原生超链接是否真的被打开对应用不可观测；`onClick` 只表示框架收到了鼠标或键盘激活。需要本地桥接、自定义跳转或埋点时，用组件层回调；需要终端自行处理时，提供 `href`。
+
 ## `ref` 和 `key` 必须显式传播
 
 **Element schema：** `element.lua` 创建 element 时会把 `ref` 和 `key` **从 props 里取出**，放到 element 的顶层字段（`element.ref`、`element.key`），props 里不再含有它们。因此任何对 element 做结构性复制（clone、expand 等）的代码，**必须显式拷贝 `ref` 和 `key`**，不能只拷贝 `props`。

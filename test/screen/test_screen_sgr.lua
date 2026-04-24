@@ -351,6 +351,41 @@ function suite:test_skin_tone_zwj_single_cluster_styled()
         "skin-tone emoji cluster must be idempotent: " .. hex(ansi))
 end
 
+function suite:test_osc8_hyperlink_output_and_cells()
+    local s = screen.new(8, 1)
+    screen.clear(s)
+    tui_core.screen.draw_ansi_line(s, 0, 0,
+        "\27]8;;https://example.com\27\\X\27]8;;\27\\Y", 8)
+    local ansi = screen.diff(s)
+    lt.assertEquals(ansi:find(ESC .. "]8;;https://example.com" .. ESC .. "\\", 1, true) ~= nil, true,
+        "expected OSC 8 open sequence: " .. hex(ansi))
+    lt.assertEquals(ansi:find(ESC .. "]8;;" .. ESC .. "\\", 1, true) ~= nil, true,
+        "expected OSC 8 close sequence: " .. hex(ansi))
+
+    local cells = screen_c.cells(s, 1)
+    lt.assertEquals(cells[1].char, "X")
+    lt.assertEquals(cells[1].hyperlink, "https://example.com")
+    lt.assertEquals(cells[2].char, "Y")
+    lt.assertEquals(cells[2].hyperlink, nil)
+end
+
+function suite:test_osc8_hyperlink_change_mid_run()
+    local s = screen.new(4, 1)
+    screen.clear(s)
+    screen.diff(s)
+
+    screen.clear(s)
+    tui_core.screen.draw_ansi_line(s, 0, 0,
+        "A\27]8;;https://example.com\27\\B\27]8;;\27\\C", 4)
+    local ansi = screen.diff(s)
+    local open_seq = ESC .. "]8;;https://example.com" .. ESC .. "\\"
+    local close_seq = ESC .. "]8;;" .. ESC .. "\\"
+    lt.assertEquals(ansi:find(open_seq, 1, true) ~= nil, true,
+        "expected hyperlink open sequence: " .. hex(ansi))
+    lt.assertEquals(ansi:find(close_seq, 1, true) ~= nil, true,
+        "expected hyperlink close sequence: " .. hex(ansi))
+end
+
 function suite:test_screen_size()
     local s = screen.new(30, 10)
     local w, h = screen.size(s)

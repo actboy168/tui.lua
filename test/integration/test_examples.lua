@@ -44,6 +44,17 @@ local function load_frame_after(path, opts, drive_fn)
     return frame
 end
 
+local function has_hyperlink(h, rows, url)
+    for row = 1, rows do
+        for _, cell in ipairs(h:cells(row)) do
+            if cell.hyperlink == url then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- ---------------------------------------------------------------------------
 -- hello.lua
 -- ---------------------------------------------------------------------------
@@ -120,6 +131,39 @@ function suite:test_select_menu_shows_items()
 end
 
 -- ---------------------------------------------------------------------------
+-- hyperlink examples
+-- ---------------------------------------------------------------------------
+
+function suite:test_link_example_initial_render()
+    local frame = load_frame("examples/link.lua", { cols = 70, rows = 12 })
+    lt.assertNotEquals(frame:find("Link 示例", 1, true), nil)
+    lt.assertNotEquals(frame:find("可激活链接", 1, true), nil)
+    lt.assertNotEquals(frame:find("状态: 尚未激活", 1, true), nil)
+end
+
+function suite:test_link_example_enter_updates_status()
+    local frame = load_frame_after("examples/link.lua", { cols = 70, rows = 12 }, function(h)
+        h:press("enter")
+    end)
+    lt.assertNotEquals(frame:find("状态: keyboard -> https://example.com/docs", 1, true), nil)
+end
+
+function suite:test_raw_ansi_example_initial_render()
+    local frame = load_frame("examples/raw_ansi.lua", { cols = 70, rows = 10 })
+    lt.assertNotEquals(frame:find("RawAnsi 示例", 1, true), nil)
+    lt.assertNotEquals(frame:find("raw-docs", 1, true), nil)
+end
+
+function suite:test_raw_ansi_example_exposes_hyperlink_metadata()
+    testing.capture_stderr(function()
+        local App = testing.load_app("examples/raw_ansi.lua")
+        local h   = testing.render(App, { cols = 70, rows = 10 })
+        lt.assertTrue(has_hyperlink(h, 10, "https://example.com/raw"))
+        h:unmount()
+    end)
+end
+
+-- ---------------------------------------------------------------------------
 -- load_app error handling
 -- ---------------------------------------------------------------------------
 
@@ -146,15 +190,15 @@ end
 -- ---------------------------------------------------------------------------
 -- chat.lua — mouse interaction tests
 -- ---------------------------------------------------------------------------
--- The chat example uses <Textarea> which internally adds onClick/onScroll
+-- The chat example uses <Textarea> which internally adds onMouseDown/onScroll
 -- to its wrapper Box. These tests verify the hit-test → dispatch pipeline
 -- works end-to-end: click to focus, click to position cursor, scroll.
 
---- Find the first Box element in the tree with an onClick prop.
+--- Find the first Box element in the tree with an onMouseDown prop.
 local function find_clickable_box(tree)
     local function walk(e)
         if not e then return nil end
-        if e.kind == "box" and e.props and type(e.props.onClick) == "function" then
+        if e.kind == "box" and e.props and type(e.props.onMouseDown) == "function" then
             return e
         end
         for _, c in ipairs(e.children or {}) do
@@ -180,8 +224,25 @@ local function find_scrollable_box(tree)
     return walk(tree)
 end
 
+function suite:test_link_example_mouse_click_updates_status()
+    testing.capture_stderr(function()
+        local App = testing.load_app("examples/link.lua")
+        local h   = testing.render(App, { cols = 70, rows = 12 })
+        local box = find_clickable_box(h:tree())
+        lt.assertNotEquals(box, nil, "should find a clickable Link box")
+        local r = box.rect
+        local cx, cy = h:sgr(r.x, r.y)
+        h:mouse("down", 1, cx, cy)
+        h:rerender()
+        local frame = h:frame()
+        lt.assertNotEquals(frame:find("状态: mouse -> https://example.com/docs", 1, true), nil)
+        lt.assertTrue(has_hyperlink(h, 12, "https://example.com/docs"))
+        h:unmount()
+    end)
+end
+
 function suite:test_chat_tree_has_mouse_props()
-    -- The chat example's Textarea adds onClick/onScroll, so the tree
+    -- The chat example's Textarea adds onMouseDown/onScroll, so the tree
     -- should be detected as needing mouse mode by has_mouse_props.
     testing.capture_stderr(function()
         local App  = testing.load_app("examples/chat.lua")

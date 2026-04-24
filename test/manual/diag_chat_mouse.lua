@@ -132,14 +132,14 @@ local function App()
             " y=" .. tostring(ev.y))
     end)
 
-    -- 带 onClick 的 Box，测试 hit_test 路径
+    -- 带 onMouseDown 的 Box，测试 hit_test 路径
     return tui.Box {
         width = 30, height = 6,
         borderStyle = "round",
         color = "green",
-        onClick = function(ev)
+        onMouseDown = function(ev)
             test_result.click_count = test_result.click_count + 1
-            dbg("onClick! count=" .. test_result.click_count ..
+            dbg("onMouseDown! count=" .. test_result.click_count ..
                 " x=" .. ev.col .. " y=" .. ev.row ..
                 " localCol=" .. ev.localCol .. " localRow=" .. ev.localRow)
             setCount(count + 1)
@@ -168,9 +168,9 @@ local function test_framework_mouse()
     end
 
     if test_result.click_count > 0 then
-        dbg("RESULT: hit_test onClick OK")
+        dbg("RESULT: hit_test onMouseDown OK")
     else
-        dbg("RESULT: hit_test onClick FAILED (no clicks reached onClick handler)")
+        dbg("RESULT: hit_test onMouseDown FAILED (no clicks reached onMouseDown handler)")
     end
 end
 

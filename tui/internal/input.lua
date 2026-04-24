@@ -261,7 +261,7 @@ local function _process_event(ev)
     end
     -- ── Mouse events ──────────────────────────────────────────────────────
     if ev.name == "mouse" then
-        -- Hit-test dispatch: framework-level hit testing (onClick, onScroll, etc.)
+        -- Hit-test dispatch: framework-level hit testing (onMouseDown, onScroll, etc.)
         -- takes priority over useMouse subscribers. If a handler consumes the
         -- event, it is not forwarded to the mouse bus.
         if _hit_test_handler then

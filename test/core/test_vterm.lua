@@ -580,6 +580,17 @@ function suite:test_clipboard_log_osc52()
     lt.assertEquals(type(log), "table")
 end
 
+function suite:test_osc8_hyperlink_updates_cell_metadata()
+    local vt, term = make_term(10, 3)
+    write(term, "\x1b]8;;https://example.com\x1b\\X\x1b]8;;\x1b\\Y")
+    local c1 = vterm.cell(vt, 1, 1)
+    local c2 = vterm.cell(vt, 2, 1)
+    lt.assertEquals(c1.char, "X")
+    lt.assertEquals(c1.hyperlink, "https://example.com")
+    lt.assertEquals(c2.char, "Y")
+    lt.assertEquals(c2.hyperlink, nil)
+end
+
 -- ---------------------------------------------------------------------------
 -- Resize
 

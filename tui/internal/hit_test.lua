@@ -3,11 +3,11 @@
 -- After each layout pass, the framework stores the rendered element tree
 -- (with absolute screen rects) via set_tree().  When a mouse event arrives,
 -- hit_test() finds the deepest element whose rect contains the (col, row),
--- and dispatch_click() bubbles the event up through ancestors looking for
--- an onClick handler.
+-- and dispatch_mouse_down() bubbles the event up through ancestors looking for
+-- an onMouseDown handler.
 --
 -- This mirrors Ink's hit-test + dispatch architecture:
---   * Box supports onClick / onScroll props
+--   * Box supports onMouseDown / onScroll props
 --   * Text does NOT support mouse event props (clicks on text bubble to
 --     the nearest ancestor Box with a handler)
 --   * hit_test walks children in reverse order (later siblings overlay
@@ -86,20 +86,20 @@ end
 ---@return table|nil path array from root to deepest hit element, or nil
 M.hit_test = do_hit_test
 
---- dispatch_click(col, row) -> consumed: bool
--- Hit-test and bubble a click event.  Walks the hit path from leaf to
--- root; the first element with an onClick prop handles the event.
+--- dispatch_mouse_down(col, row) -> consumed: bool
+-- Hit-test and bubble a left-button mouse-down event. Walks the hit path
+-- from leaf to root; the first element with an onMouseDown prop handles it.
 -- The handler receives { col, row, localCol, localRow, target } where
 -- localCol/localRow are 0-based offsets relative to the handler element.
-function M.dispatch_click(col, row)
+function M.dispatch_mouse_down(col, row)
     local path = do_hit_test(col, row)
     if not path then return false end
     local leaf = path[#path]
     for i = #path, 1, -1 do
         local e = path[i]
-        if e.props and type(e.props.onClick) == "function" then
+        if e.props and type(e.props.onMouseDown) == "function" then
             local r = e.rect or { x = 0, y = 0 }
-            e.props.onClick({
+            e.props.onMouseDown({
                 col      = col,
                 row      = row,
                 localCol = (col - 1) - r.x,
@@ -140,7 +140,7 @@ end
 --- has_mouse_props(tree) -> bool
 -- Scan the tree for any element with mouse-related props.
 -- Used to auto-enable terminal mouse mode.
-local _MOUSE_PROPS = { onClick = true, onScroll = true }
+local _MOUSE_PROPS = { onMouseDown = true, onScroll = true }
 
 local function has_mouse_props(tree)
     if not tree then return false end

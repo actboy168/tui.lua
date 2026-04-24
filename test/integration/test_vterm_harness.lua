@@ -99,7 +99,7 @@ end
 function suite:test_mouse_mode_auto_enable_with_onclick()
     local function App()
         return tui.Box {
-            onClick = function() end,
+            onMouseDown = function() end,
             tui.Text { "click me" },
         }
     end
@@ -442,12 +442,12 @@ function suite:test_mouse_level_3_any_motion()
 end
 
 function suite:test_mouse_auto_enable_disable_lifecycle()
-    -- onClick component causes auto mouse enable; removing it disables
+    -- onMouseDown component causes auto mouse enable; removing it disables
     local show_click = { value = true }
     local function App()
         if show_click.value then
             return tui.Box {
-                onClick = function() end,
+                onMouseDown = function() end,
                 tui.Text { "clickable" },
             }
         end
@@ -455,17 +455,17 @@ function suite:test_mouse_auto_enable_disable_lifecycle()
     end
     local h = testing.render(App, { cols = 20, rows = 5, interactive = true })
     local vt = h:vterm()
-    -- Auto-enable: onClick present → mouse level > 0
+    -- Auto-enable: onMouseDown present → mouse level > 0
     lt.assertEquals(vterm.mouse_level(vt) > 0, true,
-        "mouse should be auto-enabled with onClick")
+        "mouse should be auto-enabled with onMouseDown")
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1000h"), true,
         "click tracking sequence should be emitted")
-    -- Remove onClick by toggling the condition
+    -- Remove onMouseDown by toggling the condition
     show_click.value = false
     h:rerender()
-    -- After rerender without onClick, mouse should be disabled
+    -- After rerender without onMouseDown, mouse should be disabled
     lt.assertEquals(vterm.mouse_level(vt), 0,
-        "mouse should be auto-disabled when onClick is removed")
+        "mouse should be auto-disabled when onMouseDown is removed")
     lt.assertEquals(vterm.has_sequence(vt, "\x1b[?1000l"), true,
         "click tracking disable sequence should be emitted")
     h:unmount()

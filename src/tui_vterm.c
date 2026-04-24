@@ -35,8 +35,10 @@ typedef struct {
     cell_t *cells;
     slab_t cell_slab;
     style_pool_t pool;
+    hyperlink_pool_t links;
     style_entry_t current_style;
     uint16_t write_style_id;
+    uint16_t current_hyperlink_id;
     struct {
         int col, row, visible;
         style_entry_t style;
@@ -152,6 +154,7 @@ vt_put_cell(vterm_t *vt, int col, int row, const uint8_t *bytes, int len, int wi
     }
     c->width = (uint8_t)width;
     c->style_id = vt->write_style_id;
+    c->hyperlink_id = vt->current_hyperlink_id;
 }
 
 static void
@@ -173,6 +176,7 @@ vt_write_char(vterm_t *vt, const uint8_t *bytes, int len) {
         tail->len = 0;
         tail->width = 0;
         tail->style_id = vt->write_style_id;
+        tail->hyperlink_id = vt->current_hyperlink_id;
     }
     vt->cursor_col += w;
     if (vt->cursor_col > vt->cols) {
@@ -224,8 +228,10 @@ vt_reset(vterm_t *vt) {
     vt->mode.synchronized_output = 0;
     free(vt->title);
     vt->title = NULL;
+    vt->current_hyperlink_id = 0;
     slab_reset(&vt->cell_slab);
     pool_free(&vt->pool);
+    hyperlink_pool_free(&vt->links);
     vt_fill_screen(vt);
 }
 
@@ -701,6 +707,23 @@ execute_osc(vterm_t *vt) {
                 memcpy(vt->title, s + sep + 1, plen);
                 vt->title[plen] = '\0';
             }
+        } else if (osc_num == 8) {
+            const uint8_t *rest = s + sep + 1;
+            int rest_len = len - sep - 1;
+            int sep2 = -1;
+            for (int i = 0; i < rest_len; i++) {
+                if (rest[i] == ';') { sep2 = i; break; }
+            }
+            if (sep2 >= 0) {
+                const char *uri = (const char *)(rest + sep2 + 1);
+                int uri_len = rest_len - sep2 - 1;
+                if (uri_len <= 0) {
+                    vt->current_hyperlink_id = 0;
+                } else {
+                    uint16_t id = hyperlink_intern(&vt->links, uri, (uint32_t)uri_len);
+                    if (id != 0) vt->current_hyperlink_id = id;
+                }
+            }
         } else if (osc_num == 52) {
             /* clipboard - push to Lua table */
         }
@@ -1007,12 +1030,16 @@ l_cell(lua_State *L) {
     const uint8_t *bytes;
     uint32_t blen;
     cell_bytes(c, &vt->cell_slab, &bytes, &blen);
-    lua_createtable(L, 0, 2);
+    lua_createtable(L, 0, 3);
     lua_pushlstring(L, (const char *)bytes, blen);
     lua_setfield(L, -2, "char");
     const style_entry_t *se = pool_get(&vt->pool, c->style_id);
     push_attrs(L, se);
     lua_setfield(L, -2, "attrs");
+    const hyperlink_entry_t *he = hyperlink_get(&vt->links, c->hyperlink_id);
+    if (he) lua_pushlstring(L, he->uri, he->len);
+    else    lua_pushnil(L);
+    lua_setfield(L, -2, "hyperlink");
     return 1;
 }
 
@@ -1290,6 +1317,7 @@ l_gc(lua_State *L) {
     free(vt->cells);
     slab_free(&vt->cell_slab);
     pool_free(&vt->pool);
+    hyperlink_pool_free(&vt->links);
     free(vt->title);
     return 0;
 }

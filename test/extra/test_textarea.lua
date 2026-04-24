@@ -1116,7 +1116,7 @@ end
 local function find_clickable_box(tree)
     local function walk(e)
         if not e then return nil end
-        if e.kind == "box" and e.props and type(e.props.onClick) == "function" then
+        if e.kind == "box" and e.props and type(e.props.onMouseDown) == "function" then
             return e
         end
         for _, c in ipairs(e.children or {}) do

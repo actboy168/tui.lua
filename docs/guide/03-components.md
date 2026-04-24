@@ -10,6 +10,7 @@ tui.lua 提供两类组件：核心组件和高级控件。
 |------|------|
 | `tui.Box` | 布局容器（Flexbox） |
 | `tui.Text` | 文本显示（样式、截断、换行） |
+| `tui.RawAnsi` | 预渲染 ANSI 行片段（支持 SGR / OSC 8） |
 | `tui.ErrorBoundary` | 错误边界（捕获子树渲染错误） |
 
 核心组件的完整属性签名参见 [核心 API - 组件](../api/core.md#组件)。
@@ -57,6 +58,19 @@ tui.ErrorBoundary {
 }
 ```
 
+### RawAnsi
+
+```lua
+tui.RawAnsi {
+    lines = {
+        "\27[32mOK:\27[0m \27]8;;https://example.com/raw\27\\raw-docs\27]8;;\27\\",
+    },
+    width = 12,
+}
+```
+
+`RawAnsi` 适合承载外部已经生成好的 ANSI 输出。它保留 SGR 样式和 OSC 8 超链接，但要求调用方提前拆好行，不负责 wrap。完整示例见 [`examples/raw_ansi.lua`](../../examples/raw_ansi.lua)。
+
 ## 高级控件
 
 高级控件位于 `tui/extra/`，需要显式加载：
@@ -70,6 +84,7 @@ extra.TextInput { ... }
 |------|------|
 | `extra.TextInput` | 单行文本输入 |
 | `extra.Textarea` | 多行文本编辑器 |
+| `extra.Link` | 高层超链接组件（`href` + 可选 `onClick`） |
 | `extra.Select` | 选项列表 |
 | `extra.Spinner` | 加载动画 |
 | `extra.ProgressBar` | 进度条 |
@@ -77,7 +92,7 @@ extra.TextInput { ... }
 | `extra.Newline` | 换行 |
 | `extra.Spacer` | 弹性空间 |
 
-高级控件的完整属性、示例和键盘操作参见 [高级控件](../api/extra.md)。
+高级控件的完整属性、示例和键盘操作参见 [高级控件](../api/extra.md)。如果你只需要普通可交互超链接，优先用 `extra.Link`；如果你要承载外部预渲染 ANSI/OSC 8 输出，使用 `tui.RawAnsi`。`extra.Link` 示例见 [`examples/link.lua`](../../examples/link.lua)。
 
 ## 自定义组件
 

@@ -107,6 +107,27 @@ function suite:test_bold_and_background_sgr()
     h:unmount()
 end
 
+function suite:test_osc8_hyperlink_is_recorded_in_cells()
+    local function App()
+        return tui.Box {
+            width = 2,
+            height = 1,
+            tui.RawAnsi {
+                lines = { "\27]8;;https://example.com\27\\X\27]8;;\27\\Y" },
+                width = 2,
+            },
+        }
+    end
+
+    local h = testing.render(App, { cols = 2, rows = 1 })
+    local cells = h:cells(1)
+    lt.assertEquals(cells[1].char, "X")
+    lt.assertEquals(cells[1].hyperlink, "https://example.com")
+    lt.assertEquals(cells[2].char, "Y")
+    lt.assertEquals(cells[2].hyperlink, nil)
+    h:unmount()
+end
+
 function suite:test_unsupported_ansi_control_sequence_errors()
     local function App()
         return tui.Box {
@@ -122,4 +143,21 @@ function suite:test_unsupported_ansi_control_sequence_errors()
     local ok, err = pcall(testing.render, App, { cols = 2, rows = 1 })
     lt.assertEquals(ok, false)
     lt.assertNotEquals(tostring(err):find("unsupported ANSI control sequence", 1, true), nil)
+end
+
+function suite:test_unsupported_osc_sequence_errors()
+    local function App()
+        return tui.Box {
+            width = 1,
+            height = 1,
+            tui.RawAnsi {
+                lines = { "\27]2;title\7X" },
+                width = 1,
+            },
+        }
+    end
+
+    local ok, err = pcall(testing.render, App, { cols = 1, rows = 1 })
+    lt.assertEquals(ok, false)
+    lt.assertNotEquals(tostring(err):find("unsupported OSC sequence", 1, true), nil)
 end

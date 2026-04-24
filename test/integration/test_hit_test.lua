@@ -21,7 +21,7 @@ function suite:test_harness_click_on_full_height_content()
             flexDirection = "column",
             height = 4,
             tui.Box {
-                onClick = function() clicked = true end,
+                onMouseDown = function() clicked = true end,
                 tui.Text { "Click" },
             },
         }
@@ -40,7 +40,7 @@ function suite:test_harness_click_with_short_content()
     local clicked = false
     local App = function()
         return tui.Box {
-            onClick = function() clicked = true end,
+            onMouseDown = function() clicked = true end,
             tui.Text { "Hi" },
         }
     end
@@ -104,7 +104,7 @@ function suite:test_row_offset_shifts_hit_target()
     -- Content row 0 is at terminal row 15 (1-based).
     local App = function()
         return tui.Box {
-            onClick = function() end,
+            onMouseDown = function() end,
             tui.Text { "Content" },
         }
     end
@@ -170,14 +170,14 @@ function suite:test_overflow_hit_test_hits_bottom_element()
             return tui.Box {
                 height = 8,
                 flexDirection = "column",
-                tui.Box { key = "1", height = 1, onClick = function() clicked_line = 1 end, tui.Text { "Line 1" } },
-                tui.Box { key = "2", height = 1, onClick = function() clicked_line = 2 end, tui.Text { "Line 2" } },
-                tui.Box { key = "3", height = 1, onClick = function() clicked_line = 3 end, tui.Text { "Line 3" } },
-                tui.Box { key = "4", height = 1, onClick = function() clicked_line = 4 end, tui.Text { "Line 4" } },
-                tui.Box { key = "5", height = 1, onClick = function() clicked_line = 5 end, tui.Text { "Line 5" } },
-                tui.Box { key = "6", height = 1, onClick = function() clicked_line = 6 end, tui.Text { "Line 6" } },
-                tui.Box { key = "7", height = 1, onClick = function() clicked_line = 7 end, tui.Text { "Line 7" } },
-                tui.Box { key = "8", height = 1, onClick = function() clicked_line = 8 end, tui.Text { "Line 8" } },
+                tui.Box { key = "1", height = 1, onMouseDown = function() clicked_line = 1 end, tui.Text { "Line 1" } },
+                tui.Box { key = "2", height = 1, onMouseDown = function() clicked_line = 2 end, tui.Text { "Line 2" } },
+                tui.Box { key = "3", height = 1, onMouseDown = function() clicked_line = 3 end, tui.Text { "Line 3" } },
+                tui.Box { key = "4", height = 1, onMouseDown = function() clicked_line = 4 end, tui.Text { "Line 4" } },
+                tui.Box { key = "5", height = 1, onMouseDown = function() clicked_line = 5 end, tui.Text { "Line 5" } },
+                tui.Box { key = "6", height = 1, onMouseDown = function() clicked_line = 6 end, tui.Text { "Line 6" } },
+                tui.Box { key = "7", height = 1, onMouseDown = function() clicked_line = 7 end, tui.Text { "Line 7" } },
+                tui.Box { key = "8", height = 1, onMouseDown = function() clicked_line = 8 end, tui.Text { "Line 8" } },
             }
         end
         -- 5-row terminal, 8-row content: y_off = 3, visible rows are content 3-7.

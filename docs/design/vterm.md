@@ -349,7 +349,7 @@ local vt = h:vterm()
 vterm.has_sequence(vt, "\x1b[?2026h")  -- true
 vterm.has_sequence(vt, "\x1b[?2026l")  -- true
 -- 验证鼠标模式
-vterm.mouse_level(vt) > 0              -- true（当 tree 有 onClick）
+vterm.mouse_level(vt) > 0              -- true（当 tree 有 onMouseDown）
 ```
 
 ### 7.3 ansi.interactive() 注入
@@ -378,7 +378,7 @@ vterm.mouse_level(vt) > 0              -- true（当 tree 有 onClick）
 function suite:test_mouse_mode_with_onclick()
     local function App()
         return tui.Box {
-            onClick = function() end,
+            onMouseDown = function() end,
             tui.Text { "click me" }
         }
     end
