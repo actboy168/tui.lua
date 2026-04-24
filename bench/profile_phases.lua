@@ -3,7 +3,7 @@
 
 local layout     = require "tui.internal.layout"
 local renderer   = require "tui.internal.renderer"
-local screen_mod = require "tui.internal.screen"
+local tui_core   = require "tui.core"
 local reconciler = require "tui.internal.reconciler"
 local tui        = require "tui"
 local time       = require "bee.time"
@@ -14,7 +14,7 @@ end
 
 local state  = reconciler.new()
 local ah     = {}
-local screen = screen_mod.new(40, 24)
+local screen = tui_core.screen.new(40, 24)
 
 local function one_frame()
     local t = reconciler.render(state, App, ah)
@@ -25,9 +25,9 @@ local function one_frame()
         t.props.height = t.props.height or 24
     end
     layout.compute(t)
-    screen_mod.clear(screen)
+    tui_core.screen.clear(screen)
     renderer.paint(t, screen)
-    screen_mod.diff(screen)
+    tui_core.screen.diff(screen)
 end
 
 -- warm up
@@ -55,7 +55,7 @@ for i = 1, N do
     t_layout = t_layout + (time.monotonic() - t0)
 
     t0 = time.monotonic()
-    screen_mod.clear(screen)
+    tui_core.screen.clear(screen)
     t_clear = t_clear + (time.monotonic() - t0)
 
     t0 = time.monotonic()
@@ -63,7 +63,7 @@ for i = 1, N do
     t_render = t_render + (time.monotonic() - t0)
 
     t0 = time.monotonic()
-    screen_mod.diff(screen)
+    tui_core.screen.diff(screen)
     t_diff = t_diff + (time.monotonic() - t0)
 end
 

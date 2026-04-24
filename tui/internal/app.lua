@@ -6,7 +6,6 @@
 
 local tui_core     = require "tui.core"
 local terminal     = tui_core.terminal
-local screen_mod   = require "tui.internal.screen"
 local scheduler    = require "tui.internal.scheduler"
 local terminal_mod = require "tui.internal.terminal"
 local app_base     = require "tui.internal.app_base"
@@ -31,7 +30,7 @@ function M.render(root, opts)
     local use_kkp = opts.kitty_keyboard ~= nil and opts.kitty_keyboard or caps.kitty_keyboard
 
     local w, h = terminal.get_size()
-    local screen_state = screen_mod.new(w, h)
+    local screen_state = tui_core.screen.new(w, h)
 
     local level = caps.color_level
     if opts.colorLevel == "16" then level = 0

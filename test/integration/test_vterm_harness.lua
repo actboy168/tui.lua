@@ -4,6 +4,7 @@ local tui     = require "tui"
 local testing = require "tui.testing.harness"
 local vterm   = require "tui.testing.vterm"
 local input_helpers = require "tui.testing.input"
+local tui_core = require "tui.core"
 
 local suite = lt.test "vterm_harness"
 
@@ -513,7 +514,7 @@ end
 function suite:test_error_fallback_banner_renders_to_screen()
     -- Verify the fallback banner tree actually renders visible content
     local reconciler_mod = require "tui.internal.reconciler"
-    local screen_mod = require "tui.internal.screen"
+    local screen_mod = tui_core.screen
     local layout_mod = require "tui.internal.layout"
 
     local function BuggyApp()

@@ -5,7 +5,8 @@ local lt       = require "ltest"
 local tui      = require "tui"
 local layout   = require "tui.internal.layout"
 local renderer = require "tui.internal.renderer"
-local screen   = require "tui.internal.screen"
+local tui_core = require "tui.core"
+local screen   = tui_core.screen
 
 local suite = lt.test "text_wrap"
 

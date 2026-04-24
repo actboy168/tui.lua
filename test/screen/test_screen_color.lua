@@ -12,7 +12,6 @@
 --   • style_id=0 default (no SGR prefix)
 
 local lt       = require "ltest"
-local screen   = require "tui.internal.screen"
 local sgr      = require "tui.internal.sgr"
 local tui_core = require "tui.core"
 local screen_c = tui_core.screen
@@ -28,19 +27,19 @@ end
 -- Helper: new screen already past first frame (so diffs are incremental),
 -- with truecolor enabled by default.
 local function make_screen(w, h, level)
-    local s = screen.new(w or 4, h or 1)
+    local s = screen_c.new(w or 4, h or 1)
     screen_c.set_color_level(s, level or 2)
-    screen.clear(s)
-    screen.diff(s)  -- commit blank first frame
+    screen_c.clear(s)
+    screen_c.diff(s)  -- commit blank first frame
     return s
 end
 
 -- Helper: put one char with a style, run diff, return ANSI output.
 local function diff_one(s, props)
-    screen.clear(s)
+    screen_c.clear(s)
     local style_id = sgr.pack_style(s, props)
     screen_c.put(s, 0, 0, "X", 1, style_id)
-    return screen.diff(s)
+    return screen_c.diff(s)
 end
 
 -- ---------------------------------------------------------------------------
@@ -151,45 +150,45 @@ end
 -- cells() return value format
 
 function suite:test_cells_default_is_nil()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     screen_c.set_color_level(s, 2)
-    screen.clear(s)
+    screen_c.clear(s)
     screen_c.put(s, 0, 0, "X", 1, 0)  -- style_id=0 = default
-    screen.diff(s)
+    screen_c.diff(s)
     local c = screen_c.cells(s, 1)[1]
     lt.assertEquals(c.fg, nil)
     lt.assertEquals(c.bg, nil)
 end
 
 function suite:test_cells_16color_returns_integer()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     screen_c.set_color_level(s, 2)
-    screen.clear(s)
+    screen_c.clear(s)
     local id = sgr.pack_style(s, { color = "cyan" })  -- index 6
     screen_c.put(s, 0, 0, "X", 1, id)
-    screen.diff(s)
+    screen_c.diff(s)
     local c = screen_c.cells(s, 1)[1]
     lt.assertEquals(c.fg, 6)
 end
 
 function suite:test_cells_256color_returns_integer()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     screen_c.set_color_level(s, 2)
-    screen.clear(s)
+    screen_c.clear(s)
     local id = sgr.pack_style(s, { color = 200 })
     screen_c.put(s, 0, 0, "X", 1, id)
-    screen.diff(s)
+    screen_c.diff(s)
     local c = screen_c.cells(s, 1)[1]
     lt.assertEquals(c.fg, 200)
 end
 
 function suite:test_cells_truecolor_returns_hex_string()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     screen_c.set_color_level(s, 2)
-    screen.clear(s)
+    screen_c.clear(s)
     local id = sgr.pack_style(s, { color = "#AABBCC" })
     screen_c.put(s, 0, 0, "X", 1, id)
-    screen.diff(s)
+    screen_c.diff(s)
     local c = screen_c.cells(s, 1)[1]
     lt.assertEquals(type(c.fg), "string")
     lt.assertEquals(c.fg:lower(), "#aabbcc")
@@ -199,7 +198,7 @@ end
 -- Style pool: same props → same style_id
 
 function suite:test_same_props_same_id()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     screen_c.set_color_level(s, 2)
     local id1 = sgr.pack_style(s, { color = "red", bold = true })
     local id2 = sgr.pack_style(s, { color = "red", bold = true })
@@ -207,7 +206,7 @@ function suite:test_same_props_same_id()
 end
 
 function suite:test_diff_props_diff_id()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     screen_c.set_color_level(s, 2)
     local id1 = sgr.pack_style(s, { color = "red" })
     local id2 = sgr.pack_style(s, { color = "blue" })
@@ -219,9 +218,9 @@ end
 
 function suite:test_default_style_no_sgr()
     local s = make_screen()
-    screen.clear(s)
+    screen_c.clear(s)
     screen_c.put(s, 0, 0, "A", 1, 0)
-    local ansi = screen.diff(s)
+    local ansi = screen_c.diff(s)
     -- No color/attribute codes should appear (only cursor positioning + char)
     lt.assertEquals(ansi:find(ESC .. "[3", 1, true), nil,
         "default style must not emit fg SGR: " .. hex(ansi))
@@ -237,14 +236,14 @@ end
 function suite:test_truecolor_idempotent()
     local s = make_screen(4, 1, 2)
     local id = sgr.pack_style(s, { color = "#123456" })
-    screen.clear(s)
+    screen_c.clear(s)
     screen_c.put(s, 0, 0, "X", 1, id)
-    screen.diff(s)
+    screen_c.diff(s)
 
     -- Identical second frame
-    screen.clear(s)
+    screen_c.clear(s)
     screen_c.put(s, 0, 0, "X", 1, id)
-    local ansi = screen.diff(s)
+    local ansi = screen_c.diff(s)
     lt.assertEquals(#ansi, 0,
         "identical truecolor frame should produce empty diff: " .. hex(ansi))
 end
@@ -252,13 +251,13 @@ end
 function suite:test_256color_idempotent()
     local s = make_screen(4, 1, 1)
     local id = sgr.pack_style(s, { color = 150 })
-    screen.clear(s)
+    screen_c.clear(s)
     screen_c.put(s, 0, 0, "X", 1, id)
-    screen.diff(s)
+    screen_c.diff(s)
 
-    screen.clear(s)
+    screen_c.clear(s)
     screen_c.put(s, 0, 0, "X", 1, id)
-    local ansi = screen.diff(s)
+    local ansi = screen_c.diff(s)
     lt.assertEquals(#ansi, 0,
         "identical 256-color frame should produce empty diff: " .. hex(ansi))
 end

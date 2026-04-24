@@ -8,7 +8,7 @@ local scheduler  = require "tui.internal.scheduler"
 local hit_test   = require "tui.internal.hit_test"
 local ansi       = require "tui.internal.ansi"
 local clipboard  = require "tui.internal.clipboard"
-local screen_mod = require "tui.internal.screen"
+local tui_core   = require "tui.core"
 local element    = require "tui.internal.element"
 local layout     = require "tui.internal.layout"
 local renderer   = require "tui.internal.renderer"
@@ -248,7 +248,7 @@ function M.mount(terminal, screen_state, opts)
     setup_interactive(terminal, interactive, use_kkp)
 
     if interactive then
-        screen_mod.set_mode(screen_state, "main")
+        tui_core.screen.set_mode(screen_state, "main")
     end
 
     local w, h = terminal.get_size()
@@ -288,13 +288,13 @@ function M.mount(terminal, screen_state, opts)
 
     local function check_resize()
         local w, h = terminal.get_size()
-        local cw, ch = screen_mod.size(screen_state)
+        local cw, ch = tui_core.screen.size(screen_state)
         local resized = (cw ~= w or ch ~= h)
         if resized then
-            screen_mod.resize(screen_state, w, h)
+            tui_core.screen.resize(screen_state, w, h)
         end
         if resize_mod.observe(w, h) then
-            screen_mod.invalidate(screen_state)
+            tui_core.screen.invalidate(screen_state)
         end
         return w, h, resized
     end
@@ -323,18 +323,18 @@ function M.mount(terminal, screen_state, opts)
             -- crow-1 is absolute content row; visible range is [y_off, y_off+content_h-1].
             local br = (crow - 1) - y_off
             if interactive and br >= 0 and br < content_h then
-                local cx, cy = screen_mod.cursor_pos(screen_state)
+                local cx, cy = tui_core.screen.cursor_pos(screen_state)
                 local dx = (ccol - 1) - cx
                 local dy = br - cy
                 cursor_seq = ansi.cursorShow .. ansi.cursorMove(dx, dy)
-                screen_mod.set_display_cursor(screen_state, ccol - 1, br)
+                tui_core.screen.set_display_cursor(screen_state, ccol - 1, br)
                 buf_row = br
             elseif not interactive then
                 cursor_seq = ansi.cursorShow .. ansi.cursorPosition(ccol, crow, inst._capabilities)
             end
         elseif interactive then
             cursor_seq = ansi.cursorHide
-            screen_mod.set_display_cursor(screen_state, -1, -1)
+            tui_core.screen.set_display_cursor(screen_state, -1, -1)
         end
         return cursor_seq, ccol, crow, buf_row
     end
@@ -392,9 +392,9 @@ function M.mount(terminal, screen_state, opts)
         -- clear + paint + diff
         -- y_off shifts rendering up so the visible bottom content_h rows land
         -- in the screen buffer (indices 0..content_h-1).
-        screen_mod.clear(screen_state)
+        tui_core.screen.clear(screen_state)
         renderer.paint(tree, screen_state, y_off)
-        local diff = screen_mod.diff(screen_state, interactive and resized,
+        local diff = tui_core.screen.diff(screen_state, interactive and resized,
                                      interactive and content_h or nil)
 
         local cursor_seq, ccol, crow, buf_row = build_cursor(tree, content_h, y_off)

@@ -2,7 +2,6 @@
 
 local lt       = require "ltest"
 local sgr      = require "tui.internal.sgr"
-local screen   = require "tui.internal.screen"
 local tui_core = require "tui.core"
 local screen_c = tui_core.screen
 
@@ -11,11 +10,11 @@ local suite = lt.test "sgr"
 -- Helper: make a small screen and read back the first cell's color info.
 -- Returns the cells() table for column 1 of row 1 after painting one cell.
 local function cell_style(props)
-    local s = screen.new(4, 1)
-    screen.clear(s)
+    local s = screen_c.new(4, 1)
+    screen_c.clear(s)
     local style_id = sgr.pack_style(s, props)
     screen_c.put(s, 0, 0, "X", 1, style_id)
-    screen.diff(s)
+    screen_c.diff(s)
     local cells = screen_c.cells(s, 1)
     return cells and cells[1]
 end
@@ -91,12 +90,12 @@ end
 -- pack_style: no props / nil → style_id = 0
 
 function suite:test_pack_style_nil()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     lt.assertEquals(sgr.pack_style(s, nil), 0)
 end
 
 function suite:test_pack_style_no_styling()
-    local s = screen.new(4, 1)
+    local s = screen_c.new(4, 1)
     lt.assertEquals(sgr.pack_style(s, {}), 0)
 end
 
@@ -165,42 +164,42 @@ end
 
 function suite:test_pack_style_float_int()
     lt.assertError(function()
-        local s = screen.new(4, 1)
+        local s = screen_c.new(4, 1)
         sgr.pack_style(s, { color = 3.5 })
     end)
 end
 
 function suite:test_pack_style_negative_int()
     lt.assertError(function()
-        local s = screen.new(4, 1)
+        local s = screen_c.new(4, 1)
         sgr.pack_style(s, { color = -1 })
     end)
 end
 
 function suite:test_pack_style_int_out_of_range()
     lt.assertError(function()
-        local s = screen.new(4, 1)
+        local s = screen_c.new(4, 1)
         sgr.pack_style(s, { color = 256 })
     end)
 end
 
 function suite:test_pack_style_unknown_color_name()
     lt.assertError(function()
-        local s = screen.new(4, 1)
+        local s = screen_c.new(4, 1)
         sgr.pack_style(s, { color = "chartreuse" })
     end)
 end
 
 function suite:test_pack_style_bad_color_type()
     lt.assertError(function()
-        local s = screen.new(4, 1)
+        local s = screen_c.new(4, 1)
         sgr.pack_style(s, { color = {} })
     end)
 end
 
 function suite:test_pack_style_bad_bg_type()
     lt.assertError(function()
-        local s = screen.new(4, 1)
+        local s = screen_c.new(4, 1)
         sgr.pack_style(s, { backgroundColor = true })
     end)
 end

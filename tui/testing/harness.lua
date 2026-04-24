@@ -1,5 +1,4 @@
 local layout        = require "tui.internal.layout"
-local screen_mod    = require "tui.internal.screen"
 local hooks         = require "tui.hook.core"
 local app_base      = require "tui.internal.app_base"
 local input_mod     = require "tui.internal.input"
@@ -25,15 +24,15 @@ function Harness:height() return app_base.height(self) end
 function Harness:size()   return app_base.size(self) end
 function Harness:screen() return app_base.screen(self) end
 function Harness:rows()
-    return screen_mod.rows(self._screen)
+    return tui_core.screen.rows(self._screen)
 end
 function Harness:row(n)
-    local rows = screen_mod.rows(self._screen)
+    local rows = tui_core.screen.rows(self._screen)
     return rows[n]
 end
 --- Return the rendered frame as an LF-joined string.
 function Harness:frame()
-    return table.concat(screen_mod.rows(self._screen), "\n")
+    return table.concat(tui_core.screen.rows(self._screen), "\n")
 end
 function Harness:tree()
     return self._tree
@@ -60,7 +59,7 @@ function Harness:sgr(x, y)
 end
 
 function Harness:cells(row)
-    return screen_mod.cells(self._screen, row)
+    return tui_core.screen.cells(self._screen, row)
 end
 
 function Harness:render_count()
@@ -217,7 +216,7 @@ function M.render(App, opts)
     })
 
     -- Create screen
-    local screen_state = screen_mod.new(W, H)
+    local screen_state = tui_core.screen.new(W, H)
     tui_core.screen.set_color_level(screen_state, caps.color_level)
 
     -- Mount shared instance (inside pcall for error recovery)

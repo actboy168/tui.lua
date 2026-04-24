@@ -4,8 +4,8 @@
 -- input bloating the slab. 100-byte ZWJ sequences still render in one cell.
 
 local lt       = require "ltest"
-local screen   = require "tui.internal.screen"
 local tui_core = require "tui.core"
+local screen   = tui_core.screen
 
 local suite = lt.test "screen_cluster_bounds"
 
