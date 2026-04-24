@@ -63,6 +63,14 @@
 
 **Spinner 无 `isActive` prop — 用条件渲染控制生命周期。** 对齐 Ink ink-spinner。`isActive` 只是重复 mount/unmount；React-style 的地道写法就是 `isLoading and Spinner{} or nil`。给组件加 prop 会让用户误以为"停止但保留"有意义。Hook 层的 `useAnimation` 仍保留 `isActive`，因为 hook 粒度用户可能想在 render 内动态暂停而不拆解树形。其它外层组件（ProgressBar、Select 的 loading 态等）同理：能用条件渲染表达的就不加 prop flag。
 
+## useEffect vs useLayoutEffect
+
+**useLayoutEffect 在绘制前同步执行，useEffect 在绘制后异步执行。** TUI 中没有浏览器 DOM 的"闪烁"问题，但同步修正状态仍然重要：TextInput/Textarea 的 caret/selection clamping、Textarea 的 scroll_top 同步、Select 的 highlight clamping 都需要在返回 tree 前完成，否则会导致一帧延迟。
+
+**两者共享同一 slot 结构（`kind = "effect"` / `"layout_effect"`），但使用不同 pending 队列。** `_flush_layout_effects` 在 reconciler stabilization 后、返回 tree 前执行；`_flush_effects` 在同一位置之后执行。这样 layout effects 和普通 effects 在同一组件上保持正确顺序（layout 先）。
+
+**useLayoutEffect 中的 setState 仍然延迟到下一帧。** 虽然 effect 是同步执行的，但 stabilization 循环已经结束，所以 `setState` 触发的 dirty 不会在同一次 `render()` 中消费。这和 React 行为一致：layout effect 可以读取最新布局，但状态更新仍进入下一次调度。
+
 ## Harness 测试框架
 
 **泄漏 harness 自动恢复而非硬报错。** `hijack_terminal` 发现 HIJACKED=true 时选择 `restore_terminal()` + 发 `[tui:test]` 警告。硬报错会让 ltest 报告里"第一个真正失败的测试"被淹没在后续 N 个 "another harness is already active" 里。但也不能无声恢复 — 那会掩盖"忘记 :unmount()"的真 bug。未来若改成"多 harness 并存"，此块整段删除，而不是放宽。

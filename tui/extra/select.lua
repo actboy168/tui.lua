@@ -116,7 +116,7 @@ local function SelectImpl(props)
     ctx.current.setH      = setHighlight
 
     -- Clamp highlight if items shrank underneath us.
-    tui.useEffect(function()
+    tui.useLayoutEffect(function()
         if n == 0 then
             if highlight ~= 1 then setHighlight(1) end
         elseif highlight > n then

@@ -74,6 +74,7 @@ function M._begin_render(instance)
     cursor  = 0
     instance.hooks         = instance.hooks         or {}
     instance.pending_fx    = {}
+    instance.pending_layout_fx = {}
     if dev_mode then
         instance._hook_kinds = {}
     end

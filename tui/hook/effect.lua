@@ -1,6 +1,6 @@
 -- tui/hook/effect.lua — effect hooks and lifecycle.
 --
--- useEffect, _flush_effects, _unmount.
+-- useEffect, useLayoutEffect, _flush_effects, _flush_layout_effects, _unmount.
 
 local core = require "tui.hook.core"
 
@@ -18,6 +18,19 @@ function M.useEffect(fn, deps)
     end
     -- Queue; _flush_effects will decide whether to actually run.
     inst.pending_fx[#inst.pending_fx + 1] = { slot = slot, fn = fn, deps = deps }
+end
+
+-- ---------------------------------------------------------------------------
+-- useLayoutEffect
+
+function M.useLayoutEffect(fn, deps)
+    local inst, i = core.require_instance("layout_effect")
+    local slot = inst.hooks[i]
+    if not slot then
+        slot = { kind = "layout_effect", ran = false, cleanup = nil }
+        inst.hooks[i] = slot
+    end
+    inst.pending_layout_fx[#inst.pending_layout_fx + 1] = { slot = slot, fn = fn, deps = deps }
 end
 
 -- ---------------------------------------------------------------------------
@@ -77,6 +90,46 @@ function M._flush_effects(instance)
         end
     end
     instance.pending_fx = nil
+end
+
+-- ---------------------------------------------------------------------------
+-- _flush_layout_effects — called synchronously after the element tree has
+-- been produced but before it is returned to the caller (layout / screen).
+--
+-- Semantics are identical to _flush_effects, but layout effects run before
+-- paint so they can read layout and synchronously adjust state without an
+-- extra frame.
+
+function M._flush_layout_effects(instance)
+    for _, fx in ipairs(instance.pending_layout_fx or {}) do
+        local slot = fx.slot
+        local should_run
+        if fx.deps == nil then
+            should_run = true
+        elseif not slot.ran then
+            should_run = true   -- first mount
+        else
+            should_run = not core.deps_equal(slot.deps, fx.deps)
+        end
+        if should_run then
+            if slot.cleanup then
+                local old = slot.cleanup
+                slot.cleanup = nil
+                local ok, err = xpcall(old, core.wrap_err)
+                if not ok then core.route_effect_error(instance, err) end
+            end
+            local ok, result = xpcall(fx.fn, core.wrap_err)
+            if ok then
+                slot.cleanup = result or nil
+            else
+                slot.cleanup = nil
+                core.route_effect_error(instance, result)
+            end
+            slot.deps = fx.deps
+            slot.ran  = true
+        end
+    end
+    instance.pending_layout_fx = nil
 end
 
 -- ---------------------------------------------------------------------------

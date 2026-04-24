@@ -98,7 +98,7 @@ local function textarea_impl(props)
         end
     end
 
-    tui.useEffect(function()
+    tui.useLayoutEffect(function()
         if caret_line ~= cl then set_caret_line(cl) end
         if caret_col  ~= cc then set_caret_col(cc)  end
         if not core.same_position(selection_anchor, anchor_clamped) then set_selection_anchor(anchor_clamped) end
@@ -131,7 +131,7 @@ local function textarea_impl(props)
     ctx.composing = composing
 
     -- Sync scroll_top if it changed.
-    tui.useEffect(function()
+    tui.useLayoutEffect(function()
         if scroll_top ~= ctx.st then set_scroll_top(ctx.st) end
     end, { ctx.st, scroll_top })
 

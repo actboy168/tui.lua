@@ -85,6 +85,7 @@ end
 -- Hooks
 M.useState         = hook_state.useState
 M.useEffect        = hook_effect.useEffect
+M.useLayoutEffect  = hook_effect.useLayoutEffect
 M.useMemo          = hook_state.useMemo
 M.useCallback      = hook_state.useCallback
 M.useRef           = hook_state.useRef

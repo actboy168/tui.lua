@@ -461,9 +461,11 @@ end
 --
 -- Stabilization: if a component calls setState during its own render
 -- (eager re-render), we run another expand pass (up to 8) so the returned
--- tree already reflects the latest state.  Effects are flushed *after* the
--- stabilization loop so that effect setState is consumed on the next frame,
--- matching both the original harness behaviour and the production event loop.
+-- tree already reflects the latest state.
+--
+-- Layout effects are flushed synchronously after stabilization but before
+-- the tree is returned, so they can read layout and adjust state without
+-- an extra frame. Normal effects are flushed after paint (next frame).
 function M.render(state, root, app_handle)
     state.app  = app_handle
     state.context_stack = state.context_stack or {}
@@ -510,9 +512,17 @@ function M.render(state, root, app_handle)
         end
     end
 
-    -- Run pending effects after the tree has stabilized.  Effect setState is
-    -- NOT consumed inside this render call; it becomes visible on the next
-    -- frame (via scheduler.requestRedraw or the harness's next _paint).
+    -- Run layout effects synchronously after stabilization, before paint.
+    -- Layout-effect setState is consumed on the next frame (same as normal
+    -- effects) because the stabilization loop has already finished.
+    for _, inst in ipairs(state._effects_to_flush) do
+        hook_effect._flush_layout_effects(inst)
+    end
+
+    -- Run pending normal effects after the tree has been committed. Effect
+    -- setState is NOT consumed inside this render call; it becomes visible
+    -- on the next frame (via scheduler.requestRedraw or the harness's next
+    -- _paint).
     for _, inst in ipairs(state._effects_to_flush) do
         hook_effect._flush_effects(inst)
     end

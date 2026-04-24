@@ -69,7 +69,7 @@ local function text_input_impl(props)
     if anchor_clamped == caret_clamped then
         anchor_clamped = nil
     end
-    tui.useEffect(function()
+    tui.useLayoutEffect(function()
         if caret_state > #chars then set_caret(#chars) end
         if selection_anchor ~= anchor_clamped then set_selection_anchor(anchor_clamped) end
     end, { caret_state, #chars, selection_anchor, anchor_clamped })
