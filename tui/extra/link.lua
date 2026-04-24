@@ -1,7 +1,4 @@
 local tui = require "tui"
-local split_props_children = require("tui.internal.element")._split_props_children
-local clickable = require "tui.hook.clickable"
-local sgr = require "tui.internal.sgr"
 
 local M = {}
 
@@ -134,7 +131,7 @@ local function append_color_params(params, spec, is_bg, which)
         return
     end
 
-    local idx = sgr.COLORS[spec]
+    local idx = tui.colorNames[spec]
     if idx == nil then
         error(("Link: unknown color name for %s: %q"):format(which, spec), 3)
     end
@@ -193,7 +190,7 @@ local function LinkImpl(props)
     end
 
     local disabled = props.isDisabled and true or false
-    local click = clickable.useClickable {
+    local click = tui.useClickable {
         disabled = disabled,
         onClick = props.onClick,
         autoFocus = props.autoFocus,
@@ -269,7 +266,7 @@ end
 
 function M.Link(t)
     t = t or {}
-    local props, children = split_props_children(t)
+    local props, children = tui.splitPropsChildren(t)
     local key = props.key
     props.key = nil
     props.children = children

@@ -1,6 +1,4 @@
 local tui = require "tui"
-local split_props_children = require("tui.internal.element")._split_props_children
-local clickable = require "tui.hook.clickable"
 
 local M = {}
 
@@ -116,7 +114,7 @@ local function ButtonImpl(props)
     end
 
     local disabled = props.isDisabled and true or false
-    local click = clickable.useClickable {
+    local click = tui.useClickable {
         disabled = disabled,
         onClick = props.onClick,
         autoFocus = props.autoFocus,
@@ -155,7 +153,7 @@ end
 
 function M.Button(t)
     t = t or {}
-    local props, children = split_props_children(t)
+    local props, children = tui.splitPropsChildren(t)
     local key = props.key
     props.key = nil
     props.children = children

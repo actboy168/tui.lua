@@ -145,6 +145,12 @@ M.truncate       = text_mod.truncate
 M.truncateStart  = text_mod.truncate_start
 M.truncateMiddle = text_mod.truncate_middle
 
+-- Element helpers
+M.splitPropsChildren = element._split_props_children
+
+-- Style / color
+M.colorNames = require("tui.internal.sgr").COLORS
+
 
 --- tui.render(root, opts)
 -- Run the main loop with `root` as the top of the component tree. Blocks
