@@ -127,7 +127,7 @@ end
 -- These methods encode high-level input actions as terminal bytes and
 -- push them into the vterm input queue.  The next read() / loop_once()
 -- will pick them up and feed them through the production input pipeline
--- (on_input → input_mod.dispatch), matching the real terminal path.
+-- (onInput → input_mod.dispatch), matching the real terminal path.
 
 function M.press(vt, name)
     local testing_input = require "tui.testing.input"

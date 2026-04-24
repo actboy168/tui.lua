@@ -348,14 +348,14 @@ function suite:test_useinput_handler_throw_caught_by_boundary()
 end
 
 -- ---------------------------------------------------------------------------
--- 14. Focused on_input errors (useFocus with on_input) bubble to the
+-- 14. Focused onInput errors (useFocus with onInput) bubble to the
 --     nearest boundary on the focused component's instance.
 
-function suite:test_usefocus_on_input_throw_caught_by_boundary()
+function suite:test_usefocus_onInput_throw_caught_by_boundary()
     local function Bad_fn()
         tui.useFocus {
             autoFocus = true,
-            on_input = function() error("focus-boom", 0) end,
+            onInput = function() error("focus-boom", 0) end,
         }
         return tui.Text { "BAD" }
     end
@@ -369,9 +369,9 @@ function suite:test_usefocus_on_input_throw_caught_by_boundary()
 
     local h = testing.render(App, { cols = 4, rows = 1 })
     lt.assertEquals(focus_mod.get_focused_id() ~= nil, true, "autoFocus took focus")
-    h:type("y")   -- dispatch_focused delivers to focused on_input → throws
+    h:type("y")   -- dispatch_focused delivers to focused onInput → throws
     h:rerender()
-    lt.assertEquals(h:frame(), "FBfb", "boundary catches focused on_input error")
+    lt.assertEquals(h:frame(), "FBfb", "boundary catches focused onInput error")
     h:unmount()
 end
 

@@ -162,7 +162,7 @@ function M.route_effect_error(instance, err)
     error(type(err) == "table" and err.message or err, 0)
 end
 
--- Wrap a user-supplied event handler (useInput, useFocus on_input) so any
+-- Wrap a user-supplied event handler (useInput, useFocus onInput) so any
 -- error raised during dispatch routes to the nearest ErrorBoundary set on
 -- the owning component instance at subscribe time. The instance reference
 -- is captured *once* here; its `.nearest_boundary` field is refreshed by

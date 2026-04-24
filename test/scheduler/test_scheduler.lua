@@ -263,7 +263,7 @@ function suite:test_run_calls_paint_then_stops()
     lt.assertEquals(paint_count, 1)
 end
 
-function suite:test_run_on_input_true_stops_loop()
+function suite:test_run_onInput_true_stops_loop()
     local b = make_fake_backend()
     scheduler.configure { now = b.now, sleep = b.sleep }
     scheduler._reset()
@@ -280,7 +280,7 @@ function suite:test_run_on_input_true_stops_loop()
             scheduler.stop()
             return nil
         end,
-        on_input = function(s)
+        onInput = function(s)
             lt.assertEquals(s, "x")
             return true  -- signal exit
         end,

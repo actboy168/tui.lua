@@ -39,7 +39,7 @@ function M.useClickable(opts)
         autoFocus = active and (opts.autoFocus == true),
         id = opts.focusId or opts.id,
         isActive = active,
-        on_input = function(_input, key)
+        onInput = function(_input, key)
             if key and key.name == "enter" and ctx.current.onClick and not ctx.current.disabled then
                 ctx.current.onClick(merge_click_event(nil, ctx.current.payload, "keyboard"))
             end

@@ -1371,7 +1371,7 @@ end
 --                   (matches a single terminal read() that returns a buffer
 --                   full of characters — e.g. IME commit of multiple chars)
 --
--- Bulk dispatch now works correctly: on_input eagerly updates ctxRef.chars
+-- Bulk dispatch now works correctly: onInput eagerly updates ctxRef.chars
 -- and ctxRef.caret after each mutation, so intra-dispatch events see the
 -- accumulated state.
 
@@ -1395,7 +1395,7 @@ function suite:test_ime_single_cjk_via_dispatch()
 end
 
 -- Multiple CJK characters via dispatch: all characters survive because
--- on_input eagerly updates ctxRef.chars/caret after each mutation.
+-- onInput eagerly updates ctxRef.chars/caret after each mutation.
 function suite:test_ime_multi_cjk_via_dispatch()
     local value = ""
     local function App()

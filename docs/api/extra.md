@@ -40,7 +40,7 @@ local function MiniInput(props)
     local caret, setCaret = tui.useState(#chars)
 
     local f = tui.useFocus {
-        on_input = function(input, key)
+        onInput = function(input, key)
             if key.name == "left" then
                 setCaret(math.max(0, caret - 1))
             elseif key.name == "right" then

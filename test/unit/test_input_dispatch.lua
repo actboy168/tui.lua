@@ -117,9 +117,9 @@ function suite:test_tab_focus_navigation()
     focus.enable()
 
     local order = {}
-    focus.subscribe({ id = "a", on_change = function(f) if f then order[#order + 1] = "a" end end })
-    focus.subscribe({ id = "b", on_change = function(f) if f then order[#order + 1] = "b" end end })
-    focus.subscribe({ id = "c", on_change = function(f) if f then order[#order + 1] = "c" end end })
+    focus.subscribe({ id = "a", onChange = function(f) if f then order[#order + 1] = "a" end end })
+    focus.subscribe({ id = "b", onChange = function(f) if f then order[#order + 1] = "b" end end })
+    focus.subscribe({ id = "c", onChange = function(f) if f then order[#order + 1] = "c" end end })
 
     -- Tab should move focus forward
     input._dispatch_event({ name = "tab", shift = false })
@@ -134,8 +134,8 @@ function suite:test_shift_tab_focus_navigation()
     focus.enable()
 
     local order = {}
-    focus.subscribe({ id = "a", on_change = function(f) if f then order[#order + 1] = "a" end end })
-    focus.subscribe({ id = "b", on_change = function(f) if f then order[#order + 1] = "b" end end })
+    focus.subscribe({ id = "a", onChange = function(f) if f then order[#order + 1] = "a" end end })
+    focus.subscribe({ id = "b", onChange = function(f) if f then order[#order + 1] = "b" end end })
 
     -- Shift+Tab should move focus backward
     input._dispatch_event({ name = "tab", shift = true })
@@ -149,8 +149,8 @@ end
 function suite:test_backtab_focus_navigation()
     focus.enable()
 
-    focus.subscribe({ id = "a", on_change = function() end })
-    focus.subscribe({ id = "b", on_change = function() end })
+    focus.subscribe({ id = "a", onChange = function() end })
+    focus.subscribe({ id = "b", onChange = function() end })
 
     -- Backtab is another way to express Shift+Tab
     input._dispatch_event({ name = "backtab" })
@@ -167,7 +167,7 @@ function suite:test_focus_nav_does_not_broadcast()
     end)
 
     focus.enable()
-    focus.subscribe({ id = "a", on_change = function() end })
+    focus.subscribe({ id = "a", onChange = function() end })
 
     input._dispatch_event({ name = "tab", shift = false })
 
@@ -187,7 +187,7 @@ function suite:test_focused_component_receives_input()
     local focused_input = {}
     focus.subscribe({
         id = "input",
-        on_input = function(str, key)
+        onInput = function(str, key)
             focused_input[#focused_input + 1] = str
         end
     })
@@ -208,7 +208,7 @@ function suite:test_focus_and_broadcast_both_receive()
     focus.subscribe({
         id = "input",
         autoFocus = true,
-        on_input = function(str)
+        onInput = function(str)
             focused[#focused + 1] = str
         end
     })
@@ -305,7 +305,7 @@ function suite:test_dispatch_event_with_focus()
     focus.subscribe({
         id = "test",
         autoFocus = true,
-        on_input = function(str)
+        onInput = function(str)
             focused_received[#focused_received + 1] = str
         end
     })

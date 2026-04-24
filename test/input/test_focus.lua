@@ -527,3 +527,558 @@ function suite:test_textinput_disabled_is_inactive_entry()
     h:press("tab"); h:rerender(); lt.assertEquals(focus_mod.get_focused_id(), "top")
     h:unmount()
 end
+
+-- ---------------------------------------------------------------------------
+-- 14. Focus stack: explicit focus() pushes the old focus; unmounting the
+--     focused entry restores the previous one.
+-- ---------------------------------------------------------------------------
+
+function suite:test_focus_stack_restores_on_unmount()
+    local set_show_b
+    local function A()
+        local f = tui.useFocus { id = "a", autoFocus = true }
+        return tui.Text { f.isFocused and "A*" or "A " }
+    end
+    local function B()
+        local f = tui.useFocus { id = "b" }
+        return tui.Text { f.isFocused and "B*" or "B " }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local function App()
+        local show, setShow = tui.useState(false)
+        set_show_b = setShow
+        return tui.Box {
+            flexDirection = "column",
+            AComp {},
+            show and BComp {} or nil,
+        }
+    end
+
+    local h = testing.render(App, { cols = 2, rows = 2 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+
+    set_show_b(true)
+    h:rerender()
+    focus_mod.focus("b")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    set_show_b(false)
+    h:rerender()
+    -- b was focused and is gone; focus should be restored to a via the stack.
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 15. Focus stack supports multiple layers (A -> B -> C).
+-- ---------------------------------------------------------------------------
+
+function suite:test_focus_stack_multiple_layers()
+    local set_show_b, set_show_c
+    local function A()
+        local f = tui.useFocus { id = "a", autoFocus = true }
+        return tui.Text { f.isFocused and "A*" or "A " }
+    end
+    local function B()
+        local f = tui.useFocus { id = "b" }
+        return tui.Text { f.isFocused and "B*" or "B " }
+    end
+    local function C()
+        local f = tui.useFocus { id = "c" }
+        return tui.Text { f.isFocused and "C*" or "C " }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local CComp = tui.component(C)
+    local function App()
+        local showB, setShowB = tui.useState(false)
+        local showC, setShowC = tui.useState(false)
+        set_show_b = setShowB
+        set_show_c = setShowC
+        return tui.Box {
+            flexDirection = "column",
+            AComp { key = "a" },
+            showB and BComp { key = "b" } or nil,
+            showC and CComp { key = "c" } or nil,
+        }
+    end
+
+    local h = testing.render(App, { cols = 2, rows = 3 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+
+    set_show_b(true)
+    h:rerender()
+    focus_mod.focus("b")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    set_show_c(true)
+    h:rerender()
+    focus_mod.focus("c")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "c")
+
+    -- Pop c -> restore b
+    set_show_c(false)
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    -- Pop b -> restore a
+    set_show_b(false)
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 16. Focus stack skips entries that no longer exist.
+-- ---------------------------------------------------------------------------
+
+function suite:test_focus_stack_skips_removed_entries()
+    local set_show_b, set_show_c
+    local function A()
+        local f = tui.useFocus { id = "a", autoFocus = true }
+        return tui.Text { f.isFocused and "A*" or "A " }
+    end
+    local function B()
+        local f = tui.useFocus { id = "b" }
+        return tui.Text { f.isFocused and "B*" or "B " }
+    end
+    local function C()
+        local f = tui.useFocus { id = "c" }
+        return tui.Text { f.isFocused and "C*" or "C " }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local CComp = tui.component(C)
+    local function App()
+        local showB, setShowB = tui.useState(true)
+        local showC, setShowC = tui.useState(false)
+        set_show_b = setShowB
+        set_show_c = setShowC
+        return tui.Box {
+            flexDirection = "column",
+            AComp { key = "a" },
+            showB and BComp { key = "b" } or nil,
+            showC and CComp { key = "c" } or nil,
+        }
+    end
+
+    local h = testing.render(App, { cols = 2, rows = 3 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+
+    -- a -> b via focus(); stack = [a]
+    focus_mod.focus("b")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    -- b -> c via focus(); stack = [a, b]
+    set_show_c(true)
+    h:rerender()
+    focus_mod.focus("c")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "c")
+
+    -- Remove b (middle of stack) while c is focused.
+    set_show_b(false)
+    h:rerender()
+    -- b is gone but still in stack; c is still focused, nothing changes yet.
+    lt.assertEquals(focus_mod.get_focused_id(), "c")
+
+    -- Remove c; stack pop finds b (gone), then a (exists) -> restore a.
+    set_show_c(false)
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 17. Focus stack skips inactive entries and falls back to neighbor logic.
+-- ---------------------------------------------------------------------------
+
+function suite:test_focus_stack_skips_inactive_entries()
+    local set_show_b, set_a_active
+    local function A()
+        local active, setActive = tui.useState(true)
+        set_a_active = setActive
+        local f = tui.useFocus { id = "a", autoFocus = true, isActive = active }
+        return tui.Text { f.isFocused and "A*" or "A " }
+    end
+    local function B()
+        local f = tui.useFocus { id = "b" }
+        return tui.Text { f.isFocused and "B*" or "B " }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local function App()
+        local showB, setShowB = tui.useState(false)
+        set_show_b = setShowB
+        return tui.Box {
+            flexDirection = "column",
+            AComp { key = "a" },
+            showB and BComp { key = "b" } or nil,
+        }
+    end
+
+    local h = testing.render(App, { cols = 2, rows = 2 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+
+    set_show_b(true)
+    h:rerender()
+    focus_mod.focus("b")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    -- Make a inactive before removing b.
+    set_a_active(false)
+    h:rerender()
+
+    -- Remove b; a is in stack but inactive -> skipped.
+    -- No other entries -> focus clears.
+    set_show_b(false)
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), nil)
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 18. Tab navigation does NOT push onto the focus stack.
+-- ---------------------------------------------------------------------------
+
+function suite:test_tab_does_not_push_focus_stack()
+    local set_show_c
+    local function A()
+        local f = tui.useFocus { id = "a", autoFocus = true }
+        return tui.Text { f.isFocused and "A*" or "A " }
+    end
+    local function B()
+        local f = tui.useFocus { id = "b" }
+        return tui.Text { f.isFocused and "B*" or "B " }
+    end
+    local function C()
+        local f = tui.useFocus { id = "c" }
+        return tui.Text { f.isFocused and "C*" or "C " }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local CComp = tui.component(C)
+    local function App()
+        local showC, setShowC = tui.useState(false)
+        set_show_c = setShowC
+        return tui.Box {
+            flexDirection = "column",
+            AComp { key = "a" },
+            BComp { key = "b" },
+            showC and CComp { key = "c" } or nil,
+        }
+    end
+
+    local h = testing.render(App, { cols = 2, rows = 3 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+
+    -- Tab from a to b; this should NOT push a onto the stack.
+    h:press("tab")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    -- Open c and focus it explicitly; stack now has [b].
+    set_show_c(true)
+    h:rerender()
+    focus_mod.focus("c")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "c")
+
+    -- Remove c; if Tab had pushed a, we might get a. Instead stack pop
+    -- finds b (the explicit focus() push) -> restore b.
+    set_show_c(false)
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 19. focus() on the already-focused entry does not push a duplicate.
+-- ---------------------------------------------------------------------------
+
+function suite:test_focus_same_id_no_duplicate_stack()
+    local set_show_b
+    local function A()
+        local f = tui.useFocus { id = "a", autoFocus = true }
+        return tui.Text { f.isFocused and "A*" or "A " }
+    end
+    local function B()
+        local f = tui.useFocus { id = "b" }
+        return tui.Text { f.isFocused and "B*" or "B " }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local function App()
+        local showB, setShowB = tui.useState(false)
+        set_show_b = setShowB
+        return tui.Box {
+            flexDirection = "column",
+            AComp {},
+            showB and BComp {} or nil,
+        }
+    end
+
+    local h = testing.render(App, { cols = 2, rows = 2 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+
+    set_show_b(true)
+    h:rerender()
+    focus_mod.focus("b")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    -- Calling focus("b") again should not push another "b" onto stack.
+    focus_mod.focus("b")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+
+    local stack = focus_mod._focus_stack()
+    lt.assertEquals(#stack, 1)
+    lt.assertEquals(stack[1], "a")
+
+    set_show_b(false)
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 20. onFocus / onBlur callbacks fire on focus transitions.
+-- ---------------------------------------------------------------------------
+
+function suite:test_onfocus_onblur_fire_on_transitions()
+    local events = {}
+    local function A()
+        tui.useFocus {
+            id = "a",
+            autoFocus = true,
+            onFocus = function() events[#events + 1] = "a:focus" end,
+            onBlur  = function() events[#events + 1] = "a:blur" end,
+        }
+        return tui.Text { "A" }
+    end
+    local function B()
+        tui.useFocus {
+            id = "b",
+            onFocus = function() events[#events + 1] = "b:focus" end,
+            onBlur  = function() events[#events + 1] = "b:blur" end,
+        }
+        return tui.Text { "B" }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local function App()
+        return tui.Box {
+            flexDirection = "column",
+            AComp { key = "a" },
+            BComp { key = "b" },
+        }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 2 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+    lt.assertEquals(table.concat(events, ","), "a:focus")
+
+    -- Explicit focus() from a to b: a blurs, b focuses.
+    focus_mod.focus("b")
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+    lt.assertEquals(table.concat(events, ","), "a:focus,a:blur,b:focus")
+
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 21. onFocus fires for autoFocus.
+-- ---------------------------------------------------------------------------
+
+function suite:test_onfocus_fires_for_autofocus()
+    local events = {}
+    local function App()
+        tui.useFocus {
+            id = "only",
+            autoFocus = true,
+            onFocus = function() events[#events + 1] = "focus" end,
+            onBlur  = function() events[#events + 1] = "blur" end,
+        }
+        return tui.Text { "x" }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 1 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "only")
+    lt.assertEquals(table.concat(events, ","), "focus")
+
+    -- Unmount triggers blur.
+    h:unmount()
+    lt.assertEquals(table.concat(events, ","), "focus,blur")
+end
+
+-- ---------------------------------------------------------------------------
+-- 22. onBlur fires when focused entry is unmounted.
+-- ---------------------------------------------------------------------------
+
+function suite:test_onblur_fires_on_unmount()
+    local events = {}
+    local set_show
+    local function A()
+        tui.useFocus {
+            id = "a",
+            autoFocus = true,
+            onFocus = function() events[#events + 1] = "a:focus" end,
+            onBlur  = function() events[#events + 1] = "a:blur" end,
+        }
+        return tui.Text { "A" }
+    end
+    local function B()
+        tui.useFocus {
+            id = "b",
+            onFocus = function() events[#events + 1] = "b:focus" end,
+            onBlur  = function() events[#events + 1] = "b:blur" end,
+        }
+        return tui.Text { "B" }
+    end
+    local AComp = tui.component(A)
+    local BComp = tui.component(B)
+    local function App()
+        local show, setShow = tui.useState(true)
+        set_show = setShow
+        return tui.Box {
+            flexDirection = "column",
+            show and AComp { key = "a" } or nil,
+            BComp { key = "b" },
+        }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 2 })
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "a")
+    lt.assertEquals(table.concat(events, ","), "a:focus")
+
+    -- Unmount a: a blurs, focus transfers to b (neighbor), b focuses.
+    set_show(false)
+    h:rerender()
+    lt.assertEquals(focus_mod.get_focused_id(), "b")
+    lt.assertEquals(table.concat(events, ","), "a:focus,a:blur,b:focus")
+
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 23. onBlur fires when isActive flips to false.
+-- ---------------------------------------------------------------------------
+
+function suite:test_onblur_fires_when_isactive_goes_false()
+    local events = {}
+    local set_active
+    local function App()
+        local a, setA = tui.useState(true)
+        set_active = setA
+        tui.useFocus {
+            id = "only",
+            autoFocus = true,
+            isActive = a,
+            onFocus = function() events[#events + 1] = "focus" end,
+            onBlur  = function() events[#events + 1] = "blur" end,
+        }
+        return tui.Text { "x" }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 1 })
+    h:rerender()
+    lt.assertEquals(table.concat(events, ","), "focus")
+
+    set_active(false)
+    h:rerender()
+    lt.assertEquals(table.concat(events, ","), "focus,blur")
+
+    -- Reactivating does not re-trigger onFocus (no auto-grab).
+    set_active(true)
+    h:rerender()
+    lt.assertEquals(table.concat(events, ","), "focus,blur")
+
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 24. onFocus / onBlur see the latest closure (useLatestRef semantics).
+-- ---------------------------------------------------------------------------
+
+function suite:test_onfocus_onblur_latest_closure()
+    local counter = 0
+    local bump
+    local function App()
+        local n, setN = tui.useState(0)
+        bump = function() setN(n + 1) end
+        tui.useFocus {
+            id = "only",
+            autoFocus = true,
+            onFocus = function() counter = counter + n end,
+            onBlur  = function() counter = counter - n end,
+        }
+        return tui.Text { ("n=%d"):format(n) }
+    end
+
+    local h = testing.render(App, { cols = 5, rows = 1 })
+    h:rerender()
+    lt.assertEquals(counter, 0)  -- onFocus fired with n=0
+
+    bump()                       -- n becomes 1
+    h:rerender()
+    -- No focus change yet; counter unchanged.
+    lt.assertEquals(counter, 0)
+
+    -- Disable focus to trigger blur; closure should see n=1.
+    focus_mod.set_active("only", false)
+    h:rerender()
+    lt.assertEquals(counter, -1)  -- 0 - 1
+
+    -- Re-enable and explicitly focus; onFocus should see n=1.
+    focus_mod.set_active("only", true)
+    focus_mod.focus("only")
+    h:rerender()
+    lt.assertEquals(counter, 0)  -- -1 + 1
+
+    h:unmount()
+end
+
+-- ---------------------------------------------------------------------------
+-- 25. Focusing the already-focused entry does not re-fire onFocus.
+-- ---------------------------------------------------------------------------
+
+function suite:test_refocus_same_entry_no_duplicate_onfocus()
+    local events = {}
+    local function App()
+        tui.useFocus {
+            id = "only",
+            autoFocus = true,
+            onFocus = function() events[#events + 1] = "focus" end,
+            onBlur  = function() events[#events + 1] = "blur" end,
+        }
+        return tui.Text { "x" }
+    end
+
+    local h = testing.render(App, { cols = 1, rows = 1 })
+    h:rerender()
+    lt.assertEquals(table.concat(events, ","), "focus")
+
+    focus_mod.focus("only")
+    h:rerender()
+    -- No change — onFocus should not fire again.
+    lt.assertEquals(table.concat(events, ","), "focus")
+
+    h:unmount()
+end

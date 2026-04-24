@@ -161,7 +161,7 @@ end
 -- Run loop
 --
 -- opts = {
---   on_input = function(str)  -- called with each non-empty read batch
+--   onInput = function(str)  -- called with each non-empty read batch
 --                             -- return true to stop the loop
 --   read     = function() -> string|nil   -- non-blocking stdin read
 --   paint    = function(terminal)  -- called whenever a repaint should happen;
@@ -172,7 +172,7 @@ end
 --   terminal = <terminal object>  -- passed as first arg to paint
 -- }
 
--- Do one iteration of the run loop: read → on_input → tick_timers →
+-- Do one iteration of the run loop: read → onInput → tick_timers →
 -- paint if dirty and frame_ms has elapsed (or immediately if immediate=true).
 -- Exposed so the test harness can simulate one iteration after injecting
 -- input via h:dispatch, going through the full production code path.
@@ -182,8 +182,8 @@ function M.loop_once(opts, terminal, now, immediate)
     -- Input: forward raw bytes; handler can stop loop by returning true.
     if opts.read then
         local s = opts.read()
-        if s and #s > 0 and opts.on_input then
-            if opts.on_input(s) then
+        if s and #s > 0 and opts.onInput then
+            if opts.onInput(s) then
                 running = false
                 return false
             end
@@ -224,8 +224,8 @@ function M.run(opts)
 		-- Input: forward raw bytes; handler can stop loop by returning true.
 		if opts.read then
 			local s = opts.read()
-			if s and #s > 0 and opts.on_input then
-				if opts.on_input(s) then
+			if s and #s > 0 and opts.onInput then
+				if opts.onInput(s) then
 					running = false
 					break
 				end

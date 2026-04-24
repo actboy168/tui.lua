@@ -17,7 +17,9 @@ local M = {}
 --   isActive  = bool?,       -- default true. When false, entry is registered
 --                            --   but skipped by Tab navigation and never
 --                            --   auto-focuses.
---   on_input  = fn?,         -- called when a key is delivered to us
+--   onInput   = fn?,         -- called when a key is delivered to us
+--   onFocus   = fn?,         -- called when this entry receives focus
+--   onBlur    = fn?,         -- called when this entry loses focus
 -- }
 --
 -- Hot-update semantics:
@@ -30,7 +32,9 @@ local M = {}
 --                 a rerender is a no-op (matches Ink: autoFocus is a mount
 --                 intent, not an imperative command — use the returned
 --                 focus() instead).
---   * on_input  — always sees latest closure via useLatestRef.
+--   * onInput   — always sees latest closure via useLatestRef.
+--   * onFocus   — always sees latest closure via useLatestRef.
+--   * onBlur    — always sees latest closure via useLatestRef.
 --
 -- returns { isFocused : bool, focus : fn }
 --
@@ -45,7 +49,9 @@ function M.useFocus(opts)
     if not focus_mod then focus_mod = require "tui.internal.focus" end
 
     local isFocused, setFocused = state_mod.useState(false)
-    local onInputRef = state_mod.useLatestRef(opts.on_input)
+    local onInputRef = state_mod.useLatestRef(opts.onInput)
+    local onFocusRef = state_mod.useLatestRef(opts.onFocus)
+    local onBlurRef  = state_mod.useLatestRef(opts.onBlur)
 
     -- A dedicated slot holds the live focus entry so the returned `focus()`
     -- closure can reach it even though subscribe happens in a later effect.
@@ -60,7 +66,7 @@ function M.useFocus(opts)
     local id       = opts.id
     local isActive = opts.isActive
 
-    -- Capture the owning instance once so the focus on_input wrapper can
+    -- Capture the owning instance once so the focus onInput wrapper can
     -- route handler errors through the same nearest_boundary path useInput
     -- uses. The instance's .nearest_boundary is refreshed each render.
     local inst_outer = inst
@@ -73,10 +79,16 @@ function M.useFocus(opts)
             id        = id,
             autoFocus = auto,
             isActive  = isActive,
-            on_change = function(b) setFocused(b) end,
-            on_input  = core.wrap_handler_for_boundary(inst_outer, function(input, key)
+            onChange = function(b) setFocused(b) end,
+            onInput  = core.wrap_handler_for_boundary(inst_outer, function(input, key)
                 if onInputRef.current then onInputRef.current(input, key) end
             end),
+            onFocus = function()
+                if onFocusRef.current then onFocusRef.current() end
+            end,
+            onBlur = function()
+                if onBlurRef.current then onBlurRef.current() end
+            end,
         }
         slot.entry = entry
         return function()

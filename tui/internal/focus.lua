@@ -9,7 +9,7 @@
 -- * At most one entry is focused at a time, by id.
 -- * Tab/Shift-Tab are intercepted by tui/input.lua dispatch and translated
 --   into focus_next / focus_prev here; other keys are dispatched to the
---   focused entry's on_input handler via dispatch_focused.
+--   focused entry's onInput handler via dispatch_focused.
 --
 -- Invariants
 -- ----------
@@ -35,6 +35,7 @@ local focused_id      = nil
 local enabled         = true
 local seq_counter     = 0
 local auto_id_counter = 0
+local focus_stack     = {}    -- stack of previous focused ids (for focus restoration)
 
 -- -- internals ----------------------------------------------------------------
 
@@ -43,8 +44,14 @@ local function set_focused(new_entry)
     if focused_id == new_id then return end
     local old = focused_id and by_id[focused_id] or nil
     focused_id = new_id
-    if old and old.on_change then old.on_change(false) end
-    if new_entry and new_entry.on_change then new_entry.on_change(true) end
+    if old then
+        if old.onChange then old.onChange(false) end
+        if old.onBlur then old.onBlur() end
+    end
+    if new_entry then
+        if new_entry.onChange then new_entry.onChange(true) end
+        if new_entry.onFocus then new_entry.onFocus() end
+    end
 end
 
 -- -- public API ---------------------------------------------------------------
@@ -56,8 +63,10 @@ end
 --   isActive  = bool?,       -- default true. When false, entry is skipped by
 --                            --   focus_next / focus_prev and will not auto-focus
 --                            --   on registration. Explicit focus(id) still lands.
---   on_change = fn(bool),    -- called when this entry's focused state flips
---   on_input  = fn(input, key),  -- invoked when a key is dispatched to us
+--   onChange = fn(bool),    -- called when this entry's focused state flips
+--   onInput  = fn(input, key),  -- invoked when a key is dispatched to us
+--   onFocus  = fn?,           -- called when this entry receives focus
+--   onBlur   = fn?,           -- called when this entry loses focus
 -- }
 function M.subscribe(opts)
     opts = opts or {}
@@ -74,11 +83,13 @@ function M.subscribe(opts)
     end
 
     local entry = {
-        id        = id,
-        seq       = seq_counter,
-        isActive  = opts.isActive ~= false,
-        on_change = opts.on_change,
-        on_input  = opts.on_input,
+        id       = id,
+        seq      = seq_counter,
+        isActive = opts.isActive ~= false,
+        onChange = opts.onChange,
+        onInput  = opts.onInput,
+        onFocus  = opts.onFocus,
+        onBlur   = opts.onBlur,
     }
     entries[#entries + 1] = entry
     by_id[id] = entry
@@ -101,37 +112,53 @@ function M.subscribe(opts)
                 break
             end
         end
-        by_id[id] = nil
         if focused_id == id then
             if #entries == 0 then
-                focused_id = nil
+                set_focused(nil)
             else
-                -- Transfer to the entry now at the same index (or last one),
-                -- but skip isActive=false entries. If none are active, clear.
-                local start = math.min(removed_idx or 1, #entries)
-                local n = #entries
-                local landed
-                for step = 0, n - 1 do
-                    local idx = ((start + step - 1) % n) + 1
-                    if entries[idx].isActive then
-                        landed = entries[idx]
+                -- Try to restore focus from the focus stack first.
+                local restored = nil
+                while #focus_stack > 0 do
+                    local prev_id = table.remove(focus_stack)
+                    local prev = by_id[prev_id]
+                    if prev and prev.isActive then
+                        restored = prev
                         break
                     end
                 end
-                if landed then
-                    set_focused(landed)
+                if restored then
+                    set_focused(restored)
                 else
-                    set_focused(nil)
+                    -- Transfer to the entry now at the same index (or last one),
+                    -- but skip isActive=false entries. If none are active, clear.
+                    local start = math.min(removed_idx or 1, #entries)
+                    local n = #entries
+                    local landed
+                    for step = 0, n - 1 do
+                        local idx = ((start + step - 1) % n) + 1
+                        if entries[idx].isActive then
+                            landed = entries[idx]
+                            break
+                        end
+                    end
+                    set_focused(landed)  -- nil if none found → clears focus
                 end
             end
         end
+        by_id[id] = nil
     end
 end
 
 --- focus(id): jump to the named entry. No-op if absent.
+-- Pushes the previously-focused entry onto the focus stack so that if the
+-- new target is later unmounted, focus can be restored to the old one.
 function M.focus(id)
     local e = by_id[id]
-    if e then set_focused(e) end
+    if not e then return end
+    if focused_id and focused_id ~= id then
+        focus_stack[#focus_stack + 1] = focused_id
+    end
+    set_focused(e)
 end
 
 --- set_active(id, flag): mark an existing entry active/inactive.
@@ -234,12 +261,12 @@ function M.get_focused_id()
 end
 
 --- dispatch_focused(input, key): deliver a key event to the focused entry's
--- on_input handler. Returns true if a handler was invoked, false otherwise.
+-- onInput handler. Returns true if a handler was invoked, false otherwise.
 function M.dispatch_focused(input, key)
     if not enabled then return false end
     local e = focused_id and by_id[focused_id] or nil
-    if not e or not e.on_input then return false end
-    e.on_input(input, key)
+    if not e or not e.onInput then return false end
+    e.onInput(input, key)
     return true
 end
 
@@ -254,6 +281,11 @@ function M._reset()
     enabled         = true
     seq_counter     = 0
     auto_id_counter = 0
+    focus_stack     = {}
+end
+
+function M._focus_stack()
+    return focus_stack
 end
 
 return M

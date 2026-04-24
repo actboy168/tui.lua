@@ -318,8 +318,10 @@ local focus = tui.useFocus {
     id = string?,
     autoFocus = boolean?,
     isActive = boolean?,
-    on_change = function(isFocused: boolean)?,
-    on_input = function(input: string, key: KeyEvent)?,
+    onChange = function(isFocused: boolean)?,
+    onInput = function(input: string, key: KeyEvent)?,
+    onFocus = function()?,
+    onBlur = function()?,
 }
 
 -- focus.isFocused: boolean

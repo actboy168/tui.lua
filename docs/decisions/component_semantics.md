@@ -71,7 +71,7 @@
 
 ## TextInput 批量输入
 
-`h:dispatch("中文")` 已正确工作（ctxRef eager update）。Bracketed-paste 协议（`\x1b[200~` / `\x1b[201~`）由 `keys.c` 识别为 `paste_start` / `paste_end` 事件，`input.lua` 累加器合并为单一 `paste` 事件再分发；TextInput 的 `on_input` 处理 `name=="paste"` 分支批量插入，`usePaste(fn)` 对外暴露为 `tui.usePaste`。
+`h:dispatch("中文")` 已正确工作（ctxRef eager update）。Bracketed-paste 协议（`\x1b[200~` / `\x1b[201~`）由 `keys.c` 识别为 `paste_start` / `paste_end` 事件，`input.lua` 累加器合并为单一 `paste` 事件再分发；TextInput 的 `onInput` 处理 `name=="paste"` 分支批量插入，`usePaste(fn)` 对外暴露为 `tui.usePaste`。
 
 ## 点击语义
 

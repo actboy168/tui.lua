@@ -130,7 +130,7 @@ local function SelectImpl(props)
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
         isActive  = not disabled,
-        on_input  = function(_input, key)
+        onInput  = function(_input, key)
             local st = ctx.current
             local cur = st.highlight
             local len = #st.items

@@ -104,7 +104,7 @@ local function textarea_impl(props)
         if not core.same_position(selection_anchor, anchor_clamped) then set_selection_anchor(anchor_clamped) end
     end, { caret_line, caret_col, cl, cc, selection_anchor, anchor_clamped })
 
-    -- Keep a ref to live values for the on_input closure.
+    -- Keep a ref to live values for the onInput closure.
     local ctx, _ = tui.useState({})
     ctx.lines       = lines_now
     ctx.cl          = cl
@@ -280,7 +280,7 @@ local function textarea_impl(props)
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
         isActive  = not disabled,
-        on_input  = function(input, key)
+        onInput  = function(input, key)
             local lines = ctx.lines
             local cl    = ctx.cl
             local cc    = ctx.cc

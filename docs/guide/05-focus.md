@@ -55,7 +55,7 @@ local function CustomInput(props)
 
     local focus = tui.useFocus {
         autoFocus = props.autoFocus,
-        on_input = function(input, key)
+        onInput = function(input, key)
             if key.name == "char" then
                 setValue(value .. input)
             elseif key.name == "backspace" then

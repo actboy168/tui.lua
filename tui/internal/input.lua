@@ -10,7 +10,7 @@
 -- Key flow for each parsed event:
 --   1. If focus is enabled and ev is Tab / Shift-Tab → focus_next/prev,
 --      swallow (no further dispatch).
---   2. Hand ev to the currently focused entry's on_input (if any).
+--   2. Hand ev to the currently focused entry's onInput (if any).
 --   3. Broadcast ev to every plain useInput subscriber.
 --
 -- The focused handler and the broadcast handlers are NOT mutually exclusive:

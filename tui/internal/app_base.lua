@@ -239,7 +239,7 @@ end
 --     * decorate(tree, ctx) -> tree
 --     * subscribe(request_redraw) -> unsubscribe_fn
 --     * reset() -> nil
---   on_paint_done   — function(inst, tree, passes) or nil
+--   onPaintDone   — function(inst, tree, passes) or nil
 --     App uses this to free the tree; Harness uses it to store the tree.
 function M.mount(terminal, screen_state, opts)
     local interactive = opts.interactive
@@ -407,8 +407,8 @@ function M.mount(terminal, screen_state, opts)
         inst._render_count = inst._render_count + passes
         inst._mouse_auto_release = new_mouse
         inst._tree = tree
-        if opts.on_paint_done then
-            opts.on_paint_done(inst, tree, passes)
+        if opts.onPaintDone then
+            opts.onPaintDone(inst, tree, passes)
         end
     end
     inst.paint = paint_fn
@@ -416,7 +416,7 @@ function M.mount(terminal, screen_state, opts)
     -- Scheduler opts shared by rerender/dispatch/run.
     inst._scheduler_opts = {
         read     = terminal.read,
-        on_input = function(bytes) return input_mod.dispatch(bytes) end,
+        onInput = function(bytes) return input_mod.dispatch(bytes) end,
         paint    = paint_fn,
         terminal = terminal,
     }

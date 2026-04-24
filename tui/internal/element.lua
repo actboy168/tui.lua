@@ -157,7 +157,7 @@ end
 --- ErrorBoundary { fallback = element_or_fn_or_nil, child1, child2, ... }
 -- Catches errors raised while expanding any descendant during reconciliation,
 -- and errors bubbled from post-commit channels (useEffect body/cleanup,
--- useInput / useFocus on_input). On a caught error, children are replaced
+-- useInput / useFocus onInput). On a caught error, children are replaced
 -- by `fallback` until the boundary is reset.
 --
 -- `fallback` shapes:

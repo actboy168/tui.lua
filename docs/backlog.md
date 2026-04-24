@@ -37,8 +37,6 @@ _暂无_
 
 ### 渲染性能与稳定性
 
-- `P1` **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点，解决弹窗关闭后焦点丢失问题
-- `P1` **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
 - `P2` **Transform region API 扩展**：当前 region 主要只有 `setHyperlink()`；后续补充更通用的输出后处理能力，例如样式/属性变换、清理已有效果、按 cell 访问等
 - `P2` **Transform 精确命中已绘制 cells**：当前更接近对子树 bounding region 统一处理；后续应支持只作用于真实绘制到的 cells，避免 gap / padding / 空白区域被一并覆盖
 - `P2` **Transform 嵌套与组合语义**：明确父子 Transform 的执行顺序、覆盖规则与叠加行为，特别是与 Link 的 subtree hyperlink、未来 hover/highlight 效果组合时的语义

@@ -79,8 +79,8 @@ local function text_input_impl(props)
     ctx_ref.chars = chars
     ctx_ref.caret = caret_clamped
     ctx_ref.anchor = anchor_clamped
-    ctx_ref.on_change = onChange
-    ctx_ref.on_submit = onSubmit
+    ctx_ref.onChange = onChange
+    ctx_ref.onSubmit = onSubmit
     ctx_ref.set_caret = set_caret
     ctx_ref.set_anchor = set_selection_anchor
     ctx_ref.value = value
@@ -134,8 +134,8 @@ local function text_input_impl(props)
         ctx_ref.anchor = restore_anchor
         ctx_ref.chars = restore_chars
         ctx_ref.value = snapshot.value or ""
-        if ctx_ref.on_change then
-            ctx_ref.on_change(ctx_ref.value)
+        if ctx_ref.onChange then
+            ctx_ref.onChange(ctx_ref.value)
         end
     end
 
@@ -152,7 +152,7 @@ local function text_input_impl(props)
         autoFocus = (not disabled) and (props.autoFocus ~= false),
         id        = props.focusId,
         isActive  = not disabled,
-        on_input  = function(input, key)
+        onInput  = function(input, key)
             local cs = ctx_ref.chars
             local c  = ctx_ref.caret
             local anchor = ctx_ref.anchor
@@ -182,8 +182,8 @@ local function text_input_impl(props)
                 end
                 ctx_ref.set_caret(new_caret)
                 ctx_ref.set_anchor(nil)
-                if ctx_ref.on_change then
-                    ctx_ref.on_change(new_value)
+                if ctx_ref.onChange then
+                    ctx_ref.onChange(new_value)
                 end
                 ctx_ref.chars = new_chars
                 ctx_ref.caret = new_caret
@@ -273,7 +273,7 @@ local function text_input_impl(props)
 
             if action == "submit" then
                 clear_history_group()
-                if ctx_ref.features.submit and ctx_ref.on_submit then ctx_ref.on_submit(ctx_ref.value) end
+                if ctx_ref.features.submit and ctx_ref.onSubmit then ctx_ref.onSubmit(ctx_ref.value) end
             elseif action == "select_all" then
                 clear_history_group()
                 local all_anchor = (#cs > 0) and 0 or nil
