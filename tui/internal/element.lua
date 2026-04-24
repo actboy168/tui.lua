@@ -171,6 +171,30 @@ end
 --                children re-attempt. Throwing inside `fallback` falls back
 --                to an empty box (fatal prefix still propagates).
 --   * nil      — render an empty box (legal, rarely useful)
+function M.Transform(t)
+    t = t or {}
+    local props, children = split_props_children(t)
+    local key, _ref = pluck_reserved(props)
+    _ref = nil
+    local transform = props.transform
+    props.transform = nil
+    if type(transform) ~= "function" then
+        error("Transform: `transform` must be a function", 2)
+    end
+    for k in pairs(props) do
+        error(("Transform: unsupported prop %q"):format(k), 2)
+    end
+    if #children == 0 then
+        return nil
+    end
+    return {
+        kind = "transform",
+        key = key,
+        transform = transform,
+        children = children,
+    }
+end
+
 function M.ErrorBoundary(t)
     t = t or {}
     local props, children = split_props_children(t)

@@ -79,6 +79,12 @@
 
 **`href` / OSC 8 和 `onClick` 分离。** 终端原生超链接是否真的被打开对应用不可观测；`onClick` 只表示框架收到了鼠标或键盘激活。需要本地桥接、自定义跳转或埋点时，用组件层回调；需要终端自行处理时，提供 `href`。
 
+## Transform 语义
+
+**`Transform` 采用 region/cell 语义，不做 string transform。** `Transform` 操作的是渲染后的 cell/region。原因是本项目的主渲染链是 `element tree -> layout -> screen cell buffer -> diff`，字符串级 transform 会破坏样式、超链接元数据和裁剪语义。
+
+**rich-children `Link` 建在 `Transform` 之上。** plain-label `Link` 仍可走 `RawAnsi` 快路径；当 `Link` 包裹任意子树时，通过 `Transform` 给整棵子树附加 hyperlink metadata，而不是把子树 flatten 成字符串再重解析。
+
 ## `ref` 和 `key` 必须显式传播
 
 **Element schema：** `element.lua` 创建 element 时会把 `ref` 和 `key` **从 props 里取出**，放到 element 的顶层字段（`element.ref`、`element.key`），props 里不再含有它们。因此任何对 element 做结构性复制（clone、expand 等）的代码，**必须显式拷贝 `ref` 和 `key`**，不能只拷贝 `props`。

@@ -1,5 +1,6 @@
 local tui = require "tui"
 local split_props_children = require("tui.internal.element")._split_props_children
+local clickable = require "tui.hook.clickable"
 local sgr = require "tui.internal.sgr"
 
 local M = {}
@@ -34,34 +35,69 @@ local function assert_no_control(text, where)
     if text:find("\7", 1, true) then
         error(("Link: %s must not contain BEL bytes"):format(where), 3)
     end
+end
+
+local function assert_single_line(text, where)
     if text:find("\n", 1, true) or text:find("\r", 1, true) then
         error(("Link: %s must be single-line"):format(where), 3)
     end
 end
 
-local function collect_text(props)
+local function collect_plain_text(props)
     local label = props.label
     local children = props.children or {}
     if label ~= nil and #children > 0 then
         error("Link: use either `label` or children, not both", 3)
     end
 
-    local text
     if label ~= nil then
-        text = tostring(label)
-    else
-        local parts = {}
-        for i, child in ipairs(children) do
-            if type(child) == "table" then
-                error(("Link: children[%d] must be plain text, got table"):format(i), 3)
-            end
-            parts[#parts + 1] = tostring(child)
-        end
-        text = table.concat(parts)
+        local text = tostring(label)
+        assert_no_control(text, "label")
+        assert_single_line(text, "label")
+        return text
     end
 
-    assert_no_control(text, "label")
-    return text
+    if #children == 0 then
+        return nil
+    end
+
+    local parts = {}
+    for i, child in ipairs(children) do
+        if type(child) == "table" then
+            return nil
+        end
+        local text = tostring(child)
+        assert_no_control(text, ("children[%d]"):format(i))
+        assert_single_line(text, ("children[%d]"):format(i))
+        parts[#parts + 1] = text
+    end
+    return table.concat(parts)
+end
+
+local function normalize_rich_children(children)
+    local normalized = {}
+    for i, child in ipairs(children or {}) do
+        if type(child) == "table" then
+            normalized[#normalized + 1] = child
+        else
+            local text = tostring(child)
+            assert_no_control(text, ("children[%d]"):format(i))
+            normalized[#normalized + 1] = tui.Text { text }
+        end
+    end
+    if #normalized == 0 then
+        return nil
+    end
+    if #normalized == 1 then
+        return normalized[1]
+    end
+    local row = {
+        flexDirection = "row",
+    }
+    for _, child in ipairs(normalized) do
+        row[#row + 1] = child
+    end
+    return tui.Box(row)
 end
 
 local function append_color_params(params, spec, is_bg, which)
@@ -136,21 +172,6 @@ local function osc8_close()
     return "\27]8;;\27\\"
 end
 
-local function merge_click_event(base, href, source)
-    local out = {
-        href = href,
-        source = source,
-    }
-    if base then
-        for k, v in pairs(base) do
-            out[k] = v
-        end
-        out.href = href
-        out.source = source
-    end
-    return out
-end
-
 local function LinkImpl(props)
     props = props or {}
     local href = props.href
@@ -158,80 +179,91 @@ local function LinkImpl(props)
         error("Link: `href` must be a non-empty string", 3)
     end
     assert_no_control(href, "href")
+    assert_single_line(href, "href")
 
-    local text = collect_text(props)
-    if text == "" then
+    local plain_text = collect_plain_text(props)
+    local rich_child = nil
+    if plain_text == nil then
+        rich_child = normalize_rich_children(props.children or {})
+        if rich_child == nil then
+            return nil
+        end
+    elseif plain_text == "" then
         return nil
     end
 
     local disabled = props.isDisabled and true or false
-    local text_props = {
-        color = props.color,
-        backgroundColor = props.backgroundColor,
-        bold = props.bold,
-        italic = props.italic,
-        underline = props.underline,
-        strikethrough = props.strikethrough,
-        inverse = props.inverse,
-        dim = props.dim,
-        dimColor = props.dimColor,
+    local click = clickable.useClickable {
+        disabled = disabled,
+        onClick = props.onClick,
+        autoFocus = props.autoFocus,
+        focusId = props.focusId,
+        id = props.id,
+        payload = { href = href },
     }
-    if text_props.color == nil and text_props.dimColor == nil then
-        text_props.color = "blue"
-    end
-    if text_props.underline == nil then
-        text_props.underline = true
-    end
-
-    local prefix = build_sgr_prefix(text_props)
-    local line
-    if disabled then
-        line = prefix .. text .. (prefix ~= "" and "\27[0m" or "")
-    else
-        line = prefix .. osc8_open(href) .. text .. osc8_close() .. (prefix ~= "" and "\27[0m" or "")
-    end
-
-    local ctx = tui.useRef {}
-    ctx.current.href = href
-    ctx.current.onClick = props.onClick
-    ctx.current.disabled = disabled
-
-    local keyboard_active = (not disabled) and (props.onClick ~= nil)
-    local focus = tui.useFocus {
-        autoFocus = keyboard_active and (props.autoFocus == true),
-        id = props.focusId or props.id,
-        isActive = keyboard_active,
-        on_input = function(_input, key)
-            if key and key.name == "enter" and ctx.current.onClick and not ctx.current.disabled then
-                ctx.current.onClick(merge_click_event(nil, ctx.current.href, "keyboard"))
-            end
-        end,
-    }
-
-    local on_mouse_down
-    if not disabled and props.onClick ~= nil then
-        on_mouse_down = function(ev)
-            focus.focus()
-            ctx.current.onClick(merge_click_event(ev, ctx.current.href, "mouse"))
-        end
-    end
 
     local box_props = {
-        width = props.width or tui.displayWidth(text),
-        height = props.height or 1,
-        onMouseDown = on_mouse_down,
-        tui.RawAnsi {
-            lines = { line },
-            width = tui.displayWidth(text),
-        },
+        onMouseDown = click.onMouseDown,
     }
-
     for k, v in pairs(props) do
         if not LINK_PROPS[k] and not TEXT_STYLE_KEYS[k] then
             box_props[k] = v
         end
     end
 
+    if plain_text ~= nil then
+        local text_props = {
+            color = props.color,
+            backgroundColor = props.backgroundColor,
+            bold = props.bold,
+            italic = props.italic,
+            underline = props.underline,
+            strikethrough = props.strikethrough,
+            inverse = props.inverse,
+            dim = props.dim,
+            dimColor = props.dimColor,
+        }
+        if text_props.color == nil and text_props.dimColor == nil then
+            text_props.color = "blue"
+        end
+        if text_props.underline == nil then
+            text_props.underline = true
+        end
+
+        local prefix = build_sgr_prefix(text_props)
+        local line
+        if disabled then
+            line = prefix .. plain_text .. (prefix ~= "" and "\27[0m" or "")
+        else
+            line = prefix .. osc8_open(href) .. plain_text .. osc8_close() .. (prefix ~= "" and "\27[0m" or "")
+        end
+
+        box_props.width = box_props.width or tui.displayWidth(plain_text)
+        box_props.height = box_props.height or 1
+        box_props[1] = tui.RawAnsi {
+            lines = { line },
+            width = tui.displayWidth(plain_text),
+        }
+        return tui.Box(box_props)
+    end
+
+    if props.color ~= nil then
+        box_props.color = props.color
+    end
+    if props.backgroundColor ~= nil then
+        box_props.backgroundColor = props.backgroundColor
+    end
+
+    if disabled then
+        box_props[1] = rich_child
+    else
+        box_props[1] = tui.Transform {
+            transform = function(region)
+                region:setHyperlink(href)
+            end,
+            rich_child,
+        }
+    end
     return tui.Box(box_props)
 end
 

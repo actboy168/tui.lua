@@ -52,7 +52,7 @@ end
 -- For box nodes, detaches their Yoga children first so they can be released too.
 local function release_subtree(element)
     if not element.yoga_node then return end
-    if element.kind == "box" then
+    if element.kind == "box" or element.kind == "transform" then
         yoga.node_remove_all_children(element.yoga_node)
         for _, child in ipairs(element.children or {}) do
             release_subtree(child)
@@ -80,12 +80,12 @@ local function reconcile(element, prev)
     end
     element.yoga_node = node
 
-    if element.kind == "box" then
+    if element.kind == "box" or element.kind == "transform" then
         -- Single C pass: iterate props array directly, no intermediate Lua table.
-        yoga.node_set_box_props(node, element.props or {})
+        yoga.node_set_box_props(node, element.kind == "box" and (element.props or {}) or {})
 
         local children      = element.children or {}
-        local prev_children = (prev and prev.kind == "box" and prev.children) or {}
+        local prev_children = (prev and (prev.kind == "box" or prev.kind == "transform") and prev.children) or {}
 
         -- Reconcile all children first (builds new_nodes; replaced prev nodes
         -- keep their yoga_node until we detach them below).
@@ -150,8 +150,8 @@ local function build(element, parent_node)
             yoga.node_child_count(parent_node))
     end
 
-    if element.kind == "box" then
-        yoga.node_set_box_props(node, element.props or {})
+    if element.kind == "box" or element.kind == "transform" then
+        yoga.node_set_box_props(node, element.kind == "box" and (element.props or {}) or {})
         for _, child in ipairs(element.children or {}) do
             build(child, node)
         end
@@ -208,7 +208,7 @@ local function readback_from_cache(element, ax, ay)
             end
         end
     end
-    if element.kind == "box" then
+    if element.kind == "box" or element.kind == "transform" then
         for _, child in ipairs(element.children or {}) do
             if not readback_from_cache(child, cax, cay) then
                 return false
@@ -273,7 +273,7 @@ local function readback(element, ox, oy, phase, wrap_nodes)
                 end
             end
         end
-        if element.kind == "box" then
+        if element.kind == "box" or element.kind == "transform" then
             for _, child in ipairs(element.children or {}) do
                 if not readback_from_cache(child, ax, ay) then
                     -- Cache miss mid-subtree: full readback for this child.
@@ -303,7 +303,7 @@ local function readback(element, ox, oy, phase, wrap_nodes)
     cache[1], cache[2], cache[3], cache[4] = lx, ly, lw, lh
     cache[5], cache[6] = ox, oy
 
-    if element.kind == "box" then
+    if element.kind == "box" or element.kind == "transform" then
         for _, child in ipairs(element.children or {}) do
             readback(child, ax, ay, phase, wrap_nodes)
         end

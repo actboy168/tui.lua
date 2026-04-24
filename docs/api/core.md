@@ -136,9 +136,36 @@ tui.Text {
 }
 ```
 
+### Transform
+
+对子树输出做后处理。回调操作的是渲染后的 cell/region，而不是字符串。
+
+```lua
+tui.Transform {
+    transform = function(region)
+        region:setHyperlink("https://example.com")
+    end,
+    tui.Text { "docs" },
+}
+```
+
+```lua
+tui.Transform {
+    transform = function(region, index)
+        -- region.x / region.y / region.width / region.height
+        -- region:setHyperlink(uri | nil)
+    end,
+    children,
+}
+```
+
+- `transform(region, index)` 在子树完成 paint 后执行
+- 当前 `region` 提供位置/尺寸信息，以及 `setHyperlink(uri)` 这类基于 cell region 的后处理能力
+- 适合给整棵子树统一附加超链接等输出级效果，而不需要把 children flatten 成字符串
+
 ### RawAnsi
 
-预渲染 ANSI 行片段。对齐 Ink 风格，只接收 `lines` 和 `width`。当前支持 SGR 样式序列与 OSC 8 超链接。内容仍进入 screen backend，因此可以参与布局、裁剪、diff 和测试，而不是直接把原始字节写到 stdout。
+预渲染 ANSI 行片段，只接收 `lines` 和 `width`。当前支持 SGR 样式序列与 OSC 8 超链接。内容仍进入 screen backend，因此可以参与布局、裁剪、diff 和测试，而不是直接把原始字节写到 stdout。
 
 ```lua
 tui.RawAnsi {
@@ -435,7 +462,7 @@ type Color = string | number
 
 ```lua
 type Element = {
-    kind = "box" | "text" | "raw_ansi" | "component" | ...,
+    kind = "box" | "text" | "raw_ansi" | "transform" | "component" | ...,
     props = table,
     key = any?,  -- 用于 reconciler
 }

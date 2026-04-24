@@ -86,6 +86,18 @@ function suite:test_raw_ansi_element_structure()
     lt.assertEquals(raw.raw_text, "\27[31mhi\27[0m")
 end
 
+function suite:test_transform_element_structure()
+    local fn = function() end
+    local transform = tui.Transform {
+        transform = fn,
+        tui.Text { "Child" },
+    }
+
+    lt.assertEquals(transform.kind, "transform")
+    lt.assertEquals(transform.transform, fn)
+    lt.assertEquals(#transform.children, 1)
+end
+
 function suite:test_error_boundary_element_structure()
     local fallback = tui.Text { "Error!" }
     local boundary = tui.ErrorBoundary {

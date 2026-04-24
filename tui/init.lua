@@ -54,6 +54,7 @@ M.configureScheduler = scheduler.configure
 M.Box            = element.Box
 M.Text           = element.Text
 M.RawAnsi        = element.RawAnsi
+M.Transform      = element.Transform
 M.ErrorBoundary  = element.ErrorBoundary
 
 -- Component factory helper

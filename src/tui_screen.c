@@ -1785,6 +1785,49 @@ l_overlay_selection(lua_State *L) {
     return 0;
 }
 
+/* overlay_hyperlink(ud, c1, r1, c2, r2, uri)
+ *
+ * Set hyperlink_id on every cell in the inclusive region [c1,r1]..[c2,r2].
+ * `uri=nil` or empty string clears hyperlink metadata in the region.
+ */
+static int
+l_overlay_hyperlink(lua_State *L) {
+    screen_t *s  = check_screen(L, 1);
+    int c1 = (int)luaL_checkinteger(L, 2);
+    int r1 = (int)luaL_checkinteger(L, 3);
+    int c2 = (int)luaL_checkinteger(L, 4);
+    int r2 = (int)luaL_checkinteger(L, 5);
+
+    size_t uri_len = 0;
+    const char *uri = NULL;
+    if (!lua_isnoneornil(L, 6)) {
+        uri = luaL_checklstring(L, 6, &uri_len);
+        if (uri_len == 0) uri = NULL;
+    }
+
+    uint16_t hyperlink_id = 0;
+    if (uri && uri_len > 0) {
+        hyperlink_id = hyperlink_intern(&s->links, uri, (uint32_t)uri_len);
+        if (hyperlink_id == 0)
+            return luaL_error(L, "screen.overlay_hyperlink: failed to intern hyperlink");
+    }
+
+    if (c1 < 0) c1 = 0;
+    if (r1 < 0) r1 = 0;
+    if (c2 >= s->w) c2 = s->w - 1;
+    if (r2 >= s->h) r2 = s->h - 1;
+    if (c1 > c2 || r1 > r2) return 0;
+
+    for (int row = r1; row <= r2; row++) {
+        for (int col = c1; col <= c2; col++) {
+            cell_t *c = cell_at(s->next, s->w, col, row);
+            c->hyperlink_id = hyperlink_id;
+            if (col > s->dirty_xmax[row]) s->dirty_xmax[row] = col;
+        }
+    }
+    return 0;
+}
+
 /* ── registration ─────────────────────────────────────────────── */
 
 static const luaL_Reg screen_lib[] = {
@@ -1806,6 +1849,7 @@ static const luaL_Reg screen_lib[] = {
     {"intern_style",      l_intern_style},
     {"set_color_level",   l_set_color_level},
     {"overlay_selection", l_overlay_selection},
+    {"overlay_hyperlink", l_overlay_hyperlink},
     {NULL, NULL},
 };
 

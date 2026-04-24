@@ -86,7 +86,7 @@ end
 
 local function is_host_element(e)
     return type(e) == "table"
-        and (e.kind == "box" or e.kind == "text" or e.kind == "raw_ansi")
+        and (e.kind == "box" or e.kind == "text" or e.kind == "raw_ansi" or e.kind == "transform")
 end
 
 local function is_error_boundary(e)
@@ -310,7 +310,18 @@ local function expand(state, element, path)
         -- Propagate `key` (reconciler identity) and `ref` (useMeasure) from the
         -- original element so layout.fire_measure_refs can see the ref callback.
         local out = { kind = element.kind, key = element.key, ref = element.ref, props = element.props, children = {} }
-        if element.kind == "text" then
+        if element.kind == "transform" then
+            out.transform = element.transform
+            dev_check_keys(state, path, element.children)
+            local seen_keys = {}
+            for i, c in ipairs(element.children or {}) do
+                local cp = child_path_for(path, i, c, seen_keys)
+                local expanded = expand(state, c, cp)
+                if expanded ~= nil then
+                    out.children[#out.children + 1] = expanded
+                end
+            end
+        elseif element.kind == "text" then
             -- Text children are strings; copy verbatim + keep .text field.
             for i, c in ipairs(element.children or {}) do out.children[i] = c end
             out.text = element.text

@@ -32,16 +32,17 @@ _暂无_
 
 - `P0` **ScrollBox**：可滚动容器 + 命令式滚动 API（scrollTo/scrollBy）+ stickyScroll + 视口裁剪；复杂内容展示刚需（Lua 层为主，C 层可选加速）
 - `P1` **Button**：焦点/悬停/点击/键盘激活；对比 Ink `Button` 组件（Lua 层）
-- `P1` **可点击语义原语（clickable / pressable）**：抽离 Link 已验证的 `onMouseDown` + focus + `Enter` => 语义 `onClick` 模式，供 Button、可点击列表项、Tab 等复用
 - `P1` **`form.lua`**：多输入框 + 字段导航；表单/对话式应用刚需
 - `P2` **Link / Button 交互态样式**：hover / focus / pressed 视觉反馈；Link 目前只有默认蓝色下划线，后续可结合 `useHover()` 和焦点态统一组件交互样式
-- `P2` **`Transform { transform=fn }`**：对子树输出做后处理变换
 - `P3` Markdown / syntax-highlight：AI chat 核心诉求，靠后实施
 
 ### 渲染性能与稳定性
 
 - `P1` **焦点栈（Focus Stack）**：节点移除时自动恢复前一个焦点，解决弹窗关闭后焦点丢失问题
 - `P1` **焦点事件**：Box/组件级别 `onFocus` / `onBlur` 事件（当前只有 entry 级 `on_change`）
+- `P2` **Transform region API 扩展**：当前 region 主要只有 `setHyperlink()`；后续补充更通用的输出后处理能力，例如样式/属性变换、清理已有效果、按 cell 访问等
+- `P2` **Transform 精确命中已绘制 cells**：当前更接近对子树 bounding region 统一处理；后续应支持只作用于真实绘制到的 cells，避免 gap / padding / 空白区域被一并覆盖
+- `P2` **Transform 嵌套与组合语义**：明确父子 Transform 的执行顺序、覆盖规则与叠加行为，特别是与 Link 的 subtree hyperlink、未来 hover/highlight 效果组合时的语义
 - `P3` **shift() 滚动优化**：纯滚动场景用 DECSTBM + SU/SD 序列，零重绘内容
 - `P3` **CharPool 字符串去重**：相同文本共享存储，减少内存占用
 - `P3` **`focus` 链表 entry→idx 映射**：当前 Tab 切换线性搜索 O(n) → O(1)

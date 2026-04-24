@@ -10,6 +10,7 @@ tui.lua 提供两类组件：核心组件和高级控件。
 |------|------|
 | `tui.Box` | 布局容器（Flexbox） |
 | `tui.Text` | 文本显示（样式、截断、换行） |
+| `tui.Transform` | 对子树输出做 cell/region 级后处理 |
 | `tui.RawAnsi` | 预渲染 ANSI 行片段（支持 SGR / OSC 8） |
 | `tui.ErrorBoundary` | 错误边界（捕获子树渲染错误） |
 
@@ -58,6 +59,19 @@ tui.ErrorBoundary {
 }
 ```
 
+### Transform
+
+```lua
+tui.Transform {
+    transform = function(region)
+        region:setHyperlink("https://example.com")
+    end,
+    tui.Text { "docs" },
+}
+```
+
+`Transform` 适合对子树做输出级后处理。这里处理的是渲染后的 cell/region，而不是字符串。`Link` 的 rich children 原生超链接就是建立在它之上的。
+
 ### RawAnsi
 
 ```lua
@@ -92,7 +106,7 @@ extra.TextInput { ... }
 | `extra.Newline` | 换行 |
 | `extra.Spacer` | 弹性空间 |
 
-高级控件的完整属性、示例和键盘操作参见 [高级控件](../api/extra.md)。如果你只需要普通可交互超链接，优先用 `extra.Link`；如果你要承载外部预渲染 ANSI/OSC 8 输出，使用 `tui.RawAnsi`。`extra.Link` 示例见 [`examples/link.lua`](../../examples/link.lua)。
+高级控件的完整属性、示例和键盘操作参见 [高级控件](../api/extra.md)。如果你只需要普通可交互超链接，优先用 `extra.Link`；如果你要承载外部预渲染 ANSI/OSC 8 输出，使用 `tui.RawAnsi`；如果你要给任意子树附加输出级效果，使用 `tui.Transform`。`extra.Link` 示例见 [`examples/link.lua`](../../examples/link.lua)。
 
 ## 自定义组件
 

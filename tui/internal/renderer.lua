@@ -20,6 +20,51 @@ local text_mod = require "tui.internal.text"
 
 local M = {}
 
+local function union_bounds(a, b)
+    if not a then return b end
+    if not b then return a end
+    local x1 = math.min(a.x, b.x)
+    local y1 = math.min(a.y, b.y)
+    local x2 = math.max(a.x + a.w - 1, b.x + b.w - 1)
+    local y2 = math.max(a.y + a.h - 1, b.y + b.h - 1)
+    return {
+        x = x1,
+        y = y1,
+        w = x2 - x1 + 1,
+        h = y2 - y1 + 1,
+    }
+end
+
+local function rect_bounds(r, y_off)
+    if not r or r.w <= 0 or r.h <= 0 then return nil end
+    return {
+        x = r.x,
+        y = r.y - y_off,
+        w = r.w,
+        h = r.h,
+    }
+end
+
+local function make_region(screen, bounds)
+    if not bounds then return nil end
+    return {
+        x = bounds.x,
+        y = bounds.y,
+        width = bounds.w,
+        height = bounds.h,
+        setHyperlink = function(self, uri)
+            screen_c.overlay_hyperlink(
+                screen,
+                self.x,
+                self.y,
+                self.x + self.width - 1,
+                self.y + self.height - 1,
+                uri
+            )
+        end,
+    }
+end
+
 -- Merge `color` / `backgroundColor` from `inherit` into `props` when the
 -- child doesn't already set them. Returns `props` unchanged when there is
 -- nothing to inherit, avoiding any table allocation on the common fast path.
@@ -64,13 +109,14 @@ local function merge_span_props(base, span_props)
     return merged
 end
 
-local function paint(element, screen, inherit, y_off)
+local function paint(element, screen, inherit, y_off, transform_state)
     local r = element.rect
-    if not r then return end
+    if not r then return nil end
     local ry = r.y - y_off
     if element.kind == "box" then
         local props = element.props
         local border_style = props and props.borderStyle
+        local bounds = nil
         if border_style then
             local style_id = sgr.pack_border_style(screen, props)
             -- When the box overflows the screen vertically, clamp draw_h so
@@ -83,17 +129,31 @@ local function paint(element, screen, inherit, y_off)
             end
             screen_c.put_border(screen, r.x, ry, r.w, draw_h, border_style,
                                 style_id)
+            bounds = rect_bounds({ x = r.x, y = r.y, w = r.w, h = draw_h }, y_off)
         end
         local ci = child_inherit(props, inherit)
         for _, ch in ipairs(element.children or {}) do
-            paint(ch, screen, ci, y_off)
+            bounds = union_bounds(bounds, paint(ch, screen, ci, y_off, transform_state))
         end
+        return bounds
+    elseif element.kind == "transform" then
+        local bounds = nil
+        for _, ch in ipairs(element.children or {}) do
+            bounds = union_bounds(bounds, paint(ch, screen, inherit, y_off, transform_state))
+        end
+        if bounds and element.transform then
+            transform_state.index = transform_state.index + 1
+            local region = make_region(screen, bounds)
+            element.transform(region, transform_state.index)
+        end
+        return bounds
     elseif element.kind == "raw_ansi" then
         local lines = element.raw_lines or {}
         for li, line in ipairs(lines) do
             if li - 1 >= r.h then break end
             screen_c.draw_ansi_line(screen, r.x, ry + (li - 1), line, r.w)
         end
+        return rect_bounds(r, y_off)
     elseif element.kind == "text" then
         local props = effective_props(element.props, inherit)
         if element.line_runs then
@@ -149,7 +209,9 @@ local function paint(element, screen, inherit, y_off)
             screen_c.draw_line(screen, r.x, ry, element.text or "", r.w,
                                style_id)
         end
+        return rect_bounds(r, y_off)
     end
+    return nil
 end
 
 --- Paint element tree into the given C-owned screen. Caller is responsible
@@ -160,7 +222,7 @@ end
 ---@param screen userdata
 ---@param y_off integer|nil rows to skip from top (default 0)
 function M.paint(element, screen, y_off)
-    paint(element, screen, nil, y_off or 0)
+    paint(element, screen, nil, y_off or 0, { index = 0 })
 end
 
 return M
